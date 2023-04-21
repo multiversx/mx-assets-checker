@@ -28,6 +28,10 @@ export const robot = (app: Probot) => {
         });
 
         for (const workflowRun of workflowRuns.data.workflow_runs) {
+          if (workflowRun.conclusion !== 'failure') {
+            continue;
+          }
+
           const pullRequests = workflowRun.pull_requests;
           if (!pullRequests) {
             continue;
