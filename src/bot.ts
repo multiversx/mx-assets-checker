@@ -18,6 +18,14 @@ export const robot = (app: Probot) => {
         });
       }
 
+      const workflowRuns = context.octokit.actions.listWorkflowRunsForRepo({
+        workflow_id: 'check-signature.yml',
+        repo: context.repo().repo,
+        owner: context.repo().owner,
+      });
+
+      console.log('workflow runs', workflowRuns);
+
       async function getInfoContents(files: {filename: string, raw_url: string}[]): Promise<{owners: string[]} | undefined> {
         // we try to read the contents of the info.json file
         const { data: infoFromMaster } = await axios.get(`https://raw.githubusercontent.com/multiversx/mx-assets/master/identities/${identity}/info.json`, { validateStatus: status => [200, 404].includes(status) });
