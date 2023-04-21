@@ -20,7 +20,7 @@ export const robot = (app: Probot) => {
 
       // console.log('context', context);
 
-      if (context.name === 'issue_comment') {
+      // if (context.name === 'issue_comment') {
         const workflowRuns = await context.octokit.actions.listWorkflowRunsForRepo({
           workflow_id: 'check-signature.yml',
           repo: context.repo().repo,
@@ -54,7 +54,7 @@ export const robot = (app: Probot) => {
         }
 
         console.log('workflow runs', workflowRuns);
-      }
+      // }
 
       async function getInfoContents(files: {filename: string, raw_url: string}[]): Promise<{owners: string[]} | undefined> {
         // we try to read the contents of the info.json file
