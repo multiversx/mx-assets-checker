@@ -18,7 +18,7 @@ export const robot = (app: Probot) => {
         });
       }
 
-      const workflowRuns = context.octokit.actions.listWorkflowRunsForRepo({
+      const workflowRuns = await context.octokit.actions.listWorkflowRunsForRepo({
         workflow_id: 'check-signature.yml',
         repo: context.repo().repo,
         owner: context.repo().owner,
