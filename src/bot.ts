@@ -69,6 +69,47 @@ export const robot = (app: Probot) => {
         process.exit(1);
       }
 
+      async function verify(body: string, address: string, message: string): Promise<boolean | undefined> {
+        const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
+
+        if (!signature) {
+          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${address}\``);
+          return undefined;
+        }
+  
+        const signableMessage = new SignableMessage({
+          address: new Address(address),
+          message: Buffer.from(message, 'utf8'),
+        });
+  
+        const publicKey = new UserPublicKey(
+          new Address(address).pubkey(),
+        );
+  
+        const verifier = new UserVerifier(publicKey);
+        return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
+      }
+
+      async function multiVerify(bodies: string[], address: string, message: string): Promise<boolean | undefined> {
+        const results = [];
+
+        for (const body of bodies) {
+          const result = await verify(body, address, message);
+
+          results.push(result);
+        }
+
+        if (results.every(x => x === undefined)) {
+          return undefined;
+        }
+
+        if (results.some(x => x === true)) {
+          return true;
+        }
+
+        return false;
+      }
+
       const { data: pullRequest } = await axios.get(`https://api.github.com/repos/multiversx/mx-assets/pulls/${context.pullRequest().pull_number}`);
       const state = pullRequest.state;
 
@@ -109,33 +150,30 @@ export const robot = (app: Probot) => {
         owner = ownerResult.data;
       }
 
+      const comments = await context.octokit.issues.listComments({
+        repo: context.repo().repo,
+        owner: context.repo().owner,
+        issue_number: context.pullRequest().pull_number,
+      });
+
       const body = pullRequest.body || '';
+
+      const bodies = [...comments.data.map(x => x.body || ''), body];
 
       const address = owner;
       const message = lastCommitSha;
-      const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
 
-      if (!signature) {
+      const valid = await multiVerify(bodies, address ?? '', message);
+      if (valid === undefined) {
         await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${address}\``);
         return;
       }
 
-      const signableMessage = new SignableMessage({
-        address: new Address(address),
-        message: Buffer.from(message, 'utf8'),
-      });
-
-      const publicKey = new UserPublicKey(
-        new Address(address).pubkey(),
-      );
-
-      const verifier = new UserVerifier(publicKey);
-      let valid = verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
-      if (!valid) {
+      if (valid === false) {
         await fail(`The provided signature is invalid. Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${address}\``);
         return;
       } else {
-        await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet address \`${address}\` using the signature \`${signature}\``);
+        await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet address \`${address}\``);
       }
 
       console.info('successfully reviewed', pullRequest.html_url);
