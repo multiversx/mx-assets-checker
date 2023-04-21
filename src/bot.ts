@@ -73,7 +73,6 @@ export const robot = (app: Probot) => {
         const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
 
         if (!signature) {
-          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${address}\``);
           return undefined;
         }
   
