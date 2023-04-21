@@ -44,11 +44,13 @@ export const robot = (app: Probot) => {
 
           console.log('Rerunning', workflowRun.run_number);
 
-          // await context.octokit.actions.reRunWorkflowFailedJobs({
-          //   repo: context.repo().repo,
-          //   owner: context.repo().owner,
-          //   run_id: workflowRun.run_number
-          // });
+          await context.octokit.actions.reRunWorkflowFailedJobs({
+            repo: context.repo().repo,
+            owner: context.repo().owner,
+            run_id: workflowRun.run_number
+          });
+
+          return;
         }
 
         console.log('workflow runs', workflowRuns);
