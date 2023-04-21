@@ -160,6 +160,9 @@ export const robot = (app: Probot) => {
 
       const bodies = [...comments.data.map(x => x.body || ''), body];
 
+      console.log('comments', comments);
+      console.log('bodies', bodies);
+
       const address = owner;
       const message = lastCommitSha;
 
