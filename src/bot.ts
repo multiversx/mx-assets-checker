@@ -25,7 +25,6 @@ export const robot = (app: Probot) => {
         const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
         if (signature) {
           const workflowRuns = await context.octokit.actions.listWorkflowRunsForRepo({
-            workflow_id: 'check-signature.yml',
             repo: context.repo().repo,
             owner: context.repo().owner,
           });
@@ -42,6 +41,10 @@ export const robot = (app: Probot) => {
 
             const pullRequest = pullRequests.find(x => x.number === context.pullRequest().pull_number);
             if (!pullRequest) {
+              continue;
+            }
+
+            if (pullRequest.head.sha !== workflowRun.head_sha) {
               continue;
             }
 
