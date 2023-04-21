@@ -99,6 +99,8 @@ export const robot = (app: Probot) => {
           results.push(result);
         }
 
+        console.log('results', results);
+
         if (results.every(x => x === undefined)) {
           return undefined;
         }
