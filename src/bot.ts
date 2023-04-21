@@ -55,8 +55,6 @@ export const robot = (app: Probot) => {
             //   owner: context.repo().owner,
             //   run_id: workflowRun.id
             // });
-
-            return;
           }
         }
       }
