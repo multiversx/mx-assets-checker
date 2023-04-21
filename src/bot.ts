@@ -99,7 +99,7 @@ export const robot = (app: Probot) => {
           results.push(result);
         }
 
-        console.log('results', results);
+        console.info('results', results);
 
         if (results.every(x => x === undefined)) {
           return undefined;
@@ -169,6 +169,7 @@ export const robot = (app: Probot) => {
       const message = lastCommitSha;
 
       const valid = await multiVerify(bodies, address ?? '', message);
+      console.info('valid', valid);
       if (valid === undefined) {
         await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${address}\``);
         return;
