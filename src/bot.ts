@@ -20,41 +20,43 @@ export const robot = (app: Probot) => {
 
       // console.log('context', context);
 
-      // if (context.name === 'issue_comment') {
-        const workflowRuns = await context.octokit.actions.listWorkflowRunsForRepo({
-          workflow_id: 'check-signature.yml',
-          repo: context.repo().repo,
-          owner: context.repo().owner,
-        });
-
-        for (const workflowRun of workflowRuns.data.workflow_runs) {
-          if (workflowRun.conclusion !== 'failure') {
-            continue;
-          }
-
-          const pullRequests = workflowRun.pull_requests;
-          if (!pullRequests) {
-            continue;
-          }
-
-          const pullRequest = pullRequests.find(x => x.number === context.pullRequest().pull_number);
-          if (!pullRequest) {
-            continue;
-          }
-
-          console.log('Rerunning', workflowRun.id);
-
-          await context.octokit.actions.reRunWorkflowFailedJobs({
+      if (context.name === 'issue_comment') {
+        const body = context.payload.comment.body || '';
+        const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
+        if (signature) {
+          const workflowRuns = await context.octokit.actions.listWorkflowRunsForRepo({
+            workflow_id: 'check-signature.yml',
             repo: context.repo().repo,
             owner: context.repo().owner,
-            run_id: workflowRun.id
           });
 
-          return;
-        }
+          for (const workflowRun of workflowRuns.data.workflow_runs) {
+            if (workflowRun.conclusion !== 'failure') {
+              continue;
+            }
 
-        console.log('workflow runs', workflowRuns);
-      // }
+            const pullRequests = workflowRun.pull_requests;
+            if (!pullRequests) {
+              continue;
+            }
+
+            const pullRequest = pullRequests.find(x => x.number === context.pullRequest().pull_number);
+            if (!pullRequest) {
+              continue;
+            }
+
+            console.log('Rerunning', workflowRun.id);
+
+            // await context.octokit.actions.reRunWorkflowFailedJobs({
+            //   repo: context.repo().repo,
+            //   owner: context.repo().owner,
+            //   run_id: workflowRun.id
+            // });
+
+            return;
+          }
+        }
+      }
 
       async function getInfoContents(files: {filename: string, raw_url: string}[]): Promise<{owners: string[]} | undefined> {
         // we try to read the contents of the info.json file
