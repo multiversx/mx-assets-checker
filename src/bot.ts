@@ -18,11 +18,33 @@ export const robot = (app: Probot) => {
         });
       }
 
+      console.log('context', context);
+
       const workflowRuns = await context.octokit.actions.listWorkflowRunsForRepo({
         workflow_id: 'check-signature.yml',
         repo: context.repo().repo,
         owner: context.repo().owner,
       });
+
+      for (const workflowRun of workflowRuns.data.workflow_runs) {
+        const pullRequests = workflowRun.pull_requests;
+        if (!pullRequests) {
+          continue;
+        }
+
+        const pullRequest = pullRequests.find(x => x.number === context.pullRequest().pull_number);
+        if (!pullRequest) {
+          continue;
+        }
+
+        console.log('Rerunning', workflowRun.run_number);
+
+        await context.octokit.actions.reRunWorkflowFailedJobs({
+          repo: context.repo().repo,
+          owner: context.repo().owner,
+          run_id: workflowRun.run_number
+        });
+      }
 
       console.log('workflow runs', workflowRuns);
 
