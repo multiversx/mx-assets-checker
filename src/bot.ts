@@ -18,8 +18,6 @@ export const robot = (app: Probot) => {
         });
       }
 
-      console.info('context', context);
-
       if (context.name === 'issue_comment') {
         const body = context.payload.comment.body || '';
         const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
@@ -50,11 +48,11 @@ export const robot = (app: Probot) => {
 
             console.log('Rerunning', workflowRun.id);
 
-            // await context.octokit.actions.reRunWorkflowFailedJobs({
-            //   repo: context.repo().repo,
-            //   owner: context.repo().owner,
-            //   run_id: workflowRun.id
-            // });
+            await context.octokit.actions.reRunWorkflowFailedJobs({
+              repo: context.repo().repo,
+              owner: context.repo().owner,
+              run_id: workflowRun.id
+            });
           }
         }
 
