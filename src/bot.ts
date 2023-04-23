@@ -57,6 +57,8 @@ export const robot = (app: Probot) => {
             // });
           }
         }
+
+        return;
       }
 
       async function getInfoContents(files: {filename: string, raw_url: string}[]): Promise<{owners: string[]} | undefined> {
