@@ -18,7 +18,7 @@ export const robot = (app: Probot) => {
         });
       }
 
-      console.log('context', context);
+      console.info('context', context);
 
       if (context.name === 'issue_comment') {
         const body = context.payload.comment.body || '';
