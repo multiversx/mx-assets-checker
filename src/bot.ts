@@ -187,6 +187,7 @@ export const robot = (app: Probot) => {
       }
 
       const identity = distinctIdentities[0];
+      console.info('identity', identity);
 
       let owner = await getOwner(changedFiles);
       if (new Address(owner).isContractAddress()) {
