@@ -19,39 +19,48 @@ export const robot = (app: Probot) => {
           });
         }
 
-        async function getInfoContents(files: {filename: string, raw_url: string}[]): Promise<{owners: string[]} | undefined> {
+        async function getInfoContents(files: {filename: string, raw_url: string}[]): Promise<string[]> {
+          const originalOwners: string[] = [];
+          const newOwners: string[] = [];
+
           // we try to read the contents of the info.json file
           const { data: infoFromMaster } = await axios.get(`https://raw.githubusercontent.com/multiversx/mx-assets/master/identities/${identity}/info.json`, { validateStatus: status => [200, 404].includes(status) });
 
           if (infoFromMaster && typeof infoFromMaster === 'object' && infoFromMaster['owners']) {
-            return infoFromMaster;
+            originalOwners.push(...infoFromMaster.owners);
           }
           
           const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}/info.json`));
-          if (!infoJsonFile) {
-            return undefined;
-          }
-
-          const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
-
-          return infoFromPullRequest;
+          if (infoJsonFile) {
+            const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
+              
+            if (infoFromPullRequest && typeof infoFromPullRequest === 'object' && infoFromPullRequest['owners']) {
+              newOwners.push(...infoFromPullRequest.owners);
+            }
         }
-
-
-        async function getOwner(files: {filename: string, raw_url: string}[]): Promise<string | undefined> {
-          const info = await getInfoContents(files);
-          if (!info) {
-            return undefined;
+          
+          let mainOwner = '';
+          if (originalOwners.length > 0) {
+            mainOwner = originalOwners[0];
+          } else if (newOwners.length > 0) {
+            mainOwner = newOwners[0];
           }
 
-          const owners = info.owners;
-          if (!owners || !Array.isArray(owners) || owners.length === 0) {
-            return undefined;
+          const extraOwners = newOwners.filter(x => !originalOwners.includes(x));
+
+          const allOwners: string[] = [];
+          const allOwnersToCheck = [ mainOwner, ...extraOwners ];
+
+          for (const owner of allOwnersToCheck) {
+            if (new Address(owner).isContractAddress()) {
+              const ownerResult = await axios.get(`https://next-api.multiversx.com/accounts/${owner}?extract=ownerAddress`);
+              allOwners.push(ownerResult.data);
+            } else {
+              allOwners.push(owner);
+            }
           }
 
-          const owner = owners[0];
-
-          return owner;
+          return allOwners;
         }
 
         function getDistinctIdentities(fileNames: string[]) {
@@ -72,11 +81,23 @@ export const robot = (app: Probot) => {
 
         async function verify(body: string, address: string, message: string): Promise<boolean | undefined> {
           const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
-
-          if (!signature) {
-            return undefined;
+          if (signature) {
+            return verifySignature(signature, address, message);
           }
-    
+
+          const txHash = /[0-9a-fA-F]{64}/.exec(body)?.at(0);
+          if (txHash) {
+            return verifyTxHash(txHash, address, message);
+          }
+
+          return undefined;
+        }
+
+        async function verifyTxHash(_txHash: string, _address: string, _message: string): Promise<boolean | undefined> {
+          throw new Error('Not implemented yet');
+        }
+
+        async function verifySignature(signature: string, address: string, message: string): Promise<boolean | undefined> {
           const signableMessage = new SignableMessage({
             address: new Address(address),
             message: Buffer.from(message, 'utf8'),
@@ -90,24 +111,26 @@ export const robot = (app: Probot) => {
           return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
         }
 
-        async function multiVerify(bodies: string[], address: string, message: string): Promise<boolean | undefined> {
-          const results = [];
-
-          for (const body of bodies) {
-            const result = await verify(body, address, message);
-
-            results.push(result);
-          }
-
-          if (results.every(x => x === undefined)) {
+        async function multiVerify(bodies: string[], addresses: string[], message: string): Promise<boolean | undefined> {
+          if (addresses.length === 0) {
             return undefined;
           }
 
-          if (results.some(x => x === true)) {
-            return true;
-          }
+          const resultDict: Record<string, boolean> = {};
 
-          return false;
+          for (const body of bodies) {
+            const lines = body.split('\n');
+            for (const line of lines) {
+              for (const address of addresses) {
+                const result = await verify(line, address, message);
+                if (result === true) {
+                  resultDict[address] = true;
+                }
+              }
+            }
+          }
+          
+          return Object.keys(resultDict).length === addresses.length ? true : undefined;
         }
 
         const { data: pullRequest } = await axios.get(`https://api.github.com/repos/multiversx/mx-assets/pulls/${context.pullRequest().pull_number}`);
@@ -150,7 +173,7 @@ export const robot = (app: Probot) => {
 
         const adminAddress = process.env.ADMIN_ADDRESS;
         if (adminAddress) {
-          const result = await multiVerify(bodies, adminAddress, lastCommitSha);
+          const result = await multiVerify(bodies, [adminAddress], lastCommitSha);
           if (result === true) {
             await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the admin wallet address`);
             return;
@@ -164,23 +187,19 @@ export const robot = (app: Probot) => {
 
         const identity = distinctIdentities[0];
 
-        let owner = await getOwner(changedFiles);
-        if (new Address(owner).isContractAddress()) {
-          const ownerResult = await axios.get(`https://next-api.multiversx.com/accounts/${owner}?extract=ownerAddress`);
-          owner = ownerResult.data;
-        }
+        let owners = await getInfoContents(changedFiles);
 
-        const valid = await multiVerify(bodies, owner ?? '', lastCommitSha);
+        const valid = await multiVerify(bodies, owners, lastCommitSha);
         if (valid === undefined) {
-          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${owner}\``);
+          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address(es) \`${owners}\``);
           return;
         }
 
         if (valid === false) {
-          await fail(`The provided signature is invalid. Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${owner}\``);
+          await fail(`The provided signature is invalid. Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address(es) \`${owners}\``);
           return;
         } else {
-          await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet address \`${owner}\``);
+          await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet address(es) \`${owners}\``);
         }
 
         console.info('successfully reviewed', pullRequest.html_url);
