@@ -19,7 +19,7 @@ export const robot = (app: Probot) => {
           });
         }
 
-        async function getInfoContents(files: {filename: string, raw_url: string}[]): Promise<string[]> {
+        async function getOwners(files: {filename: string, raw_url: string}[]): Promise<string[]> {
           const originalOwners: string[] = [];
           const newOwners: string[] = [];
 
@@ -60,7 +60,7 @@ export const robot = (app: Probot) => {
             }
           }
 
-          return allOwners;
+          return [...new Set(allOwners)];
         }
 
         function getDistinctIdentities(fileNames: string[]) {
@@ -187,21 +187,22 @@ export const robot = (app: Probot) => {
 
         const identity = distinctIdentities[0];
 
-        let owners = await getInfoContents(changedFiles);
+        let owners = await getOwners(changedFiles);
 
         const addressDescription = owners.length > 1 ? 'addresses' : 'address';
+        const ownersDescription = owners.map(owner => `\`${owner}\``).join('\n');
 
         const valid = await multiVerify(bodies, owners, lastCommitSha);
         if (valid === undefined) {
-          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n\`${owners.join('\n')}\``);
+          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${ownersDescription}`);
           return;
         }
 
         if (valid === false) {
-          await fail(`The provided signature is invalid. Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n\`${owners.join('\n')}\``);
+          await fail(`The provided signature is invalid. Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${ownersDescription}`);
           return;
         } else {
-          await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet ${addressDescription}: \n\`${owners.join('\n')}\``);
+          await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet ${addressDescription}: \n${ownersDescription}`);
         }
 
         console.info('successfully reviewed', pullRequest.html_url);
