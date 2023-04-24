@@ -5,7 +5,7 @@ import axios from 'axios';
 
 export const robot = (app: Probot) => {
   app.on(
-    ['pull_request.opened', 'pull_request.synchronize', 'issue_comment.created'],
+    ['pull_request.opened', 'pull_request.synchronize'/*, 'issue_comment.created'*/],
     async (context) => {
       const repo = context.repo();
 
@@ -18,46 +18,46 @@ export const robot = (app: Probot) => {
         });
       }
 
-      if (context.name === 'issue_comment') {
-        const body = context.payload.comment.body || '';
-        const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
-        if (signature) {
-          const workflowRuns = await context.octokit.actions.listWorkflowRunsForRepo({
-            repo: context.repo().repo,
-            owner: context.repo().owner,
-          });
+      // if (context.name === 'issue_comment') {
+      //   const body = context.payload.comment.body || '';
+      //   const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
+      //   if (signature) {
+      //     const workflowRuns = await context.octokit.actions.listWorkflowRunsForRepo({
+      //       repo: context.repo().repo,
+      //       owner: context.repo().owner,
+      //     });
 
-          for (const workflowRun of workflowRuns.data.workflow_runs) {
-            if (workflowRun.conclusion !== 'failure') {
-              continue;
-            }
+      //     for (const workflowRun of workflowRuns.data.workflow_runs) {
+      //       if (workflowRun.conclusion !== 'failure') {
+      //         continue;
+      //       }
 
-            const pullRequests = workflowRun.pull_requests;
-            if (!pullRequests) {
-              continue;
-            }
+      //       const pullRequests = workflowRun.pull_requests;
+      //       if (!pullRequests) {
+      //         continue;
+      //       }
 
-            const pullRequest = pullRequests.find(x => x.number === context.pullRequest().pull_number);
-            if (!pullRequest) {
-              continue;
-            }
+      //       const pullRequest = pullRequests.find(x => x.number === context.pullRequest().pull_number);
+      //       if (!pullRequest) {
+      //         continue;
+      //       }
 
-            if (pullRequest.head.sha !== workflowRun.head_sha) {
-              continue;
-            }
+      //       if (pullRequest.head.sha !== workflowRun.head_sha) {
+      //         continue;
+      //       }
 
-            console.log('Rerunning', workflowRun.id);
+      //       console.log('Rerunning', workflowRun.id);
 
-            await context.octokit.actions.reRunWorkflowFailedJobs({
-              repo: context.repo().repo,
-              owner: context.repo().owner,
-              run_id: workflowRun.id
-            });
-          }
-        }
+      //       await context.octokit.actions.reRunWorkflowFailedJobs({
+      //         repo: context.repo().repo,
+      //         owner: context.repo().owner,
+      //         run_id: workflowRun.id
+      //       });
+      //     }
+      //   }
 
-        return;
-      }
+      //   return;
+      // }
 
       async function getInfoContents(files: {filename: string, raw_url: string}[]): Promise<{owners: string[]} | undefined> {
         // we try to read the contents of the info.json file
