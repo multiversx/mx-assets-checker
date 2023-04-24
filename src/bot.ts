@@ -142,6 +142,7 @@ export const robot = (app: Probot) => {
         repo: context.repo().repo,
         owner: context.repo().owner,
         issue_number: context.pullRequest().pull_number,
+        per_page: 100,
       });
 
       const body = pullRequest.body || '';
