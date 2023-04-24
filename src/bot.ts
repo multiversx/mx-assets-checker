@@ -118,7 +118,7 @@ export const robot = (app: Probot) => {
         return 'invalid event payload';
       }
 
-      const data = await context.octokit.repos. compareCommits({
+      const data = await context.octokit.repos.compareCommits({
         owner: repo.owner,
         repo: repo.repo,
         base: pullRequest.base.sha,
@@ -138,6 +138,25 @@ export const robot = (app: Probot) => {
         return;
       }
 
+      const comments = await context.octokit.issues.listComments({
+        repo: context.repo().repo,
+        owner: context.repo().owner,
+        issue_number: context.pullRequest().pull_number,
+      });
+
+      const body = pullRequest.body || '';
+
+      const bodies = [...comments.data.map(x => x.body || ''), body];
+
+      const adminAddress = process.env.ADMIN_ADDRESS;
+      if (adminAddress) {
+        const result = await multiVerify(bodies, adminAddress, lastCommitSha);
+        if (result === true) {
+          await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the admin wallet address`);
+          return;
+        }
+      }
+
       if (distinctIdentities.length > 1) {
         await fail('Only one identity must be edited at a time');
         return;
@@ -152,33 +171,20 @@ export const robot = (app: Probot) => {
         owner = ownerResult.data;
       }
 
-      const comments = await context.octokit.issues.listComments({
-        repo: context.repo().repo,
-        owner: context.repo().owner,
-        issue_number: context.pullRequest().pull_number,
-      });
-
-      const body = pullRequest.body || '';
-
-      const bodies = [...comments.data.map(x => x.body || ''), body];
-
       console.log('bodies', bodies);
 
-      const address = owner;
-      const message = lastCommitSha;
-
-      const valid = await multiVerify(bodies, address ?? '', message);
+      const valid = await multiVerify(bodies, owner ?? '', lastCommitSha);
       console.info('valid', valid);
       if (valid === undefined) {
-        await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${address}\``);
+        await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${owner}\``);
         return;
       }
 
       if (valid === false) {
-        await fail(`The provided signature is invalid. Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${address}\``);
+        await fail(`The provided signature is invalid. Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${owner}\``);
         return;
       } else {
-        await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet address \`${address}\``);
+        await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet address \`${owner}\``);
       }
 
       console.info('successfully reviewed', pullRequest.html_url);
