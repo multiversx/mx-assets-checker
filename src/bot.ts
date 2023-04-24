@@ -99,8 +99,6 @@ export const robot = (app: Probot) => {
             results.push(result);
           }
 
-          console.info('results', results);
-
           if (results.every(x => x === undefined)) {
             return undefined;
           }
@@ -165,7 +163,6 @@ export const robot = (app: Probot) => {
         }
 
         const identity = distinctIdentities[0];
-        console.info('identity', identity);
 
         let owner = await getOwner(changedFiles);
         if (new Address(owner).isContractAddress()) {
@@ -173,10 +170,7 @@ export const robot = (app: Probot) => {
           owner = ownerResult.data;
         }
 
-        console.log('bodies', bodies);
-
         const valid = await multiVerify(bodies, owner ?? '', lastCommitSha);
-        console.info('valid', valid);
         if (valid === undefined) {
           await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet address \`${owner}\``);
           return;
