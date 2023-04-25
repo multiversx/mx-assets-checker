@@ -64,7 +64,7 @@ export const robot = (app: Probot) => {
         }
 
         function getDistinctIdentities(fileNames: string[]) {
-          const regex = /^identities\/(.*?)\//;
+          const regex = /identities\/(.*?)\//;
 
           const identities = fileNames
             .map(x => regex.exec(x)?.at(1))
