@@ -111,12 +111,12 @@ export const robot = (app: Probot) => {
           return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
         }
 
-        async function multiVerify(bodies: string[], addresses: string[], message: string): Promise<boolean | undefined> {
+        async function multiVerify(bodies: string[], addresses: string[], message: string): Promise<string[] | undefined> {
           if (addresses.length === 0) {
             return undefined;
           }
 
-          const resultDict: Record<string, boolean> = {};
+          const addressSet = new Set(addresses);
 
           for (const body of bodies) {
             const lines = body.split('\n');
@@ -124,13 +124,13 @@ export const robot = (app: Probot) => {
               for (const address of addresses) {
                 const result = await verify(line, address, message);
                 if (result === true) {
-                  resultDict[address] = true;
+                  addressSet.delete(address);
                 }
               }
             }
           }
           
-          return Object.keys(resultDict).length === addresses.length ? true : undefined;
+          return [...addressSet];
         }
 
         const { data: pullRequest } = await axios.get(`https://api.github.com/repos/multiversx/mx-assets/pulls/${context.pullRequest().pull_number}`);
@@ -173,8 +173,8 @@ export const robot = (app: Probot) => {
 
         const adminAddress = process.env.ADMIN_ADDRESS;
         if (adminAddress) {
-          const result = await multiVerify(bodies, [adminAddress], lastCommitSha);
-          if (result === true) {
+          const invalidAddresses = await multiVerify(bodies, [adminAddress], lastCommitSha);
+          if (invalidAddresses && invalidAddresses.length === 0) {
             await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the admin wallet address`);
             return;
           }
@@ -188,18 +188,22 @@ export const robot = (app: Probot) => {
         const identity = distinctIdentities[0];
 
         let owners = await getOwners(changedFiles);
-
-        const addressDescription = owners.length > 1 ? 'addresses' : 'address';
-        const ownersDescription = owners.map(owner => `\`${owner}\``).join('\n');
-
-        const valid = await multiVerify(bodies, owners, lastCommitSha);
-        if (valid === undefined) {
-          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${ownersDescription}`);
+        if (owners.length === 0) {
+          await fail('No owners identified');
           return;
         }
 
-        if (valid === false) {
-          await fail(`The provided signature is invalid. Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${ownersDescription}`);
+        const invalidAddresses = await multiVerify(bodies, owners, lastCommitSha);
+        if (!invalidAddresses) {
+          await fail('Failed to verify owners');
+          return;
+        }
+
+        const addressDescription = invalidAddresses.length > 1 ? 'addresses' : 'address';
+        const ownersDescription = invalidAddresses.map(address => `\`${address}\``).join('\n');
+
+        if (invalidAddresses.length > 0) {
+          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${ownersDescription}`);
           return;
         } else {
           await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet ${addressDescription}: \n${ownersDescription}`);
