@@ -11,15 +11,20 @@ export const robot = (app: Probot) => {
         const repo = context.repo();
 
         async function createComment(body: string) {
-          await context.octokit.issues.createComment({
-            repo: context.repo().repo,
-            owner: context.repo().owner,
-            issue_number: context.pullRequest().pull_number,
-            body,
-          });
+          try {
+            await context.octokit.issues.createComment({
+              repo: context.repo().repo,
+              owner: context.repo().owner,
+              issue_number: context.pullRequest().pull_number,
+              body,
+            });
+          } catch (error) {
+            console.error(`An error occurred while leaving comment '${JSON.stringify(body)}'`);
+            console.error(error);
+          }
         }
 
-        async function getOwners(files: {filename: string, raw_url: string}[]): Promise<string[]> {
+        async function getOwners(files: { filename: string, raw_url: string }[]): Promise<string[]> {
           const originalOwners: string[] = [];
           const newOwners: string[] = [];
 
@@ -29,16 +34,16 @@ export const robot = (app: Probot) => {
           if (infoFromMaster && typeof infoFromMaster === 'object' && infoFromMaster['owners']) {
             originalOwners.push(...infoFromMaster.owners);
           }
-          
+
           const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}/info.json`));
           if (infoJsonFile) {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
-              
+
             if (infoFromPullRequest && typeof infoFromPullRequest === 'object' && infoFromPullRequest['owners']) {
               newOwners.push(...infoFromPullRequest.owners);
             }
-        }
-          
+          }
+
           let mainOwner = '';
           if (originalOwners.length > 0) {
             mainOwner = originalOwners[0];
@@ -49,7 +54,7 @@ export const robot = (app: Probot) => {
           const extraOwners = newOwners.filter(x => !originalOwners.includes(x));
 
           const allOwners: string[] = [];
-          const allOwnersToCheck = [ mainOwner, ...extraOwners ];
+          const allOwnersToCheck = [mainOwner, ...extraOwners];
 
           for (const owner of allOwnersToCheck) {
             if (new Address(owner).isContractAddress()) {
@@ -69,7 +74,7 @@ export const robot = (app: Probot) => {
           const identities = fileNames
             .map(x => regex.exec(x)?.at(1))
             .filter(x => x);
-    
+
           return [...new Set(identities)];
         }
 
@@ -102,11 +107,11 @@ export const robot = (app: Probot) => {
             address: new Address(address),
             message: Buffer.from(message, 'utf8'),
           });
-    
+
           const publicKey = new UserPublicKey(
             new Address(address).pubkey(),
           );
-    
+
           const verifier = new UserVerifier(publicKey);
           return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
         }
@@ -129,7 +134,7 @@ export const robot = (app: Probot) => {
               }
             }
           }
-          
+
           return [...addressSet];
         }
 
