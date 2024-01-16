@@ -11,17 +11,18 @@ export const robot = (app: Probot) => {
         const repo = context.repo();
 
         async function createComment(body: string) {
-          try {
-            await context.octokit.issues.createComment({
-              repo: context.repo().repo,
-              owner: context.repo().owner,
-              issue_number: context.pullRequest().pull_number,
-              body,
-            });
-          } catch (error) {
-            console.error(`An error occurred while leaving comment '${JSON.stringify(body)}'`);
-            console.error(error);
-          }
+          // try {
+          //   await context.octokit.issues.createComment({
+          //     repo: context.repo().repo,
+          //     owner: context.repo().owner,
+          //     issue_number: context.pullRequest().pull_number,
+          //     body,
+          //   });
+          // } catch (error) {
+          //   console.error(`An error occurred while leaving comment '${JSON.stringify(body)}'`);
+          //   console.error(error);
+          // }
+          console.log(body);
         }
 
         async function getOwners(files: { filename: string, raw_url: string }[]): Promise<string[]> {
