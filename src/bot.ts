@@ -256,12 +256,13 @@ export const robot = (app: Probot) => {
         }
 
         const addressDescription = invalidAddresses.length > 1 ? 'addresses' : 'address';
-        const ownersDescription = invalidAddresses.map(address => `\`${address}\``).join('\n');
+        const invalidAddressesDescription = invalidAddresses.map(address => `\`${address}\``).join('\n');
 
         if (invalidAddresses.length > 0) {
-          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${ownersDescription}`);
+          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${invalidAddressesDescription}`);
           return;
         } else {
+          const ownersDescription = owners.map(address => `\`${address}\``).join('\n');
           await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet ${addressDescription}: \n${ownersDescription}`);
         }
 
