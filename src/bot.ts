@@ -27,9 +27,16 @@ export const robot = (app: Probot) => {
         async function getOwners(files: { filename: string, raw_url: string }[]): Promise<string[]> {
           const originalOwners: string[] = [];
           const newOwners: string[] = [];
+          const networkPath = network === 'mainnet' ? '' : `${network}/`;
+          const infoJsonUrl = `https://raw.githubusercontent.com/multiversx/mx-assets/master/${networkPath}identities/${identity}/info.json`;
+
+          console.log(`network: ${network}`);
+          console.log(`networkPath: ${networkPath}`);
+          console.log(`identity: ${identity}`);
+          console.log(`infoJsonUrl: ${infoJsonUrl}`);
 
           // we try to read the contents of the info.json file
-          const { data: infoFromMaster } = await axios.get(`https://raw.githubusercontent.com/multiversx/mx-assets/master/identities/${identity}/info.json`, { validateStatus: status => [200, 404].includes(status) });
+          const { data: infoFromMaster } = await axios.get(infoJsonUrl, { validateStatus: status => [200, 404].includes(status) });
 
           if (infoFromMaster && typeof infoFromMaster === 'object' && infoFromMaster['owners']) {
             originalOwners.push(...infoFromMaster.owners);
@@ -66,6 +73,28 @@ export const robot = (app: Probot) => {
           }
 
           return [...new Set(allOwners)];
+        }
+
+        function getDistinctNetworks(fileNames: string[]) {
+          const networks = fileNames.map(fileName => getNetwork(fileName)).filter(x => x !== undefined);
+
+          return [...new Set(networks)];
+        }
+
+        function getNetwork(fileName: string): 'mainnet' | 'devnet' | 'testnet' | undefined {
+          if (fileName.startsWith('identities')) {
+            return 'mainnet';
+          }
+
+          if (fileName.startsWith('testnet\\identities')) {
+            return 'testnet';
+          }
+
+          if (fileName.startsWith('devnet\\identities')) {
+            return 'devnet';
+          }
+
+          return undefined;
         }
 
         function getDistinctIdentities(fileNames: string[]) {
@@ -167,6 +196,11 @@ export const robot = (app: Probot) => {
           return;
         }
 
+        const distinctNetworks = getDistinctNetworks(changedFiles.map(x => x.filename));
+        if (distinctNetworks.length === 0) {
+          return;
+        }
+
         const comments = await context.octokit.issues.listComments({
           repo: context.repo().repo,
           owner: context.repo().owner,
@@ -192,7 +226,13 @@ export const robot = (app: Probot) => {
           return;
         }
 
+        if (distinctNetworks.length > 1) {
+          await fail('Only one network must be edited at a time');
+          return;
+        }
+
         const identity = distinctIdentities[0];
+        const network = distinctNetworks[0];
 
         let owners = await getOwners(changedFiles);
         if (owners.length === 0) {
