@@ -160,6 +160,8 @@ export const robot = (app: Probot) => {
           return 'no change';
         }
 
+        console.log(`changedFiles: ${JSON.stringify(changedFiles)}`);
+
         const distinctIdentities = getDistinctIdentities(changedFiles.map(x => x.filename));
         if (distinctIdentities.length === 0) {
           return;
