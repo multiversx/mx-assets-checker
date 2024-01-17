@@ -30,11 +30,6 @@ export const robot = (app: Probot) => {
           const networkPath = network === 'mainnet' ? '' : `${network}/`;
           const infoJsonUrl = `https://raw.githubusercontent.com/multiversx/mx-assets/master/${networkPath}identities/${identity}/info.json`;
 
-          console.log(`network: ${network}`);
-          console.log(`networkPath: ${networkPath}`);
-          console.log(`identity: ${identity}`);
-          console.log(`infoJsonUrl: ${infoJsonUrl}`);
-
           // we try to read the contents of the info.json file
           const { data: infoFromMaster } = await axios.get(infoJsonUrl, { validateStatus: status => [200, 404].includes(status) });
 
@@ -69,8 +64,6 @@ export const robot = (app: Probot) => {
           } else if (network === 'testnet') {
             apiUrl = 'https://testnet-api.multiversx.com';
           }
-
-          console.log(`apiUrl: ${apiUrl}`);
 
           for (const owner of allOwnersToCheck) {
             if (new Address(owner).isContractAddress()) {
@@ -197,8 +190,6 @@ export const robot = (app: Probot) => {
         if (!changedFiles?.length) {
           return 'no change';
         }
-
-        console.log(`changedFiles: ${JSON.stringify(changedFiles)}`);
 
         const distinctIdentities = getDistinctIdentities(changedFiles.map(x => x.filename));
         if (distinctIdentities.length === 0) {
