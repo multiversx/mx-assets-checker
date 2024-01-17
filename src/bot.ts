@@ -63,9 +63,18 @@ export const robot = (app: Probot) => {
           const allOwners: string[] = [];
           const allOwnersToCheck = [mainOwner, ...extraOwners];
 
+          let apiUrl = 'https://next-api.multiversx.com';
+          if (network === 'devnet') {
+            apiUrl = 'https://devnet-api.multiversx.com';
+          } else if (network === 'testnet') {
+            apiUrl = 'https://testnet-api.multiversx.com';
+          }
+
+          console.log(`apiUrl: ${apiUrl}`);
+
           for (const owner of allOwnersToCheck) {
             if (new Address(owner).isContractAddress()) {
-              const ownerResult = await axios.get(`https://next-api.multiversx.com/accounts/${owner}?extract=ownerAddress`);
+              const ownerResult = await axios.get(`${apiUrl}/accounts/${owner}?extract=ownerAddress`);
               allOwners.push(ownerResult.data);
             } else {
               allOwners.push(owner);
