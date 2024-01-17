@@ -86,11 +86,11 @@ export const robot = (app: Probot) => {
             return 'mainnet';
           }
 
-          if (fileName.startsWith('testnet\\identities')) {
+          if (fileName.startsWith('testnet/identities')) {
             return 'testnet';
           }
 
-          if (fileName.startsWith('devnet\\identities')) {
+          if (fileName.startsWith('devnet/identities')) {
             return 'devnet';
           }
 
