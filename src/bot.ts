@@ -161,6 +161,7 @@ export const robot = (app: Probot) => {
                 for (const address of addresses) {
                   const result = await verify(line, address, message);
                   if (result === true) {
+                    console.info(`Successfully verified that message '${message}' was signed correctly using the address '${address}'`);
                     addressSet.delete(address);
                   }
                 }
