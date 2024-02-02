@@ -147,20 +147,23 @@ export const robot = (app: Probot) => {
           return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
         }
 
-        async function multiVerify(bodies: string[], addresses: string[], message: string): Promise<string[] | undefined> {
+        async function multiVerify(bodies: string[], addresses: string[], messages: string[]): Promise<string[] | undefined> {
           if (addresses.length === 0) {
             return undefined;
           }
 
           const addressSet = new Set(addresses);
 
-          for (const body of bodies) {
-            const lines = body.split('\n');
-            for (const line of lines) {
-              for (const address of addresses) {
-                const result = await verify(line, address, message);
-                if (result === true) {
-                  addressSet.delete(address);
+          for (const message of messages) {
+            for (const body of bodies) {
+              const lines = body.split('\n');
+              for (const line of lines) {
+                for (const address of addresses) {
+                  const result = await verify(line, address, message);
+                  if (result === true) {
+                    console.info(`Successfully verified that message '${message}' was signed correctly using the address '${address}'`);
+                    addressSet.delete(address);
+                  }
                 }
               }
             }
@@ -186,6 +189,7 @@ export const robot = (app: Probot) => {
         let { files: changedFiles, commits } = data.data;
 
         const lastCommitSha = commits[commits.length - 1].sha;
+        const commitShas = commits.map(x => x.sha);
 
         if (!changedFiles?.length) {
           return 'no change';
@@ -214,7 +218,7 @@ export const robot = (app: Probot) => {
 
         const adminAddress = process.env.ADMIN_ADDRESS;
         if (adminAddress) {
-          const invalidAddresses = await multiVerify(bodies, [adminAddress], lastCommitSha);
+          const invalidAddresses = await multiVerify(bodies, [adminAddress], commitShas);
           if (invalidAddresses && invalidAddresses.length === 0) {
             await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the admin wallet address`);
             return;
@@ -240,7 +244,7 @@ export const robot = (app: Probot) => {
           return;
         }
 
-        const invalidAddresses = await multiVerify(bodies, owners, lastCommitSha);
+        const invalidAddresses = await multiVerify(bodies, owners, commitShas);
         if (!invalidAddresses) {
           await fail('Failed to verify owners');
           return;
