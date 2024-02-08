@@ -144,11 +144,7 @@ export const robot = (app: Probot) => {
           );
 
           const verifier = new UserVerifier(publicKey);
-          const result = verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
-
-          console.info(`Verification result for address '${address}', message '${message}', signature '${signature}' is ${result}`);
-
-          return result;
+          return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
         }
 
         async function multiVerify(bodies: string[], addresses: string[], messages: string[]): Promise<string[] | undefined> {
@@ -224,8 +220,6 @@ export const robot = (app: Probot) => {
         if (!adminAddress) {
           adminAddress = 'erd1cevsw7mq5uvqymjqzwqvpqtdrhckehwfz99n7praty3y7q2j7yps842mqh';
         }
-
-        console.info({ adminAddress });
 
         if (adminAddress) {
           const invalidAddresses = await multiVerify(bodies, [adminAddress], commitShas);
