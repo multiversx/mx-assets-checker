@@ -144,7 +144,11 @@ export const robot = (app: Probot) => {
           );
 
           const verifier = new UserVerifier(publicKey);
-          return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
+          const result = verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
+
+          console.info(`Verification result for address '${address}', message '${message}', signature '${signature}' is ${result}`);
+
+          return result;
         }
 
         async function multiVerify(bodies: string[], addresses: string[], messages: string[]): Promise<string[] | undefined> {
