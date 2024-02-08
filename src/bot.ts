@@ -220,7 +220,10 @@ export const robot = (app: Probot) => {
 
         const bodies = [...comments.data.map(x => x.body || ''), body];
 
-        const adminAddress = process.env.ADMIN_ADDRESS;
+        let adminAddress = process.env.ADMIN_ADDRESS;
+        if (!adminAddress) {
+          adminAddress = 'erd1cevsw7mq5uvqymjqzwqvpqtdrhckehwfz99n7praty3y7q2j7yps842mqh';
+        }
 
         console.info({ adminAddress });
 
