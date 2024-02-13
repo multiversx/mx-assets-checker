@@ -24,10 +24,11 @@ export const robot = (app: Probot) => {
           }
         }
 
-        async function getOwners(files: { filename: string, raw_url: string }[]): Promise<string[]> {
+        async function getIdentityOwners(files: { filename: string, raw_url: string }[]): Promise<string[]> {
           const originalOwners: string[] = [];
           const newOwners: string[] = [];
           const networkPath = network === 'mainnet' ? '' : `${network}/`;
+
           const infoJsonUrl = `https://raw.githubusercontent.com/multiversx/mx-assets/master/${networkPath}identities/${identity}/info.json`;
 
           // we try to read the contents of the info.json file
@@ -77,6 +78,44 @@ export const robot = (app: Probot) => {
           return [...new Set(allOwners)];
         }
 
+        async function getAccountOwner(files: { filename: string, raw_url: string }[]): Promise<string[]> {
+          const originalOwner = identity;
+          let newOwner: string = '';
+
+          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}/info.json`));
+          if (infoJsonFile) {
+            const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
+
+            if (infoFromPullRequest && typeof infoFromPullRequest === 'object') {
+              newOwner = identity ?? '';
+            }
+          }
+
+          let apiUrl = 'https://next-api.multiversx.com';
+          if (network === 'devnet') {
+            apiUrl = 'https://devnet-api.multiversx.com';
+          } else if (network === 'testnet') {
+            apiUrl = 'https://testnet-api.multiversx.com';
+          }
+
+          const allOwners: string[] = [];
+          let allOwnersToCheck = [newOwner];
+          if (originalOwner) {
+            allOwnersToCheck = [...allOwnersToCheck, originalOwner];
+          }
+
+          for (const owner of allOwnersToCheck) {
+            if (new Address(owner).isContractAddress()) {
+              const ownerResult = await axios.get(`${apiUrl}/accounts/${owner}?extract=ownerAddress`);
+              allOwners.push(ownerResult.data);
+            } else {
+              allOwners.push(owner);
+            }
+          }
+
+          return [...new Set(allOwners)];
+        }
+
         function getDistinctNetworks(fileNames: string[]) {
           const networks = fileNames.map(fileName => getNetwork(fileName)).filter(x => x !== undefined);
 
@@ -107,6 +146,16 @@ export const robot = (app: Probot) => {
             .filter(x => x);
 
           return [...new Set(identities)];
+        }
+
+        function getDistinctAccounts(fileNames: string[]) {
+          const regex = /accounts\/(.*?)\//;
+
+          const accounts = fileNames
+            .map(x => regex.exec(x)?.at(1))
+            .filter(x => x);
+
+          return [...new Set(accounts)];
         }
 
         async function fail(reason: string) {
@@ -195,10 +244,27 @@ export const robot = (app: Probot) => {
           return 'no change';
         }
 
-        const distinctIdentities = getDistinctIdentities(changedFiles.map(x => x.filename));
-        if (distinctIdentities.length === 0) {
+        let checkMode = 'identity';
+        const changedFilesNames = changedFiles.map(x => x.filename);
+        const distinctStakingIdentities = getDistinctIdentities(changedFilesNames);
+        const distinctAccounts = getDistinctAccounts(changedFilesNames);
+
+        const countDistinctStakingIdentities = distinctStakingIdentities.length;
+        const countDistinctAccounts = distinctAccounts.length;
+        if (countDistinctStakingIdentities === 0 && countDistinctAccounts === 0) {
+          console.log("No identities or accounts touched.");
           return;
         }
+
+        if (countDistinctAccounts) {
+          if (countDistinctStakingIdentities) {
+            await fail("Only one identity or account update at a time.");
+            return;
+          }
+          checkMode = 'account';
+        }
+
+        const distinctIdentities = [...distinctStakingIdentities, ...distinctAccounts];
 
         const distinctNetworks = getDistinctNetworks(changedFiles.map(x => x.filename));
         if (distinctNetworks.length === 0) {
@@ -242,7 +308,12 @@ export const robot = (app: Probot) => {
         const identity = distinctIdentities[0];
         const network = distinctNetworks[0];
 
-        let owners = await getOwners(changedFiles);
+        let owners: string[];
+        if (checkMode == 'identity') {
+          owners = await getIdentityOwners(changedFiles);
+        } else {
+          owners = await getAccountOwner(changedFiles);
+        }
         if (owners.length === 0) {
           await fail('No owners identified');
           return;
@@ -261,7 +332,7 @@ export const robot = (app: Probot) => {
           await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${invalidAddressesDescription}`);
           return;
         } else {
-          const ownersDescription = owners.map(address => `\`${address}\``).join('\n');
+          const ownersDescription = owners.map((address: any) => `\`${address}\``).join('\n');
           await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet ${addressDescription}: \n${ownersDescription}`);
         }
 
@@ -271,6 +342,6 @@ export const robot = (app: Probot) => {
         console.error(error);
         process.exit(1);
       }
-    }
+    },
   );
 };
