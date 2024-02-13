@@ -253,7 +253,7 @@ export const robot = (app: Probot) => {
         const countDistinctStakingIdentities = distinctStakingIdentities.length;
         const countDistinctAccounts = distinctAccounts.length;
         if (countDistinctStakingIdentities === 0 && countDistinctAccounts === 0) {
-          console.log("No identities or accounts touched.");
+          await fail("No identities or accounts touched.");
           return;
         }
 
