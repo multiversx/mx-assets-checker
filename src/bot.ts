@@ -226,7 +226,7 @@ export const robot = (app: Probot) => {
         const state = pullRequest.state;
 
         if (state === 'closed' || state === 'locked' || state === 'draft') {
-          context.log.error(`Invalid PR state: ${state}`);
+          await fail(`Invalid PR state: ${state}`);
           return 'invalid event payload';
         }
 
@@ -239,12 +239,12 @@ export const robot = (app: Probot) => {
 
         let { files: changedFiles, commits } = data.data;
 
-        context.log.info(`Processing the assets ownership checks for files: ${changedFiles}`);
+        await fail(`Processing the assets ownership checks for files: ${changedFiles}`);
         const lastCommitSha = commits[commits.length - 1].sha;
         const commitShas = commits.map(x => x.sha);
 
         if (!changedFiles?.length) {
-          context.log.info("No change detected.");
+          await fail("No change detected.");
           return 'no change';
         }
 
@@ -256,14 +256,14 @@ export const robot = (app: Probot) => {
         const countDistinctStakingIdentities = distinctStakingIdentities.length;
         const countDistinctAccounts = distinctAccounts.length;
         if (countDistinctStakingIdentities === 0 && countDistinctAccounts === 0) {
-          context.log.info("No identity or account changed.");
+          await fail("No identity or account changed.");
           await fail("No identity or account changed.");
           return;
         }
 
         if (countDistinctAccounts) {
           if (countDistinctStakingIdentities) {
-            context.log.info("Only one identity or account update at a time.");
+            await fail("Only one identity or account update at a time.");
             await fail("Only one identity or account update at a time.");
             return;
           }
@@ -274,7 +274,7 @@ export const robot = (app: Probot) => {
 
         const distinctNetworks = getDistinctNetworks(changedFiles.map(x => x.filename));
         if (distinctNetworks.length === 0) {
-          context.log.info("No network changed.");
+          await fail("No network changed.");
           return;
         }
 
