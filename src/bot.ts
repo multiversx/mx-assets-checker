@@ -82,7 +82,7 @@ export const robot = (app: Probot) => {
           const originalOwner = identity;
           let newOwner: string = '';
 
-          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}/info.json`));
+          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}.json`));
           if (infoJsonFile) {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
@@ -237,6 +237,7 @@ export const robot = (app: Probot) => {
 
         let { files: changedFiles, commits } = data.data;
 
+        console.log({changedFiles});
         const lastCommitSha = commits[commits.length - 1].sha;
         const commitShas = commits.map(x => x.sha);
 
