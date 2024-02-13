@@ -225,6 +225,8 @@ export const robot = (app: Probot) => {
         const { data: pullRequest } = await axios.get(`https://api.github.com/repos/multiversx/mx-assets/pulls/${context.pullRequest().pull_number}`);
         const state = pullRequest.state;
 
+        await fail(`State: ${state}`);
+
         if (state === 'closed' || state === 'locked' || state === 'draft') {
           await fail(`Invalid PR state: ${state}`);
           return 'invalid event payload';
