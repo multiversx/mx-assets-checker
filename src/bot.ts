@@ -9,6 +9,7 @@ export const robot = (app: Probot) => {
     async (context) => {
       try {
         const repo = context.repo();
+        console.log("Starting processing of the identities signatures");
 
         async function createComment(body: string) {
           try {
@@ -237,7 +238,7 @@ export const robot = (app: Probot) => {
 
         let { files: changedFiles, commits } = data.data;
 
-        console.log({changedFiles});
+        console.log({ changedFiles });
         const lastCommitSha = commits[commits.length - 1].sha;
         const commitShas = commits.map(x => x.sha);
 
