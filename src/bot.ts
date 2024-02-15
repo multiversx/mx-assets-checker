@@ -124,15 +124,15 @@ export const robot = (app: Probot) => {
         }
 
         function getNetwork(fileName: string): 'mainnet' | 'devnet' | 'testnet' | undefined {
-          if (fileName.startsWith('identities')) {
+          if (fileName.startsWith('identities') || fileName.startsWith('accounts')) {
             return 'mainnet';
           }
 
-          if (fileName.startsWith('testnet/identities')) {
+          if (fileName.startsWith('testnet/identities') || fileName.startsWith('testnet/accounts')) {
             return 'testnet';
           }
 
-          if (fileName.startsWith('devnet/identities')) {
+          if (fileName.startsWith('devnet/identities') || fileName.startsWith('devnet/accounts')) {
             return 'devnet';
           }
 
@@ -248,7 +248,7 @@ export const robot = (app: Probot) => {
 
         let checkMode = 'identity';
         const changedFilesNames = changedFiles.map(x => x.filename);
-        console.log({changedFiles});
+        console.log({ changedFiles });
         const distinctStakingIdentities = getDistinctIdentities(changedFilesNames);
         const distinctAccounts = getDistinctAccounts(changedFilesNames);
 
