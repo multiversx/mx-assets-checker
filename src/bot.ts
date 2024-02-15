@@ -150,7 +150,7 @@ export const robot = (app: Probot) => {
         }
 
         function getDistinctAccounts(fileNames: string[]) {
-          const regex = /accounts\/(.*?)\//;
+          const regex = /accounts\/(.*?).json/;
 
           const accounts = fileNames
             .map(x => regex.exec(x)?.at(1))
