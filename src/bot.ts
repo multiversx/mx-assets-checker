@@ -83,7 +83,7 @@ export const robot = (app: Probot) => {
           const originalOwner = identity;
           let newOwner: string = '';
 
-          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}/info.json`));
+          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}.info.json`));
           if (infoJsonFile) {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
@@ -323,6 +323,7 @@ export const robot = (app: Probot) => {
           return;
         }
 
+        console.log(`identity owners. check mode=${checkMode}. value=${owners}`);
         const invalidAddresses = await multiVerify(bodies, owners, commitShas);
         if (!invalidAddresses) {
           await fail('Failed to verify owners');
