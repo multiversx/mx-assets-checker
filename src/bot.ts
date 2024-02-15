@@ -88,6 +88,7 @@ export const robot = (app: Probot) => {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
             if (infoFromPullRequest && typeof infoFromPullRequest === 'object') {
+              console.log(`typeof infoFromPullRequest = ${typeof infoFromPullRequest}. infoJsonFile=${infoJsonFile}. infoFromPullRequest=${infoFromPullRequest}`);
               newOwner = identity ?? '';
             }
           }
@@ -100,7 +101,10 @@ export const robot = (app: Probot) => {
           }
 
           const allOwners: string[] = [];
-          let allOwnersToCheck = [newOwner];
+          let allOwnersToCheck: string[] = [];
+          if (newOwner) {
+            allOwnersToCheck = [...allOwnersToCheck, newOwner];
+          }
           if (originalOwner) {
             allOwnersToCheck = [...allOwnersToCheck, originalOwner];
           }
