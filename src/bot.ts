@@ -83,12 +83,12 @@ export const robot = (app: Probot) => {
           const originalOwner = identity;
           let newOwner: string = '';
 
-          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}.info.json`));
+          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}.json`));
           if (infoJsonFile) {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
+            console.log(`typeof infoFromPullRequest = ${typeof infoFromPullRequest}. infoJsonFile=${infoJsonFile}. infoFromPullRequest=${infoFromPullRequest}`);
             if (infoFromPullRequest && typeof infoFromPullRequest === 'object') {
-              console.log(`typeof infoFromPullRequest = ${typeof infoFromPullRequest}. infoJsonFile=${infoJsonFile}. infoFromPullRequest=${infoFromPullRequest}`);
               newOwner = identity ?? '';
             }
           }
