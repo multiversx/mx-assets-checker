@@ -39,7 +39,7 @@ export const robot = (app: Probot) => {
             originalOwners.push(...infoFromMaster.owners);
           }
 
-          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}/info.json`));
+          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}.json`));
           if (infoJsonFile) {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
@@ -225,8 +225,6 @@ export const robot = (app: Probot) => {
         const { data: pullRequest } = await axios.get(`https://api.github.com/repos/multiversx/mx-assets/pulls/${context.pullRequest().pull_number}`);
         const state = pullRequest.state;
 
-        await fail(`State: ${state}`);
-
         if (state === 'closed' || state === 'locked' || state === 'draft') {
           await fail(`Invalid PR state: ${state}`);
           return 'invalid event payload';
@@ -245,7 +243,6 @@ export const robot = (app: Probot) => {
         const commitShas = commits.map(x => x.sha);
 
         if (!changedFiles?.length) {
-          await fail("No change detected.");
           return 'no change';
         }
 
@@ -257,14 +254,14 @@ export const robot = (app: Probot) => {
         const countDistinctStakingIdentities = distinctStakingIdentities.length;
         const countDistinctAccounts = distinctAccounts.length;
         if (countDistinctStakingIdentities === 0 && countDistinctAccounts === 0) {
-          await fail("No identity or account changed.");
+          context.log.info("No identity or account changed.");
           await fail("No identity or account changed.");
           return;
         }
 
         if (countDistinctAccounts) {
           if (countDistinctStakingIdentities) {
-            await fail("Only one identity or account update at a time.");
+            context.log.info("Only one identity or account update at a time.");
             await fail("Only one identity or account update at a time.");
             return;
           }
