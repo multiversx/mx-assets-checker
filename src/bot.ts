@@ -9,7 +9,7 @@ export const robot = (app: Probot) => {
     async (context) => {
       try {
         const repo = context.repo();
-        context.log.info("Starting processing the assets ownership checks");
+        console.log("Starting processing the assets ownership checks");
 
         async function createComment(body: string) {
           try {
@@ -248,20 +248,19 @@ export const robot = (app: Probot) => {
 
         let checkMode = 'identity';
         const changedFilesNames = changedFiles.map(x => x.filename);
+        console.log({changedFiles});
         const distinctStakingIdentities = getDistinctIdentities(changedFilesNames);
         const distinctAccounts = getDistinctAccounts(changedFilesNames);
 
         const countDistinctStakingIdentities = distinctStakingIdentities.length;
         const countDistinctAccounts = distinctAccounts.length;
         if (countDistinctStakingIdentities === 0 && countDistinctAccounts === 0) {
-          context.log.info("No identity or account changed.");
           await fail("No identity or account changed.");
           return;
         }
 
         if (countDistinctAccounts) {
           if (countDistinctStakingIdentities) {
-            context.log.info("Only one identity or account update at a time.");
             await fail("Only one identity or account update at a time.");
             return;
           }
