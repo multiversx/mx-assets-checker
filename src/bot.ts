@@ -57,6 +57,9 @@ export const robot = (app: Probot) => {
 
           const extraOwners = newOwners.filter(x => !originalOwners.includes(x));
 
+          const printableFilenames = files.map(file => file.filename).join(', ');
+          console.log(`Names of changed files: ${printableFilenames}. original owners=${originalOwners}. new owners: ${newOwners}`);
+
           const allOwners: string[] = [];
           const allOwnersToCheck = [mainOwner, ...extraOwners];
 
@@ -221,7 +224,9 @@ export const robot = (app: Probot) => {
         async function verify(body: string, address: string, message: string): Promise<boolean | undefined> {
           const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
           if (signature) {
-            return verifySignature(signature, address, message);
+            const verifyResult = await verifySignature(signature, address, message);
+            console.log(`verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
+            return verifyResult;
           }
 
           const txHash = /[0-9a-fA-F]{64}/.exec(body)?.at(0);
@@ -348,10 +353,7 @@ export const robot = (app: Probot) => {
 
         const bodies = [...comments.data.map(x => x.body || ''), body];
 
-        let adminAddress = process.env.ADMIN_ADDRESS;
-        if (!adminAddress) {
-          adminAddress = 'erd1cevsw7mq5uvqymjqzwqvpqtdrhckehwfz99n7praty3y7q2j7yps842mqh';
-        }
+        const adminAddress = process.env.ADMIN_ADDRESS;
 
         if (adminAddress) {
           const invalidAddresses = await multiVerify(bodies, [adminAddress], commitShas);
@@ -394,7 +396,7 @@ export const robot = (app: Probot) => {
           return;
         }
 
-        console.log(`identity owners. check mode=${checkMode}. value=${owners}`);
+        console.log(`Asset owners. check mode=${checkMode}. value=${owners}`);
         const invalidAddresses = await multiVerify(bodies, owners, commitShas);
         if (!invalidAddresses) {
           await fail('Failed to verify owners');
