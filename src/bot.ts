@@ -55,6 +55,9 @@ export const robot = (app: Probot) => {
 
           const extraOwners = newOwners.filter(x => !originalOwners.includes(x));
 
+          const printableFilenames = files.map(file => file.filename).join(', ');
+          console.log(`Names of changed files: ${printableFilenames}. original owners=${originalOwners}. new owners: ${newOwners}`);
+
           const allOwners: string[] = [];
           const allOwnersToCheck = [mainOwner, ...extraOwners];
 
@@ -118,7 +121,7 @@ export const robot = (app: Probot) => {
         async function verify(body: string, address: string, message: string): Promise<boolean | undefined> {
           const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
           if (signature) {
-            const verifyResult = verifySignature(signature, address, message);
+            const verifyResult = await verifySignature(signature, address, message);
             console.log(`verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
             return verifyResult;
           }
