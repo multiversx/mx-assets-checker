@@ -216,10 +216,7 @@ export const robot = (app: Probot) => {
 
         const bodies = [...comments.data.map(x => x.body || ''), body];
 
-        let adminAddress = process.env.ADMIN_ADDRESS;
-        if (!adminAddress) {
-          adminAddress = 'erd1cevsw7mq5uvqymjqzwqvpqtdrhckehwfz99n7praty3y7q2j7yps842mqh';
-        }
+        const adminAddress = process.env.ADMIN_ADDRESS;
 
         if (adminAddress) {
           const invalidAddresses = await multiVerify(bodies, [adminAddress], commitShas);
