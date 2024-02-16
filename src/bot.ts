@@ -121,6 +121,40 @@ export const robot = (app: Probot) => {
           return [...new Set(allOwners)];
         }
 
+        async function getTokenOwner(): Promise<string> {
+          // since the token owner can be changed at protocol level at any time, it's enough to check the ownership of the token,
+          // without checking any previous owners
+          if (!identity) {
+            return '';
+          }
+          const token = identity;
+
+          let apiUrl = 'https://next-api.multiversx.com';
+          if (network === 'devnet') {
+            apiUrl = 'https://devnet-api.multiversx.com';
+          } else if (network === 'testnet') {
+            apiUrl = 'https://testnet-api.multiversx.com';
+          }
+
+
+          const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
+          if (new Address(tokenOwner).isContractAddress()) {
+            const ownerResult = await axios.get(`${apiUrl}/tokens/${token}?extract=ownerAddress`);
+            return ownerResult.data;
+          }
+
+          return tokenOwner;
+        }
+
+        async function getTokenOwnerFromApi(token: string, apiUrl: string): Promise<string> {
+          const tokenOwnerResponse = await axios.get(`${apiUrl}/tokens/${token}?extract=owner`);
+          if (tokenOwnerResponse && tokenOwnerResponse.data) {
+            return tokenOwnerResponse.data;
+          }
+
+          return '';
+        }
+
         function getDistinctNetworks(fileNames: string[]) {
           const networks = fileNames.map(fileName => getNetwork(fileName)).filter(x => x !== undefined);
 
@@ -128,20 +162,25 @@ export const robot = (app: Probot) => {
         }
 
         function getNetwork(fileName: string): 'mainnet' | 'devnet' | 'testnet' | undefined {
-          if (fileName.startsWith('identities') || fileName.startsWith('accounts')) {
+          const mainnetRegex = /^(identities|accounts|tokens)\b/;
+          const testnetRegex = /^testnet\/(identities|accounts|tokens)\b/;
+          const devnetRegex = /^devnet\/(identities|accounts|tokens)\b/;
+
+          if (mainnetRegex.test(fileName)) {
             return 'mainnet';
           }
 
-          if (fileName.startsWith('testnet/identities') || fileName.startsWith('testnet/accounts')) {
+          if (testnetRegex.test(fileName)) {
             return 'testnet';
           }
 
-          if (fileName.startsWith('devnet/identities') || fileName.startsWith('devnet/accounts')) {
+          if (devnetRegex.test(fileName)) {
             return 'devnet';
           }
 
           return undefined;
         }
+
 
         function getDistinctIdentities(fileNames: string[]) {
           const regex = /identities\/(.*?)\//;
@@ -155,6 +194,16 @@ export const robot = (app: Probot) => {
 
         function getDistinctAccounts(fileNames: string[]) {
           const regex = /accounts\/(.*?).json/;
+
+          const accounts = fileNames
+            .map(x => regex.exec(x)?.at(1))
+            .filter(x => x);
+
+          return [...new Set(accounts)];
+        }
+
+        function getDistinctTokens(fileNames: string[]) {
+          const regex = /tokens\/(.*?).json/;
 
           const accounts = fileNames
             .map(x => regex.exec(x)?.at(1))
@@ -255,23 +304,32 @@ export const robot = (app: Probot) => {
         console.log({ changedFiles });
         const distinctStakingIdentities = getDistinctIdentities(changedFilesNames);
         const distinctAccounts = getDistinctAccounts(changedFilesNames);
+        const distinctTokens = getDistinctTokens(changedFilesNames);
 
         const countDistinctStakingIdentities = distinctStakingIdentities.length;
+        if (countDistinctStakingIdentities) {
+          checkMode = 'identity';
+        }
         const countDistinctAccounts = distinctAccounts.length;
-        if (countDistinctStakingIdentities === 0 && countDistinctAccounts === 0) {
-          await fail("No identity or account changed.");
+        if (countDistinctAccounts) {
+          checkMode = 'account';
+        }
+        const countDistinctTokens = distinctTokens.length;
+        if (countDistinctTokens) {
+          checkMode = 'token';
+        }
+
+        const sumOfAllChangedAssets = countDistinctAccounts + countDistinctStakingIdentities + countDistinctTokens;
+        if (sumOfAllChangedAssets === 0) {
+          await fail("No identity, token or account changed.");
+          return;
+        }
+        if (sumOfAllChangedAssets > 1) {
+          await fail("Only one identity, token or account update at a time.");
           return;
         }
 
-        if (countDistinctAccounts) {
-          if (countDistinctStakingIdentities) {
-            await fail("Only one identity or account update at a time.");
-            return;
-          }
-          checkMode = 'account';
-        }
-
-        const distinctIdentities = [...distinctStakingIdentities, ...distinctAccounts];
+        const distinctIdentities = [...distinctStakingIdentities, ...distinctAccounts, ...distinctTokens];
 
         const distinctNetworks = getDistinctNetworks(changedFiles.map(x => x.filename));
         if (distinctNetworks.length === 0) {
@@ -317,11 +375,20 @@ export const robot = (app: Probot) => {
         const network = distinctNetworks[0];
 
         let owners: string[];
-        if (checkMode == 'identity') {
-          owners = await getIdentityOwners(changedFiles);
-        } else {
-          owners = await getAccountOwner(changedFiles);
+        switch (checkMode) {
+          case 'identity':
+            owners = await getIdentityOwners(changedFiles);
+            break;
+          case 'account':
+            owners = await getAccountOwner(changedFiles);
+            break;
+          case 'token':
+            owners = [...await getTokenOwner()];
+            break;
+          default:
+            owners = [];
         }
+
         if (owners.length === 0) {
           await fail('No owners identified');
           return;
