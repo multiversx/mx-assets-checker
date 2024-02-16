@@ -90,7 +90,6 @@ export const robot = (app: Probot) => {
           if (infoJsonFile) {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
-            console.log(`typeof infoFromPullRequest = ${typeof infoFromPullRequest}. infoJsonFile=${infoJsonFile}. infoFromPullRequest=${infoFromPullRequest}`);
             if (infoFromPullRequest && typeof infoFromPullRequest === 'object') {
               newOwner = identity ?? '';
             }
@@ -225,7 +224,7 @@ export const robot = (app: Probot) => {
           const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
           if (signature) {
             const verifyResult = await verifySignature(signature, address, message);
-            console.log(`verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
+            console.log(`Verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
             return verifyResult;
           }
 
@@ -306,7 +305,6 @@ export const robot = (app: Probot) => {
 
         let checkMode = 'identity';
         const changedFilesNames = changedFiles.map(x => x.filename);
-        console.log({ changedFiles });
         const distinctStakingIdentities = getDistinctIdentities(changedFilesNames);
         const distinctAccounts = getDistinctAccounts(changedFilesNames);
         const distinctTokens = getDistinctTokens(changedFilesNames);
