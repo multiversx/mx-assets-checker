@@ -9,6 +9,7 @@ export const robot = (app: Probot) => {
     async (context) => {
       try {
         const repo = context.repo();
+        console.log("Starting processing the assets ownership checks");
 
         async function createComment(body: string) {
           try {
@@ -24,11 +25,12 @@ export const robot = (app: Probot) => {
           }
         }
 
-        async function getOwners(files: { filename: string, raw_url: string }[]): Promise<string[]> {
+        async function getIdentityOwners(files: { filename: string, raw_url: string }[]): Promise<string[]> {
           const originalOwners: string[] = [];
           const newOwners: string[] = [];
           const networkPath = network === 'mainnet' ? '' : `${network}/`;
-          const infoJsonUrl = `https://raw.githubusercontent.com/multiversx/mx-assets/master/${networkPath}identities/${identity}/info.json`;
+
+          const infoJsonUrl = `https://raw.githubusercontent.com/multiversx/mx-assets/master/${networkPath}identities/${asset}/info.json`;
 
           // we try to read the contents of the info.json file
           const { data: infoFromMaster } = await axios.get(infoJsonUrl, { validateStatus: status => [200, 404].includes(status) });
@@ -37,7 +39,7 @@ export const robot = (app: Probot) => {
             originalOwners.push(...infoFromMaster.owners);
           }
 
-          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}/info.json`));
+          const infoJsonFile = files.find(x => x.filename.endsWith(`/${asset}/info.json`));
           if (infoJsonFile) {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
@@ -61,12 +63,7 @@ export const robot = (app: Probot) => {
           const allOwners: string[] = [];
           const allOwnersToCheck = [mainOwner, ...extraOwners];
 
-          let apiUrl = 'https://next-api.multiversx.com';
-          if (network === 'devnet') {
-            apiUrl = 'https://devnet-api.multiversx.com';
-          } else if (network === 'testnet') {
-            apiUrl = 'https://testnet-api.multiversx.com';
-          }
+          const apiUrl = getApiUrl();
 
           for (const owner of allOwnersToCheck) {
             if (new Address(owner).isContractAddress()) {
@@ -80,6 +77,61 @@ export const robot = (app: Probot) => {
           return [...new Set(allOwners)];
         }
 
+        async function getAccountOwner(account: string): Promise<string> {
+          const accountOwner = account;
+          if (new Address(accountOwner).isContractAddress()) {
+            return getAccountOwnerFromApi(accountOwner);
+          }
+
+          return accountOwner;
+        }
+
+        async function getAccountOwnerFromApi(address: string): Promise<string> {
+          const apiUrl = getApiUrl();
+          const accountOwnerResponse = await axios.get(`${apiUrl}/accounts/${address}?extract=ownerAddress`);
+          if (accountOwnerResponse && accountOwnerResponse.data) {
+            return accountOwnerResponse.data;
+          }
+
+          return '';
+        }
+
+        async function getTokenOwner(token: string): Promise<string> {
+          // since the token owner can be changed at protocol level at any time, it's enough to check the ownership of the token,
+          // without checking any previous owners
+          const apiUrl = getApiUrl();
+
+          const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
+          if (new Address(tokenOwner).isContractAddress()) {
+            const ownerResult = await axios.get(`${apiUrl}/tokens/${token}?extract=ownerAddress`);
+            return ownerResult.data;
+          }
+
+          return tokenOwner;
+        }
+
+        async function getTokenOwnerFromApi(token: string, apiUrl: string): Promise<string> {
+          const tokenOwnerResponse = await axios.get(`${apiUrl}/tokens/${token}?extract=owner`);
+          if (tokenOwnerResponse && tokenOwnerResponse.data) {
+            return tokenOwnerResponse.data;
+          }
+
+          return '';
+        }
+
+        function getApiUrl() {
+          switch (network) {
+            case 'mainnet':
+              return 'https://next-api.multiversx.com';
+            case 'devnet':
+              return 'https://devnet-api.multiversx.com';
+            case 'testnet':
+              return 'https://testnet-api.multiversx.com';
+          }
+
+          throw new Error(`Invalid network: ${network}`);
+        }
+
         function getDistinctNetworks(fileNames: string[]) {
           const networks = fileNames.map(fileName => getNetwork(fileName)).filter(x => x !== undefined);
 
@@ -87,20 +139,25 @@ export const robot = (app: Probot) => {
         }
 
         function getNetwork(fileName: string): 'mainnet' | 'devnet' | 'testnet' | undefined {
-          if (fileName.startsWith('identities')) {
+          const mainnetRegex = /^(identities|accounts|tokens)\b/;
+          const testnetRegex = /^testnet\/(identities|accounts|tokens)\b/;
+          const devnetRegex = /^devnet\/(identities|accounts|tokens)\b/;
+
+          if (mainnetRegex.test(fileName)) {
             return 'mainnet';
           }
 
-          if (fileName.startsWith('testnet/identities')) {
+          if (testnetRegex.test(fileName)) {
             return 'testnet';
           }
 
-          if (fileName.startsWith('devnet/identities')) {
+          if (devnetRegex.test(fileName)) {
             return 'devnet';
           }
 
           return undefined;
         }
+
 
         function getDistinctIdentities(fileNames: string[]) {
           const regex = /identities\/(.*?)\//;
@@ -110,6 +167,26 @@ export const robot = (app: Probot) => {
             .filter(x => x);
 
           return [...new Set(identities)];
+        }
+
+        function getDistinctAccounts(fileNames: string[]) {
+          const regex = /accounts\/(.*?).json/;
+
+          const accounts = fileNames
+            .map(x => regex.exec(x)?.at(1))
+            .filter(x => x);
+
+          return [...new Set(accounts)];
+        }
+
+        function getDistinctTokens(fileNames: string[]) {
+          const regex = /tokens\/(.*?)\/info.json/;
+
+          const tokens = fileNames
+            .map(x => regex.exec(x)?.at(1))
+            .filter(x => x);
+
+          return [...new Set(tokens)];
         }
 
         async function fail(reason: string) {
@@ -122,7 +199,7 @@ export const robot = (app: Probot) => {
           const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
           if (signature) {
             const verifyResult = await verifySignature(signature, address, message);
-            console.log(`verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
+            console.log(`Verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
             return verifyResult;
           }
 
@@ -181,6 +258,7 @@ export const robot = (app: Probot) => {
         const state = pullRequest.state;
 
         if (state === 'closed' || state === 'locked' || state === 'draft') {
+          await fail(`Invalid PR state: ${state}`);
           return 'invalid event payload';
         }
 
@@ -200,13 +278,40 @@ export const robot = (app: Probot) => {
           return 'no change';
         }
 
-        const distinctIdentities = getDistinctIdentities(changedFiles.map(x => x.filename));
-        if (distinctIdentities.length === 0) {
+        let checkMode = 'identity';
+        const changedFilesNames = changedFiles.map(x => x.filename);
+        const distinctStakingIdentities = getDistinctIdentities(changedFilesNames);
+        const distinctAccounts = getDistinctAccounts(changedFilesNames);
+        const distinctTokens = getDistinctTokens(changedFilesNames);
+
+        const countDistinctStakingIdentities = distinctStakingIdentities.length;
+        if (countDistinctStakingIdentities) {
+          checkMode = 'identity';
+        }
+        const countDistinctAccounts = distinctAccounts.length;
+        if (countDistinctAccounts) {
+          checkMode = 'account';
+        }
+        const countDistinctTokens = distinctTokens.length;
+        if (countDistinctTokens) {
+          checkMode = 'token';
+        }
+
+        const sumOfAllChangedAssets = countDistinctAccounts + countDistinctStakingIdentities + countDistinctTokens;
+        if (sumOfAllChangedAssets === 0) {
+          await fail("No identity, token or account changed.");
+          return;
+        }
+        if (sumOfAllChangedAssets > 1) {
+          await fail("Only one identity, token or account update at a time.");
           return;
         }
 
+        const distinctIdentities = [...distinctStakingIdentities, ...distinctAccounts, ...distinctTokens];
+
         const distinctNetworks = getDistinctNetworks(changedFiles.map(x => x.filename));
         if (distinctNetworks.length === 0) {
+          await fail("No network changed.");
           return;
         }
 
@@ -221,14 +326,15 @@ export const robot = (app: Probot) => {
 
         const bodies = [...comments.data.map(x => x.body || ''), body];
 
-        const adminAddress = process.env.ADMIN_ADDRESS;
+        let adminAddress = process.env.ADMIN_ADDRESS;
+        if (!adminAddress) {
+          adminAddress = 'erd1cevsw7mq5uvqymjqzwqvpqtdrhckehwfz99n7praty3y7q2j7yps842mqh';
+        }
 
-        if (adminAddress) {
-          const invalidAddresses = await multiVerify(bodies, [adminAddress], commitShas);
-          if (invalidAddresses && invalidAddresses.length === 0) {
-            await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the admin wallet address`);
-            return;
-          }
+        const invalidAddressesForAdminChecks = await multiVerify(bodies, [adminAddress], commitShas);
+        if (invalidAddressesForAdminChecks && invalidAddressesForAdminChecks.length === 0) {
+          await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the admin wallet address`);
+          return;
         }
 
         if (distinctIdentities.length > 1) {
@@ -241,16 +347,36 @@ export const robot = (app: Probot) => {
           return;
         }
 
-        const identity = distinctIdentities[0];
+        const asset = distinctIdentities[0];
+        if (!asset) {
+          await fail('No asset update detected');
+          return;
+        }
         const network = distinctNetworks[0];
 
-        let owners = await getOwners(changedFiles);
+        let owners: string[];
+        switch (checkMode) {
+          case 'identity':
+            owners = await getIdentityOwners(changedFiles);
+            break;
+          case 'account':
+            const accountOwner = await getAccountOwner(asset);
+            owners = [accountOwner];
+            break;
+          case 'token':
+            const tokenOwner = await getTokenOwner(asset);
+            owners = [tokenOwner];
+            break;
+          default:
+            owners = [];
+        }
+
         if (owners.length === 0) {
           await fail('No owners identified');
           return;
         }
 
-        console.log(`Addresses to check ownership for: ${owners}`);
+        console.log(`Asset owners. check mode=${checkMode}. value=${owners}`);
         const invalidAddresses = await multiVerify(bodies, owners, commitShas);
         if (!invalidAddresses) {
           await fail('Failed to verify owners');
@@ -264,7 +390,7 @@ export const robot = (app: Probot) => {
           await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${invalidAddressesDescription}`);
           return;
         } else {
-          const ownersDescription = owners.map(address => `\`${address}\``).join('\n');
+          const ownersDescription = owners.map((address: any) => `\`${address}\``).join('\n');
           await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet ${addressDescription}: \n${ownersDescription}`);
         }
 
