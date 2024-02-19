@@ -94,7 +94,7 @@ export const robot = (app: Probot) => {
 
         async function getAccountOwnerFromApi(address: string): Promise<string> {
           const apiUrl = getApiUrl();
-          const accountOwnerResponse = await axios.get(`${apiUrl}/accounts/${address}?extract=owner`);
+          const accountOwnerResponse = await axios.get(`${apiUrl}/accounts/${address}?extract=ownerAddress`);
           if (accountOwnerResponse && accountOwnerResponse.data) {
             return accountOwnerResponse.data;
           }
