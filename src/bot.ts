@@ -78,7 +78,7 @@ export const robot = (app: Probot) => {
         }
 
         async function getAccountOwner(account: string): Promise<string> {
-         const accountOwner = await getAccountOwnerFromApi(account);
+          const accountOwner = await getAccountOwnerFromApi(account);
           if (new Address(accountOwner).isContractAddress()) {
             return getAccountOwnerFromApi(accountOwner);
           }
@@ -182,11 +182,11 @@ export const robot = (app: Probot) => {
         function getDistinctTokens(fileNames: string[]) {
           const regex = /tokens\/(.*?).json/;
 
-          const accounts = fileNames
+          const tokens = fileNames
             .map(x => regex.exec(x)?.at(1))
             .filter(x => x);
 
-          return [...new Set(accounts)];
+          return [...new Set(tokens)];
         }
 
         async function fail(reason: string) {
@@ -348,7 +348,7 @@ export const robot = (app: Probot) => {
         }
 
         const asset = distinctIdentities[0];
-        if(!asset) {
+        if (!asset) {
           await fail('No asset update detected');
           return;
         }
@@ -360,10 +360,12 @@ export const robot = (app: Probot) => {
             owners = await getIdentityOwners(changedFiles);
             break;
           case 'account':
-            owners = [...await getAccountOwner(asset)];
+            const accountOwner = await getAccountOwner(asset);
+            owners = [accountOwner];
             break;
           case 'token':
-            owners = [...await getTokenOwner(asset)];
+            const tokenOwner = await getTokenOwner(asset);
+            owners = [tokenOwner];
             break;
           default:
             owners = [];
