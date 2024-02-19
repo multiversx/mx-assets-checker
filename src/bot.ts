@@ -78,7 +78,7 @@ export const robot = (app: Probot) => {
         }
 
         async function getAccountOwner(account: string): Promise<string> {
-          const accountOwner = await getAccountOwnerFromApi(account);
+          const accountOwner = account;
           if (new Address(accountOwner).isContractAddress()) {
             return getAccountOwnerFromApi(accountOwner);
           }
