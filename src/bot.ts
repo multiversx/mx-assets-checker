@@ -83,16 +83,23 @@ export const robot = (app: Probot) => {
           }
           const account = identity;
 
-          const apiUrl = getApiUrl();
-
-          const ownerResult = await axios.get(`${apiUrl}/accounts/${account}?extract=ownerAddress`);
-          const accountOwner = ownerResult.data;
+          const accountOwner = await getAccountOwnerFromApi(account);
           if (new Address(accountOwner).isContractAddress()) {
-            const ownerResult = await axios.get(`${apiUrl}/tokens/${accountOwner}?extract=ownerAddress`);
-            return ownerResult.data;
+            const newOwner = getAccountOwnerFromApi(accountOwner);
+            return newOwner;
           }
 
           return accountOwner;
+        }
+
+        async function getAccountOwnerFromApi(address: string): Promise<string> {
+          const apiUrl = getApiUrl();
+          const accountOwnerResponse = await axios.get(`${apiUrl}/accounts/${address}?extract=owner`);
+          if (accountOwnerResponse && accountOwnerResponse.data) {
+            return accountOwnerResponse.data;
+          }
+
+          return '';
         }
 
         async function getTokenOwner(): Promise<string> {
