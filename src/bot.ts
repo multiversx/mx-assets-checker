@@ -63,12 +63,7 @@ export const robot = (app: Probot) => {
           const allOwners: string[] = [];
           const allOwnersToCheck = [mainOwner, ...extraOwners];
 
-          let apiUrl = 'https://next-api.multiversx.com';
-          if (network === 'devnet') {
-            apiUrl = 'https://devnet-api.multiversx.com';
-          } else if (network === 'testnet') {
-            apiUrl = 'https://testnet-api.multiversx.com';
-          }
+          const apiUrl = getApiUrl();
 
           for (const owner of allOwnersToCheck) {
             if (new Address(owner).isContractAddress()) {
@@ -88,12 +83,7 @@ export const robot = (app: Probot) => {
           }
           const account = identity;
 
-          let apiUrl = 'https://next-api.multiversx.com';
-          if (network === 'devnet') {
-            apiUrl = 'https://devnet-api.multiversx.com';
-          } else if (network === 'testnet') {
-            apiUrl = 'https://testnet-api.multiversx.com';
-          }
+          const apiUrl = getApiUrl();
 
           const ownerResult = await axios.get(`${apiUrl}/accounts/${account}?extract=ownerAddress`);
           const accountOwner = ownerResult.data;
@@ -113,13 +103,7 @@ export const robot = (app: Probot) => {
           }
           const token = identity;
 
-          let apiUrl = 'https://next-api.multiversx.com';
-          if (network === 'devnet') {
-            apiUrl = 'https://devnet-api.multiversx.com';
-          } else if (network === 'testnet') {
-            apiUrl = 'https://testnet-api.multiversx.com';
-          }
-
+          const apiUrl = getApiUrl();
 
           const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
           if (new Address(tokenOwner).isContractAddress()) {
@@ -137,6 +121,19 @@ export const robot = (app: Probot) => {
           }
 
           return '';
+        }
+
+        function getApiUrl() {
+          switch (network) {
+            case 'mainnet':
+              return 'https://next-api.multiversx.com';
+            case 'devnet':
+              return 'https://devnet-api.multiversx.com';
+            case 'testnet':
+              return 'https://testnet-api.multiversx.com';
+          }
+
+          throw new Error(`Invalid network: ${network}`);
         }
 
         function getDistinctNetworks(fileNames: string[]) {
