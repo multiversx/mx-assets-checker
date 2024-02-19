@@ -30,7 +30,7 @@ export const robot = (app: Probot) => {
           const newOwners: string[] = [];
           const networkPath = network === 'mainnet' ? '' : `${network}/`;
 
-          const infoJsonUrl = `https://raw.githubusercontent.com/multiversx/mx-assets/master/${networkPath}identities/${identity}/info.json`;
+          const infoJsonUrl = `https://raw.githubusercontent.com/multiversx/mx-assets/master/${networkPath}identities/${asset}/info.json`;
 
           // we try to read the contents of the info.json file
           const { data: infoFromMaster } = await axios.get(infoJsonUrl, { validateStatus: status => [200, 404].includes(status) });
@@ -39,7 +39,7 @@ export const robot = (app: Probot) => {
             originalOwners.push(...infoFromMaster.owners);
           }
 
-          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}.json`));
+          const infoJsonFile = files.find(x => x.filename.endsWith(`/${asset}/info.json`));
           if (infoJsonFile) {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
@@ -77,16 +77,10 @@ export const robot = (app: Probot) => {
           return [...new Set(allOwners)];
         }
 
-        async function getAccountOwner(): Promise<string> {
-          if (!identity) {
-            return '';
-          }
-          const account = identity;
-
-          const accountOwner = await getAccountOwnerFromApi(account);
+        async function getAccountOwner(account: string): Promise<string> {
+         const accountOwner = await getAccountOwnerFromApi(account);
           if (new Address(accountOwner).isContractAddress()) {
-            const newOwner = getAccountOwnerFromApi(accountOwner);
-            return newOwner;
+            return getAccountOwnerFromApi(accountOwner);
           }
 
           return accountOwner;
@@ -102,14 +96,9 @@ export const robot = (app: Probot) => {
           return '';
         }
 
-        async function getTokenOwner(): Promise<string> {
+        async function getTokenOwner(token: string): Promise<string> {
           // since the token owner can be changed at protocol level at any time, it's enough to check the ownership of the token,
           // without checking any previous owners
-          if (!identity) {
-            return '';
-          }
-          const token = identity;
-
           const apiUrl = getApiUrl();
 
           const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
@@ -358,7 +347,11 @@ export const robot = (app: Probot) => {
           return;
         }
 
-        const identity = distinctIdentities[0];
+        const asset = distinctIdentities[0];
+        if(!asset) {
+          await fail('No asset update detected');
+          return;
+        }
         const network = distinctNetworks[0];
 
         let owners: string[];
@@ -367,10 +360,10 @@ export const robot = (app: Probot) => {
             owners = await getIdentityOwners(changedFiles);
             break;
           case 'account':
-            owners = [...await getAccountOwner()];
+            owners = [...await getAccountOwner(asset)];
             break;
           case 'token':
-            owners = [...await getTokenOwner()];
+            owners = [...await getTokenOwner(asset)];
             break;
           default:
             owners = [];
