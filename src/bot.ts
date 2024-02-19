@@ -180,7 +180,7 @@ export const robot = (app: Probot) => {
         }
 
         function getDistinctTokens(fileNames: string[]) {
-          const regex = /tokens\/(.*?).json/;
+          const regex = /tokens\/(.*?)\/info.json/;
 
           const tokens = fileNames
             .map(x => regex.exec(x)?.at(1))
