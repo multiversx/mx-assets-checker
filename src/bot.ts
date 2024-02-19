@@ -82,18 +82,11 @@ export const robot = (app: Probot) => {
           return [...new Set(allOwners)];
         }
 
-        async function getAccountOwner(files: { filename: string, raw_url: string }[]): Promise<string[]> {
-          const originalOwner = identity;
-          let newOwner: string = '';
-
-          const infoJsonFile = files.find(x => x.filename.endsWith(`/${identity}.json`));
-          if (infoJsonFile) {
-            const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
-
-            if (infoFromPullRequest && typeof infoFromPullRequest === 'object') {
-              newOwner = identity ?? '';
-            }
+        async function getAccountOwner(): Promise<string> {
+          if (!identity) {
+            return '';
           }
+          const account = identity;
 
           let apiUrl = 'https://next-api.multiversx.com';
           if (network === 'devnet') {
@@ -102,25 +95,14 @@ export const robot = (app: Probot) => {
             apiUrl = 'https://testnet-api.multiversx.com';
           }
 
-          const allOwners: string[] = [];
-          let allOwnersToCheck: string[] = [];
-          if (newOwner) {
-            allOwnersToCheck = [...allOwnersToCheck, newOwner];
-          }
-          if (originalOwner) {
-            allOwnersToCheck = [...allOwnersToCheck, originalOwner];
+          const ownerResult = await axios.get(`${apiUrl}/accounts/${account}?extract=ownerAddress`);
+          const accountOwner = ownerResult.data;
+          if (new Address(accountOwner).isContractAddress()) {
+            const ownerResult = await axios.get(`${apiUrl}/tokens/${accountOwner}?extract=ownerAddress`);
+            return ownerResult.data;
           }
 
-          for (const owner of allOwnersToCheck) {
-            if (new Address(owner).isContractAddress()) {
-              const ownerResult = await axios.get(`${apiUrl}/accounts/${owner}?extract=ownerAddress`);
-              allOwners.push(ownerResult.data);
-            } else {
-              allOwners.push(owner);
-            }
-          }
-
-          return [...new Set(allOwners)];
+          return accountOwner;
         }
 
         async function getTokenOwner(): Promise<string> {
@@ -351,14 +333,15 @@ export const robot = (app: Probot) => {
 
         const bodies = [...comments.data.map(x => x.body || ''), body];
 
-        const adminAddress = process.env.ADMIN_ADDRESS;
+        let adminAddress = process.env.ADMIN_ADDRESS;
+        if (!adminAddress) {
+          adminAddress = 'erd1cevsw7mq5uvqymjqzwqvpqtdrhckehwfz99n7praty3y7q2j7yps842mqh';
+        }
 
-        if (adminAddress) {
-          const invalidAddresses = await multiVerify(bodies, [adminAddress], commitShas);
-          if (invalidAddresses && invalidAddresses.length === 0) {
-            await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the admin wallet address`);
-            return;
-          }
+        const invalidAddressesForAdminChecks = await multiVerify(bodies, [adminAddress], commitShas);
+        if (invalidAddressesForAdminChecks && invalidAddressesForAdminChecks.length === 0) {
+          await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the admin wallet address`);
+          return;
         }
 
         if (distinctIdentities.length > 1) {
@@ -380,7 +363,7 @@ export const robot = (app: Probot) => {
             owners = await getIdentityOwners(changedFiles);
             break;
           case 'account':
-            owners = await getAccountOwner(changedFiles);
+            owners = [...await getAccountOwner()];
             break;
           case 'token':
             owners = [...await getTokenOwner()];
