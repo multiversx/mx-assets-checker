@@ -212,7 +212,8 @@ export const robot = (app: Probot) => {
         }
 
         async function verifyTxHash(_txHash: string, _address: string, _message: string): Promise<boolean | undefined> {
-          throw new Error('Not implemented yet');
+          console.log('verifyTxHash not implemented yet');
+          return false;
         }
 
         async function verifySignature(signature: string, address: string, message: string): Promise<boolean | undefined> {
