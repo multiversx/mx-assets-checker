@@ -103,7 +103,7 @@ export const robot = (app: Probot) => {
 
           const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
           if (new Address(tokenOwner).isContractAddress()) {
-            const ownerResult = await axios.get(`${apiUrl}/tokens/${token}?extract=ownerAddress`);
+            const ownerResult = await axios.get(`${apiUrl}/accounts/${token}?extract=ownerAddress`);
             return ownerResult.data;
           }
 
