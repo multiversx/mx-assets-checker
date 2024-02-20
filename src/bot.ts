@@ -299,7 +299,7 @@ export const robot = (app: Probot) => {
 
         const sumOfAllChangedAssets = countDistinctAccounts + countDistinctStakingIdentities + countDistinctTokens;
         if (sumOfAllChangedAssets === 0) {
-          await fail("No identity, token or account changed.");
+          console.log("No identity, token or account changed.");
           return;
         }
         if (sumOfAllChangedAssets > 1) {
