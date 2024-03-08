@@ -72,8 +72,10 @@ export const robot = (app: Probot) => {
               return [];
             }
             if (new Address(owner).isContractAddress()) {
-              const ownerResult = await axios.get(`${apiUrl}/accounts/${owner}?extract=ownerAddress`);
-              allOwners.push(ownerResult.data);
+              const ownerResult = await fetchStringValueFromApi(apiUrl, "accounts", owner, "ownerAddress");
+              if (ownerResult) {
+                allOwners.push(ownerResult);
+              }
             } else {
               allOwners.push(owner);
             }
@@ -86,19 +88,24 @@ export const robot = (app: Probot) => {
           existing: boolean,
           isUpdate?: boolean
         }> {
-          const providerInfo = await axios.get(`${apiUrl}/providers/${provider}`);
-          if (!providerInfo) {
+          try {
+            const providerInfo = await axios.get(`${apiUrl}/providers/${provider}`);
+            if (!providerInfo) {
+              return { existing: false };
+            }
+
+            if (!providerInfo.data?.identity) {
+              return { existing: false };
+            }
+
+            return {
+              existing: true,
+              isUpdate: identity === providerInfo.data?.identity,
+            };
+          } catch (error) {
+            console.error(`API error while fetching the provider data for address ${provider}: ${error}`);
             return { existing: false };
           }
-
-          if (!providerInfo.data?.identity) {
-            return { existing: false };
-          }
-
-          return {
-            existing: true,
-            isUpdate: identity === providerInfo.data?.identity,
-          };
         }
 
         async function getAccountOwner(account: string): Promise<string> {
@@ -112,12 +119,7 @@ export const robot = (app: Probot) => {
 
         async function getAccountOwnerFromApi(address: string): Promise<string> {
           const apiUrl = getApiUrl();
-          const accountOwnerResponse = await axios.get(`${apiUrl}/accounts/${address}?extract=ownerAddress`);
-          if (accountOwnerResponse && accountOwnerResponse.data) {
-            return accountOwnerResponse.data;
-          }
-
-          return '';
+          return await fetchStringValueFromApi(apiUrl, "accounts", address, "ownerAddress");
         }
 
         async function getTokenOwner(token: string): Promise<string> {
@@ -127,34 +129,27 @@ export const robot = (app: Probot) => {
 
           const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
           if (new Address(tokenOwner).isContractAddress()) {
-            const ownerResult = await axios.get(`${apiUrl}/accounts/${tokenOwner}?extract=ownerAddress`);
-            return ownerResult.data;
+            return await fetchStringValueFromApi(apiUrl, "accounts", tokenOwner, "ownerAddress");
           }
 
           return tokenOwner;
         }
 
         async function getTokenOwnerFromApi(token: string, apiUrl: string): Promise<string> {
-          try {
-            const tokenOwnerResponse = await axios.get(`${apiUrl}/tokens/${token}?extract=owner`);
-            if (tokenOwnerResponse && tokenOwnerResponse.data) {
-              return tokenOwnerResponse.data;
-            }
+          return await fetchStringValueFromApi(apiUrl, "tokens", token, "owner") ||
+            await fetchStringValueFromApi(apiUrl, "collections", token, "owner");
+        }
 
-            return '';
-          } catch (error) {
-            console.log(`Cannot find token owner on the 'tokens' endpoint. Will try the 'collections'`);
+        async function fetchStringValueFromApi(apiUrl: string, endpoint: string, query: string, extract?: string): Promise<string> {
+          let requestUrl = `${apiUrl}/${endpoint}/${query}`;
+          if (extract) {
+            requestUrl += `?extract=${extract}`;
           }
-
           try {
-            const tokenOwnerResponse = await axios.get(`${apiUrl}/collections/${token}?extract=owner`);
-            if (tokenOwnerResponse && tokenOwnerResponse.data) {
-              return tokenOwnerResponse.data;
-            }
-
-            return '';
+            const response = await axios.get(requestUrl);
+            return response.data;
           } catch (error) {
-            await fail(`Cannot find token or collection with ID ${token}: ${error}`);
+            console.error(`Cannot query API at ${requestUrl}: ${error}`);
             return '';
           }
         }
