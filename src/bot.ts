@@ -66,15 +66,46 @@ export const robot = (app: Probot) => {
           const apiUrl = getApiUrl();
 
           for (const owner of allOwnersToCheck) {
+            const alreadyExistingBranding = await isProviderAlreadyBranded(apiUrl, asset as string, owner);
+            if (alreadyExistingBranding && alreadyExistingBranding.existing && !alreadyExistingBranding.isUpdate) {
+              await fail(`${owner} is already branded. Only updates are allowed.`);
+              return [];
+            }
             if (new Address(owner).isContractAddress()) {
-              const ownerResult = await axios.get(`${apiUrl}/accounts/${owner}?extract=ownerAddress`);
-              allOwners.push(ownerResult.data);
+              const ownerResult = await fetchStringValueFromApi(apiUrl, "accounts", owner, "ownerAddress");
+              if (ownerResult) {
+                allOwners.push(ownerResult);
+              }
             } else {
               allOwners.push(owner);
             }
           }
 
           return [...new Set(allOwners)];
+        }
+
+        async function isProviderAlreadyBranded(apiUrl: string, identity: string, provider: string): Promise<{
+          existing: boolean,
+          isUpdate?: boolean
+        }> {
+          try {
+            const providerInfo = await axios.get(`${apiUrl}/providers/${provider}`);
+            if (!providerInfo) {
+              return { existing: false };
+            }
+
+            if (!providerInfo.data?.identity) {
+              return { existing: false };
+            }
+
+            return {
+              existing: true,
+              isUpdate: identity === providerInfo.data?.identity,
+            };
+          } catch (error) {
+            console.error(`API error while fetching the provider data for address ${provider}: ${error}`);
+            return { existing: false };
+          }
         }
 
         async function getAccountOwner(account: string): Promise<string> {
@@ -88,12 +119,7 @@ export const robot = (app: Probot) => {
 
         async function getAccountOwnerFromApi(address: string): Promise<string> {
           const apiUrl = getApiUrl();
-          const accountOwnerResponse = await axios.get(`${apiUrl}/accounts/${address}?extract=ownerAddress`);
-          if (accountOwnerResponse && accountOwnerResponse.data) {
-            return accountOwnerResponse.data;
-          }
-
-          return '';
+          return await fetchStringValueFromApi(apiUrl, "accounts", address, "ownerAddress");
         }
 
         async function getTokenOwner(token: string): Promise<string> {
@@ -103,20 +129,29 @@ export const robot = (app: Probot) => {
 
           const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
           if (new Address(tokenOwner).isContractAddress()) {
-            const ownerResult = await axios.get(`${apiUrl}/accounts/${tokenOwner}?extract=ownerAddress`);
-            return ownerResult.data;
+            return await fetchStringValueFromApi(apiUrl, "accounts", tokenOwner, "ownerAddress");
           }
 
           return tokenOwner;
         }
 
         async function getTokenOwnerFromApi(token: string, apiUrl: string): Promise<string> {
-          const tokenOwnerResponse = await axios.get(`${apiUrl}/tokens/${token}?extract=owner`);
-          if (tokenOwnerResponse && tokenOwnerResponse.data) {
-            return tokenOwnerResponse.data;
-          }
+          return await fetchStringValueFromApi(apiUrl, "tokens", token, "owner") ||
+            await fetchStringValueFromApi(apiUrl, "collections", token, "owner");
+        }
 
-          return '';
+        async function fetchStringValueFromApi(apiUrl: string, endpoint: string, query: string, extract?: string): Promise<string> {
+          let requestUrl = `${apiUrl}/${endpoint}/${query}`;
+          if (extract) {
+            requestUrl += `?extract=${extract}`;
+          }
+          try {
+            const response = await axios.get(requestUrl);
+            return response.data;
+          } catch (error) {
+            console.error(`Cannot query API at ${requestUrl}: ${error}`);
+            return '';
+          }
         }
 
         function getApiUrl() {
