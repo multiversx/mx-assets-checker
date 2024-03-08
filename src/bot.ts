@@ -66,6 +66,11 @@ export const robot = (app: Probot) => {
           const apiUrl = getApiUrl();
 
           for (const owner of allOwnersToCheck) {
+            const alreadyExistingBranding = await isProviderAlreadyBranded(apiUrl, asset as string, owner);
+            if (alreadyExistingBranding && alreadyExistingBranding.existing && !alreadyExistingBranding.isUpdate) {
+              await fail(`${owner} is already branded. Only updates are allowed.`);
+              return [];
+            }
             if (new Address(owner).isContractAddress()) {
               const ownerResult = await axios.get(`${apiUrl}/accounts/${owner}?extract=ownerAddress`);
               allOwners.push(ownerResult.data);
@@ -75,6 +80,25 @@ export const robot = (app: Probot) => {
           }
 
           return [...new Set(allOwners)];
+        }
+
+        async function isProviderAlreadyBranded(apiUrl: string, identity: string, provider: string): Promise<{
+          existing: boolean,
+          isUpdate?: boolean
+        }> {
+          const providerInfo = await axios.get(`${apiUrl}/providers/${provider}`);
+          if (!providerInfo) {
+            return { existing: false };
+          }
+
+          if (!providerInfo.data?.identity) {
+            return { existing: false };
+          }
+
+          return {
+            existing: true,
+            isUpdate: identity === providerInfo.data?.identity,
+          };
         }
 
         async function getAccountOwner(account: string): Promise<string> {
@@ -111,12 +135,28 @@ export const robot = (app: Probot) => {
         }
 
         async function getTokenOwnerFromApi(token: string, apiUrl: string): Promise<string> {
-          const tokenOwnerResponse = await axios.get(`${apiUrl}/tokens/${token}?extract=owner`);
-          if (tokenOwnerResponse && tokenOwnerResponse.data) {
-            return tokenOwnerResponse.data;
+          try {
+            const tokenOwnerResponse = await axios.get(`${apiUrl}/tokens/${token}?extract=owner`);
+            if (tokenOwnerResponse && tokenOwnerResponse.data) {
+              return tokenOwnerResponse.data;
+            }
+
+            return '';
+          } catch (error) {
+            console.log(`Cannot find token owner on the 'tokens' endpoint. Will try the 'collections'`);
           }
 
-          return '';
+          try {
+            const tokenOwnerResponse = await axios.get(`${apiUrl}/collections/${token}?extract=owner`);
+            if (tokenOwnerResponse && tokenOwnerResponse.data) {
+              return tokenOwnerResponse.data;
+            }
+
+            return '';
+          } catch (error) {
+            await fail(`Cannot find token or collection with ID ${token}: ${error}`);
+            return '';
+          }
         }
 
         function getApiUrl() {
