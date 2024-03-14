@@ -232,7 +232,7 @@ export const robot = (app: Probot) => {
 
         async function verify(body: string, address: string, message: string): Promise<boolean | undefined> {
           const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
-          console.log(`verifying message: ${message}. Is signature = ${(!!signature)}`);
+          console.log(`verifying message: ${body}. Message: ${message}. Is signature = ${(!!signature)}`);
           if (signature) {
             const verifyResult = await verifySignature(signature, address, message);
             console.log(`Verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
