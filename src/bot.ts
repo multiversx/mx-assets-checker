@@ -232,6 +232,7 @@ export const robot = (app: Probot) => {
 
         async function verify(body: string, address: string, message: string): Promise<boolean | undefined> {
           const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
+          console.log(`verifying message: ${message}. Is signature = ${(!!signature)}`);
           if (signature) {
             const verifyResult = await verifySignature(signature, address, message);
             console.log(`Verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
@@ -412,7 +413,7 @@ export const robot = (app: Probot) => {
           return;
         }
 
-        console.log(`Asset owners. check mode=${checkMode}. value=${owners}`);
+        console.log(`Asset owners. check mode=${checkMode}. value=${owners}. Commit shas=${commitShas}`);
         const invalidAddresses = await multiVerify(bodies, owners, commitShas);
         if (!invalidAddresses) {
           await fail('Failed to verify owners');
