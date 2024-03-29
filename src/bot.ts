@@ -236,6 +236,7 @@ export const robot = (app: Probot) => {
 
           console.log({ response });
           const tokenTicker = tokenName.split("-")[0];
+          console.log(`token: ${{ tokenName }}. token ticker: ${{ tokenTicker }}`);
           if (!tokenTicker) {
             return;
           }
@@ -244,7 +245,7 @@ export const robot = (app: Probot) => {
             (content) => content?.type === "dir" && content.name.startsWith(`${tokenTicker}-`),
           );
 
-          if(subdirectories.length) {
+          if (subdirectories.length) {
             await fail(`Token with ticker ${tokenTicker} already exists!`);
           }
 
