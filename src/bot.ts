@@ -234,9 +234,7 @@ export const robot = (app: Probot) => {
             path: tokensDirPath,
           });
 
-          console.log({ response });
           const tokenTicker = tokenName.split("-")[0];
-          console.log(`token: ${tokenName}. token ticker: ${tokenTicker}`);
           if (!tokenTicker) {
             return;
           }
@@ -244,11 +242,6 @@ export const robot = (app: Probot) => {
           const subdirectories = tokensDirectories.filter(
             (content) => content?.type === "dir" && content?.name?.startsWith(tokenTicker),
           );
-
-          for(const dir of subdirectories) {
-            const result = dir.name.startsWith(`${tokenTicker}-`);
-            console.log(`dir name=${dir.name}. starts with ${tokenTicker}-: ${result}`);
-          }
 
           if (subdirectories.length) {
             await fail(`Token with ticker ${tokenTicker} already exists!`);
