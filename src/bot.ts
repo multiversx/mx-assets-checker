@@ -242,7 +242,7 @@ export const robot = (app: Probot) => {
           }
           const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
           const subdirectories = tokensDirectories.filter(
-            (content) => content?.type === "dir" && content?.name?.startsWith(`${tokenTicker}-`),
+            (content) => content?.type === "dir",
           );
 
           console.log(subdirectories);
