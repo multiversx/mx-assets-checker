@@ -236,7 +236,7 @@ export const robot = (app: Probot) => {
 
           console.log({ response });
           const tokenTicker = tokenName.split("-")[0];
-          console.log(`token: ${ tokenName }. token ticker: ${ tokenTicker }`);
+          console.log(`token: ${tokenName}. token ticker: ${tokenTicker}`);
           if (!tokenTicker) {
             return;
           }
