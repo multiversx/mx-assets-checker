@@ -20,12 +20,20 @@ export const robot = (app: Probot) => {
         console.log({ response });
         const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
         const subdirectories = tokensDirectories.filter(
-          (content) => content?.type === "dir"
+          (content) => content?.type === "dir" && content.name.startsWith("HTM")
         );
 
         const subdirectoryNames = subdirectories.map((directory) => directory.name);
 
         console.log(subdirectoryNames)
+
+        const subdirectories2 = tokensDirectories.filter(
+          (content) => content?.type === "dir" && content.name.startsWith("NONEXISTENTTICKER")
+        );
+
+        const subdirectoryNames2 = subdirectories2.map((directory) => directory.name);
+
+        console.log(subdirectoryNames2)
         async function createComment(body: string) {
           try {
             await context.octokit.issues.createComment({
