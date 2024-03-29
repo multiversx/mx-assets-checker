@@ -11,29 +11,6 @@ export const robot = (app: Probot) => {
         const repo = context.repo();
         console.log("Starting processing the assets ownership checks");
 
-        const response = await context.octokit.repos.getContent({
-          owner: context.repo().owner,
-          repo: context.repo().repo,
-          path: '/tokens',
-        });
-
-        console.log({ response });
-        const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
-        const subdirectories = tokensDirectories.filter(
-          (content) => content?.type === "dir" && content.name.startsWith("HTM")
-        );
-
-        const subdirectoryNames = subdirectories.map((directory) => directory.name);
-
-        console.log(subdirectoryNames)
-
-        const subdirectories2 = tokensDirectories.filter(
-          (content) => content?.type === "dir" && content.name.startsWith("NONEXISTENTTICKER")
-        );
-
-        const subdirectoryNames2 = subdirectories2.map((directory) => directory.name);
-
-        console.log(subdirectoryNames2)
         async function createComment(body: string) {
           try {
             await context.octokit.issues.createComment({
@@ -150,6 +127,8 @@ export const robot = (app: Probot) => {
           // without checking any previous owners
           const apiUrl = getApiUrl();
 
+          await checkIfTickerAlreadyExists(token);
+
           const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
           if (new Address(tokenOwner).isContractAddress()) {
             return await fetchStringValueFromApi(apiUrl, "accounts", tokenOwner, "ownerAddress");
@@ -245,6 +224,33 @@ export const robot = (app: Probot) => {
             .filter(x => x);
 
           return [...new Set(tokens)];
+        }
+
+        async function checkIfTickerAlreadyExists(tokenName: string) {
+          const tokensDirPath = (network === "mainnet") ? "/tokens" : `/${network}/tokens`;
+          const response = await context.octokit.repos.getContent({
+            owner: context.repo().owner,
+            repo: context.repo().repo,
+            path: tokensDirPath,
+          });
+
+          console.log({ response });
+          const tokenTicker = tokenName.split("-")[0];
+          if (!tokenTicker) {
+            return;
+          }
+          const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
+          const subdirectories = tokensDirectories.filter(
+            (content) => content?.type === "dir" && content.name.startsWith(`${tokenTicker}-`),
+          );
+
+          if(subdirectories.length) {
+            await fail(`Token with ticker ${tokenTicker} already exists!`);
+          }
+
+          const subdirectoryNames = subdirectories.map((directory) => directory.name);
+
+          console.log(subdirectoryNames);
         }
 
         async function fail(reason: string) {
