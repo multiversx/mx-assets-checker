@@ -245,10 +245,15 @@ export const robot = (app: Probot) => {
             (content) => content?.type === "dir",
           );
 
-          console.log(subdirectories);
+          for(const dir of subdirectories) {
+            const result = dir.name.startsWith(`${tokenTicker}-`);
+            console.log(`dir name=${dir.name}. starts with ${tokenTicker}-: ${result}`);
+          }
+         // console.log(subdirectories);
           const subdirectoryNamesWithSameTicker = subdirectories.filter(
             subdirectory => subdirectory.name.startsWith(`${tokenTicker}-`),
           );
+          console.log(subdirectoryNamesWithSameTicker);
           if (subdirectoryNamesWithSameTicker.length) {
             await fail(`Token with ticker ${tokenTicker} already exists!`);
           }
