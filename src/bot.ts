@@ -127,6 +127,8 @@ export const robot = (app: Probot) => {
           // without checking any previous owners
           const apiUrl = getApiUrl();
 
+          await checkIfTickerAlreadyExists(token);
+
           const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
           if (new Address(tokenOwner).isContractAddress()) {
             return await fetchStringValueFromApi(apiUrl, "accounts", tokenOwner, "ownerAddress");
@@ -149,7 +151,7 @@ export const robot = (app: Probot) => {
             const response = await axios.get(requestUrl);
             return response.data;
           } catch (error) {
-            console.error(`Cannot query API at ${requestUrl}: ${error}`);
+            console.error(`Cannot query API at ${requestUrl} : ${error}`);
             return '';
           }
         }
@@ -222,6 +224,28 @@ export const robot = (app: Probot) => {
             .filter(x => x);
 
           return [...new Set(tokens)];
+        }
+
+        async function checkIfTickerAlreadyExists(tokenName: string) {
+          const tokensDirPath = (network === "mainnet") ? "/tokens" : `/${network}/tokens`;
+          const response = await context.octokit.repos.getContent({
+            owner: context.repo().owner,
+            repo: context.repo().repo,
+            path: tokensDirPath,
+          });
+
+          const tokenTicker = tokenName.split("-")[0];
+          if (!tokenTicker) {
+            return;
+          }
+          const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
+          const subdirectories = tokensDirectories.filter(
+            (content) => content?.type === "dir" && content?.name?.startsWith(tokenTicker),
+          );
+
+          if (subdirectories.length) {
+            await fail(`Token with ticker ${tokenTicker} already exists!`);
+          }
         }
 
         async function fail(reason: string) {
