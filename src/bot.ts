@@ -11,14 +11,21 @@ export const robot = (app: Probot) => {
         const repo = context.repo();
         console.log("Starting processing the assets ownership checks");
 
-        const result = await context.octokit.repos.getContent({
+        const response = await context.octokit.repos.getContent({
           owner: context.repo().owner,
           repo: context.repo().repo,
           path: '/tokens',
         });
 
-        console.log({ result });
+        console.log({ response });
+        const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
+        const subdirectories = tokensDirectories.filter(
+          (content) => content?.type === "dir"
+        );
 
+        const subdirectoryNames = subdirectories.map((directory) => directory.name);
+
+        console.log(subdirectoryNames)
         async function createComment(body: string) {
           try {
             await context.octokit.issues.createComment({
@@ -157,7 +164,7 @@ export const robot = (app: Probot) => {
             const response = await axios.get(requestUrl);
             return response.data;
           } catch (error) {
-            console.error(`Cannot query API at ${requestUrl}: ${error}`);
+            console.error(`Cannot query API at ${requestUrl} : ${error}`);
             return '';
           }
         }
