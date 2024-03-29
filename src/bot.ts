@@ -239,11 +239,16 @@ export const robot = (app: Probot) => {
             return;
           }
           const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
-          const subdirectories = tokensDirectories.filter(
+          const subdirectoriesWithSameTicker = tokensDirectories.filter(
             (content) => content?.type === "dir" && content?.name?.startsWith(tokenTicker),
           );
 
-          if (subdirectories.length) {
+          if (subdirectoriesWithSameTicker.length) {
+            if (subdirectoriesWithSameTicker[0].name === tokenName) {
+              // it's just an update to the same token
+              return;
+            }
+
             await fail(`Token with ticker ${tokenTicker} already exists!`);
           }
         }
