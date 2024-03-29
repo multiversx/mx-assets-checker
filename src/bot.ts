@@ -11,6 +11,14 @@ export const robot = (app: Probot) => {
         const repo = context.repo();
         console.log("Starting processing the assets ownership checks");
 
+        const result = await context.octokit.repos.getContent({
+          owner: context.repo().owner,
+          repo: context.repo().repo,
+          path: '/tokens',
+        });
+
+        console.log({ result });
+
         async function createComment(body: string) {
           try {
             await context.octokit.issues.createComment({
