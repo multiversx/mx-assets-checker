@@ -242,19 +242,15 @@ export const robot = (app: Probot) => {
           }
           const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
           const subdirectories = tokensDirectories.filter(
-            (content) => content?.type === "dir",
+            (content) => content?.type === "dir" && content?.name?.startsWith(tokenTicker),
           );
 
           for(const dir of subdirectories) {
             const result = dir.name.startsWith(`${tokenTicker}-`);
             console.log(`dir name=${dir.name}. starts with ${tokenTicker}-: ${result}`);
           }
-         // console.log(subdirectories);
-          const subdirectoryNamesWithSameTicker = subdirectories.filter(
-            subdirectory => subdirectory.name.startsWith(`${tokenTicker}-`),
-          );
-          console.log(subdirectoryNamesWithSameTicker);
-          if (subdirectoryNamesWithSameTicker.length) {
+
+          if (subdirectories.length) {
             await fail(`Token with ticker ${tokenTicker} already exists!`);
           }
         }
