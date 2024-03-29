@@ -242,16 +242,16 @@ export const robot = (app: Probot) => {
           }
           const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
           const subdirectories = tokensDirectories.filter(
-            (content) => content?.type === "dir" && content.name.startsWith(`${tokenTicker}-`),
+            (content) => content?.type === "dir" && content?.name?.startsWith(`${tokenTicker}-`),
           );
 
-          if (subdirectories.length) {
+          console.log(subdirectories);
+          const subdirectoryNamesWithSameTicker = subdirectories.filter(
+            subdirectory => subdirectory.name.startsWith(`${tokenTicker}-`),
+          );
+          if (subdirectoryNamesWithSameTicker.length) {
             await fail(`Token with ticker ${tokenTicker} already exists!`);
           }
-
-          const subdirectoryNames = subdirectories.map((directory) => directory.name);
-
-          console.log(subdirectoryNames);
         }
 
         async function fail(reason: string) {
