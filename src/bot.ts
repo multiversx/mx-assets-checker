@@ -244,12 +244,13 @@ export const robot = (app: Probot) => {
           );
 
           if (subdirectoriesWithSameTicker.length) {
-            if (subdirectoriesWithSameTicker[0].name === tokenName) {
+            const existingToken = subdirectoriesWithSameTicker[0].name;
+            if (existingToken === tokenName) {
               // it's just an update to the same token
               return;
             }
 
-            await fail(`Token with ticker ${tokenTicker} already exists!`);
+            await fail(`Token with ticker ${tokenTicker} already exists! Existing token id=${existingToken}. New token id=${tokenName}`);
           }
         }
 
