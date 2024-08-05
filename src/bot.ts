@@ -261,9 +261,7 @@ export const robot = (app: Probot) => {
         }
 
         async function verify(body: string, address: string, message: string): Promise<boolean | undefined> {
-          console.log(`\tchecking message: ${message}`);
           const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
-          console.log(`\tsignature after regex exec: ${signature}`);
           if (signature) {
             const verifyResult = await verifySignature(signature, address, message);
             console.log(`Verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
@@ -294,12 +292,7 @@ export const robot = (app: Probot) => {
             new Address(address).pubkey(),
           );
 
-          const cleanedSignature = signature.startsWith("0x") ? signature.slice(2) : signature;
           const verifier = new UserVerifier(publicKey);
-          console.log(`Signable message serialized for signing:`);
-          console.log(signableMessage.toJSON());
-          console.log(cleanedSignature);
-
           return verifier.verify(signableMessage.serializeForSigning(), signableMessage.getSignature());
         }
 
