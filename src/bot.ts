@@ -261,7 +261,9 @@ export const robot = (app: Probot) => {
         }
 
         async function verify(body: string, address: string, message: string): Promise<boolean | undefined> {
+          console.log(`\tchecking message: ${message}`);
           const signature = /[0-9a-fA-F]{128}/.exec(body)?.at(0);
+          console.log(`\tsignature after regex exec: ${signature}`);
           if (signature) {
             const verifyResult = await verifySignature(signature, address, message);
             console.log(`Verifying signature for address ${address}, message ${message}, and signature ${signature}. Result=${verifyResult}`);
