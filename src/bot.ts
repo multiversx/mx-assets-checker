@@ -292,6 +292,8 @@ export const robot = (app: Probot) => {
           );
 
           const verifier = new UserVerifier(publicKey);
+          console.log(`Signable message serialized for signing:`);
+          console.log(signableMessage.serializeForSigning().toString());
           return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
         }
 
