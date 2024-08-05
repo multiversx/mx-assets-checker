@@ -293,10 +293,13 @@ export const robot = (app: Probot) => {
             new Address(address).pubkey(),
           );
 
+          const cleanedSignature = signature.startsWith("0x") ? signature.slice(2) : signature;
           const verifier = new UserVerifier(publicKey);
           console.log(`Signable message serialized for signing:`);
           console.log(signableMessage.toJSON());
-          return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(signature, 'hex'));
+          console.log(cleanedSignature);
+
+          return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(cleanedSignature, 'hex'));
         }
 
         async function multiVerify(bodies: string[], addresses: string[], messages: string[]): Promise<string[] | undefined> {
