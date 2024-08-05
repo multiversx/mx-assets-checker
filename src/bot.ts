@@ -287,6 +287,7 @@ export const robot = (app: Probot) => {
           const signableMessage = new SignableMessage({
             address: new Address(address),
             message: Buffer.from(message, 'utf8'),
+            signature: Buffer.from(signature, 'hex'),
           });
 
           const publicKey = new UserPublicKey(
@@ -299,7 +300,7 @@ export const robot = (app: Probot) => {
           console.log(signableMessage.toJSON());
           console.log(cleanedSignature);
 
-          return verifier.verify(signableMessage.serializeForSigning(), Buffer.from(cleanedSignature, 'hex'));
+          return verifier.verify(signableMessage.serializeForSigning(), signableMessage.getSignature());
         }
 
         async function multiVerify(bodies: string[], addresses: string[], messages: string[]): Promise<string[] | undefined> {
