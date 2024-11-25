@@ -157,7 +157,7 @@ export const robot = (app: Probot) => {
 
             if (infoFromPullRequest && typeof infoFromPullRequest === 'object' && infoFromPullRequest['extraTokens']) {
               console.log(infoFromPullRequest.extraTokens);
-              for (const extra in infoFromPullRequest.extraTokens) {
+              for (const extra of infoFromPullRequest.extraTokens) {
                 if (!validateTokenIdentifier(extra)) {
                   await fail(`Invalid extra token: ${extra}`);
                 }
