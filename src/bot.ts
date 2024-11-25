@@ -122,12 +122,14 @@ export const robot = (app: Probot) => {
           return await fetchStringValueFromApi(apiUrl, "accounts", address, "ownerAddress");
         }
 
-        async function getTokenOwner(token: string): Promise<string> {
+        async function validateTokenAndGetOwner(files: { filename: string, raw_url: string }[], token: string): Promise<string> {
           // since the token owner can be changed at protocol level at any time, it's enough to check the ownership of the token,
           // without checking any previous owners
           const apiUrl = getApiUrl();
 
           await checkIfTickerAlreadyExists(token);
+
+          await checkExtraTokensFields(files, token);
 
           const tokenOwner = await getTokenOwnerFromApi(token, apiUrl);
           if (new Address(tokenOwner).isContractAddress()) {
@@ -135,6 +137,37 @@ export const robot = (app: Probot) => {
           }
 
           return tokenOwner;
+        }
+
+        async function checkExtraTokensFields(files: { filename: string, raw_url: string }[], token: string): Promise<void> {
+          const infoJsonFile = files.find(x => x.filename.endsWith(`/${token}/info.json`));
+          if (infoJsonFile) {
+            const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
+
+            if (infoFromPullRequest && typeof infoFromPullRequest === 'object' && infoFromPullRequest['lockedAccounts']) {
+              for (const lockedAccount in infoFromPullRequest.lockedAccounts) {
+                if (lockedAccount.length !== 62) {
+                  await fail(`Invalid locked accounts: ${lockedAccount}`);
+                }
+              }
+            }
+
+            if (infoFromPullRequest && typeof infoFromPullRequest === 'object' && infoFromPullRequest['extraTokens']) {
+              for (const extra of infoFromPullRequest.extraTokens) {
+                if (!validateTokenIdentifier(extra)) {
+                  await fail(`Invalid extra token: ${extra}`);
+                }
+              }
+            }
+          }
+        }
+
+        function validateTokenIdentifier(input: string): boolean {
+          // Regular expression for the specified format
+          const regex = /^[A-Z0-9]{3,10}-[a-f0-9]{6}$/;
+
+          // Test the input string against the regex
+          return regex.test(input);
         }
 
         async function getTokenOwnerFromApi(token: string, apiUrl: string): Promise<string> {
@@ -431,7 +464,7 @@ export const robot = (app: Probot) => {
             owners = [accountOwner];
             break;
           case 'token':
-            const tokenOwner = await getTokenOwner(asset);
+            const tokenOwner = await validateTokenAndGetOwner(changedFiles, asset);
             owners = [tokenOwner];
             break;
           default:
