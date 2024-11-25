@@ -145,6 +145,9 @@ export const robot = (app: Probot) => {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
             if (infoFromPullRequest && typeof infoFromPullRequest === 'object' && infoFromPullRequest['lockedAccounts']) {
+              console.log(infoFromPullRequest['lockedAccounts']);
+              console.log(infoFromPullRequest.lockedAccounts);
+              console.log(typeof infoFromPullRequest.lockedAccounts);
               for (const lockedAccount of infoFromPullRequest.lockedAccounts) {
                 if (lockedAccount.length !== 62) {
                   await fail(`Invalid locked accounts: ${lockedAccount}`);
