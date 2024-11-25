@@ -148,7 +148,7 @@ export const robot = (app: Probot) => {
               console.log(infoFromPullRequest['lockedAccounts']);
               console.log(infoFromPullRequest.lockedAccounts);
               console.log(typeof infoFromPullRequest.lockedAccounts);
-              for (const lockedAccount of infoFromPullRequest.lockedAccounts) {
+              for (const lockedAccount in infoFromPullRequest.lockedAccounts) {
                 if (lockedAccount.length !== 62) {
                   await fail(`Invalid locked accounts: ${lockedAccount}`);
                 }
@@ -156,7 +156,7 @@ export const robot = (app: Probot) => {
             }
 
             if (infoFromPullRequest && typeof infoFromPullRequest === 'object' && infoFromPullRequest['extraTokens']) {
-              for (const extra of infoFromPullRequest.extraTokens) {
+              for (const extra in infoFromPullRequest.extraTokens) {
                 if (!validateTokenIdentifier(extra)) {
                   await fail(`Invalid extra token: ${extra}`);
                 }
