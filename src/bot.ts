@@ -145,7 +145,7 @@ export const robot = (app: Probot) => {
             const { data: infoFromPullRequest } = await axios.get(infoJsonFile.raw_url);
 
             if (infoFromPullRequest && typeof infoFromPullRequest === 'object' && infoFromPullRequest['lockedAccounts']) {
-              for (const lockedAccount of infoFromPullRequest['lockedAccounts']) {
+              for (const lockedAccount of infoFromPullRequest.lockedAccounts) {
                 if (lockedAccount.length !== 62) {
                   await fail(`Invalid locked accounts: ${lockedAccount}`);
                 }
@@ -153,7 +153,7 @@ export const robot = (app: Probot) => {
             }
 
             if (infoFromPullRequest && typeof infoFromPullRequest === 'object' && infoFromPullRequest['extraTokens']) {
-              for (const extra of infoFromPullRequest['extraTokens']) {
+              for (const extra of infoFromPullRequest.extraTokens) {
                 if (!validateTokenIdentifier(extra)) {
                   await fail(`Invalid extra token: ${extra}`);
                 }
