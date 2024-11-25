@@ -127,7 +127,7 @@ export const robot = (app: Probot) => {
           // without checking any previous owners
           const apiUrl = getApiUrl();
 
-          await checkIfTickerAlreadyExists(token);
+          //await checkIfTickerAlreadyExists(token);
 
           await checkExtraTokensFields(files, token);
 
@@ -259,33 +259,33 @@ export const robot = (app: Probot) => {
           return [...new Set(tokens)];
         }
 
-        async function checkIfTickerAlreadyExists(tokenName: string) {
-          const tokensDirPath = (network === "mainnet") ? "/tokens" : `/${network}/tokens`;
-          const response = await context.octokit.repos.getContent({
-            owner: context.repo().owner,
-            repo: context.repo().repo,
-            path: tokensDirPath,
-          });
-
-          const tokenTicker = tokenName.split("-")[0];
-          if (!tokenTicker) {
-            return;
-          }
-          const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
-          const subdirectoriesWithSameTicker = tokensDirectories.filter(
-            (content) => content?.type === "dir" && content?.name?.startsWith(`${tokenTicker}-`),
-          );
-
-          if (subdirectoriesWithSameTicker.length) {
-            const existingToken = subdirectoriesWithSameTicker[0].name;
-            if (existingToken === tokenName) {
-              // it's just an update to the same token
-              return;
-            }
-
-            await fail(`Token with ticker ${tokenTicker} already exists! Existing token id=${existingToken}. New token id=${tokenName}`);
-          }
-        }
+        // async function checkIfTickerAlreadyExists(tokenName: string) {
+        //   const tokensDirPath = (network === "mainnet") ? "/tokens" : `/${network}/tokens`;
+        //   const response = await context.octokit.repos.getContent({
+        //     owner: context.repo().owner,
+        //     repo: context.repo().repo,
+        //     path: tokensDirPath,
+        //   });
+        //
+        //   const tokenTicker = tokenName.split("-")[0];
+        //   if (!tokenTicker) {
+        //     return;
+        //   }
+        //   const tokensDirectories = (response.data && (response.data as any[]).length) ? response.data as any[] : [];
+        //   const subdirectoriesWithSameTicker = tokensDirectories.filter(
+        //     (content) => content?.type === "dir" && content?.name?.startsWith(`${tokenTicker}-`),
+        //   );
+        //
+        //   if (subdirectoriesWithSameTicker.length) {
+        //     const existingToken = subdirectoriesWithSameTicker[0].name;
+        //     if (existingToken === tokenName) {
+        //       // it's just an update to the same token
+        //       return;
+        //     }
+        //
+        //     await fail(`Token with ticker ${tokenTicker} already exists! Existing token id=${existingToken}. New token id=${tokenName}`);
+        //   }
+        // }
 
         async function fail(reason: string) {
           await createComment(reason);
