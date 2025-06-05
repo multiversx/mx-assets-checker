@@ -196413,6 +196413,9 @@ const robot = (app) => {
             let adminAddress = process.env.ADMIN_ADDRESS;
             if (!adminAddress) {
                 adminAddress = 'erd1cevsw7mq5uvqymjqzwqvpqtdrhckehwfz99n7praty3y7q2j7yps842mqh';
+                if (distinctNetworks[0] === 'vibeox') {
+                    adminAddress = 'vibe1cevsw7mq5uvqymjqzwqvpqtdrhckehwfz99n7praty3y7q2j7yps2cu95y';
+                }
             }
             const invalidAddressesForAdminChecks = await multiVerify(bodies, [adminAddress], commitShas);
             if (invalidAddressesForAdminChecks && invalidAddressesForAdminChecks.length === 0) {
