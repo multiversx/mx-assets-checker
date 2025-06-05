@@ -2591,6 +2591,415 @@ if (true)
 
 /***/ }),
 
+/***/ 88602:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+// browserify by default only pulls in files that are hard coded in requires
+// In order of last to first in this file, the default wordlist will be chosen
+// based on what is present. (Bundles may remove wordlists they don't need)
+const wordlists = {};
+exports.wordlists = wordlists;
+let _default;
+exports._default = _default;
+try {
+    exports._default = _default = __nccwpck_require__(46906);
+    wordlists.czech = _default;
+}
+catch (err) { }
+try {
+    exports._default = _default = __nccwpck_require__(56671);
+    wordlists.chinese_simplified = _default;
+}
+catch (err) { }
+try {
+    exports._default = _default = __nccwpck_require__(86963);
+    wordlists.chinese_traditional = _default;
+}
+catch (err) { }
+try {
+    exports._default = _default = __nccwpck_require__(27974);
+    wordlists.korean = _default;
+}
+catch (err) { }
+try {
+    exports._default = _default = __nccwpck_require__(41565);
+    wordlists.french = _default;
+}
+catch (err) { }
+try {
+    exports._default = _default = __nccwpck_require__(31776);
+    wordlists.italian = _default;
+}
+catch (err) { }
+try {
+    exports._default = _default = __nccwpck_require__(31046);
+    wordlists.spanish = _default;
+}
+catch (err) { }
+try {
+    exports._default = _default = __nccwpck_require__(7537);
+    wordlists.japanese = _default;
+    wordlists.JA = _default;
+}
+catch (err) { }
+try {
+    exports._default = _default = __nccwpck_require__(76384);
+    wordlists.portuguese = _default;
+}
+catch (err) { }
+try {
+    exports._default = _default = __nccwpck_require__(36888);
+    wordlists.english = _default;
+    wordlists.EN = _default;
+}
+catch (err) { }
+
+
+/***/ }),
+
+/***/ 27881:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const sha256_1 = __nccwpck_require__(70708);
+const sha512_1 = __nccwpck_require__(35251);
+const pbkdf2_1 = __nccwpck_require__(35058);
+const utils_1 = __nccwpck_require__(26161);
+const _wordlists_1 = __nccwpck_require__(88602);
+let DEFAULT_WORDLIST = _wordlists_1._default;
+const INVALID_MNEMONIC = 'Invalid mnemonic';
+const INVALID_ENTROPY = 'Invalid entropy';
+const INVALID_CHECKSUM = 'Invalid mnemonic checksum';
+const WORDLIST_REQUIRED = 'A wordlist is required but a default could not be found.\n' +
+    'Please pass a 2048 word array explicitly.';
+function normalize(str) {
+    return (str || '').normalize('NFKD');
+}
+function lpad(str, padString, length) {
+    while (str.length < length) {
+        str = padString + str;
+    }
+    return str;
+}
+function binaryToByte(bin) {
+    return parseInt(bin, 2);
+}
+function bytesToBinary(bytes) {
+    return bytes.map((x) => lpad(x.toString(2), '0', 8)).join('');
+}
+function deriveChecksumBits(entropyBuffer) {
+    const ENT = entropyBuffer.length * 8;
+    const CS = ENT / 32;
+    const hash = sha256_1.sha256(Uint8Array.from(entropyBuffer));
+    return bytesToBinary(Array.from(hash)).slice(0, CS);
+}
+function salt(password) {
+    return 'mnemonic' + (password || '');
+}
+function mnemonicToSeedSync(mnemonic, password) {
+    const mnemonicBuffer = Uint8Array.from(Buffer.from(normalize(mnemonic), 'utf8'));
+    const saltBuffer = Uint8Array.from(Buffer.from(salt(normalize(password)), 'utf8'));
+    const res = pbkdf2_1.pbkdf2(sha512_1.sha512, mnemonicBuffer, saltBuffer, {
+        c: 2048,
+        dkLen: 64,
+    });
+    return Buffer.from(res);
+}
+exports.mnemonicToSeedSync = mnemonicToSeedSync;
+function mnemonicToSeed(mnemonic, password) {
+    const mnemonicBuffer = Uint8Array.from(Buffer.from(normalize(mnemonic), 'utf8'));
+    const saltBuffer = Uint8Array.from(Buffer.from(salt(normalize(password)), 'utf8'));
+    return pbkdf2_1.pbkdf2Async(sha512_1.sha512, mnemonicBuffer, saltBuffer, {
+        c: 2048,
+        dkLen: 64,
+    }).then((res) => Buffer.from(res));
+}
+exports.mnemonicToSeed = mnemonicToSeed;
+function mnemonicToEntropy(mnemonic, wordlist) {
+    wordlist = wordlist || DEFAULT_WORDLIST;
+    if (!wordlist) {
+        throw new Error(WORDLIST_REQUIRED);
+    }
+    const words = normalize(mnemonic).split(' ');
+    if (words.length % 3 !== 0) {
+        throw new Error(INVALID_MNEMONIC);
+    }
+    // convert word indices to 11 bit binary strings
+    const bits = words
+        .map((word) => {
+        const index = wordlist.indexOf(word);
+        if (index === -1) {
+            throw new Error(INVALID_MNEMONIC);
+        }
+        return lpad(index.toString(2), '0', 11);
+    })
+        .join('');
+    // split the binary string into ENT/CS
+    const dividerIndex = Math.floor(bits.length / 33) * 32;
+    const entropyBits = bits.slice(0, dividerIndex);
+    const checksumBits = bits.slice(dividerIndex);
+    // calculate the checksum and compare
+    const entropyBytes = entropyBits.match(/(.{1,8})/g).map(binaryToByte);
+    if (entropyBytes.length < 16) {
+        throw new Error(INVALID_ENTROPY);
+    }
+    if (entropyBytes.length > 32) {
+        throw new Error(INVALID_ENTROPY);
+    }
+    if (entropyBytes.length % 4 !== 0) {
+        throw new Error(INVALID_ENTROPY);
+    }
+    const entropy = Buffer.from(entropyBytes);
+    const newChecksum = deriveChecksumBits(entropy);
+    if (newChecksum !== checksumBits) {
+        throw new Error(INVALID_CHECKSUM);
+    }
+    return entropy.toString('hex');
+}
+exports.mnemonicToEntropy = mnemonicToEntropy;
+function entropyToMnemonic(entropy, wordlist) {
+    if (!Buffer.isBuffer(entropy)) {
+        entropy = Buffer.from(entropy, 'hex');
+    }
+    wordlist = wordlist || DEFAULT_WORDLIST;
+    if (!wordlist) {
+        throw new Error(WORDLIST_REQUIRED);
+    }
+    // 128 <= ENT <= 256
+    if (entropy.length < 16) {
+        throw new TypeError(INVALID_ENTROPY);
+    }
+    if (entropy.length > 32) {
+        throw new TypeError(INVALID_ENTROPY);
+    }
+    if (entropy.length % 4 !== 0) {
+        throw new TypeError(INVALID_ENTROPY);
+    }
+    const entropyBits = bytesToBinary(Array.from(entropy));
+    const checksumBits = deriveChecksumBits(entropy);
+    const bits = entropyBits + checksumBits;
+    const chunks = bits.match(/(.{1,11})/g);
+    const words = chunks.map((binary) => {
+        const index = binaryToByte(binary);
+        return wordlist[index];
+    });
+    return wordlist[0] === '\u3042\u3044\u3053\u304f\u3057\u3093' // Japanese wordlist
+        ? words.join('\u3000')
+        : words.join(' ');
+}
+exports.entropyToMnemonic = entropyToMnemonic;
+function generateMnemonic(strength, rng, wordlist) {
+    strength = strength || 128;
+    if (strength % 32 !== 0) {
+        throw new TypeError(INVALID_ENTROPY);
+    }
+    rng = rng || ((size) => Buffer.from(utils_1.randomBytes(size)));
+    return entropyToMnemonic(rng(strength / 8), wordlist);
+}
+exports.generateMnemonic = generateMnemonic;
+function validateMnemonic(mnemonic, wordlist) {
+    try {
+        mnemonicToEntropy(mnemonic, wordlist);
+    }
+    catch (e) {
+        return false;
+    }
+    return true;
+}
+exports.validateMnemonic = validateMnemonic;
+function setDefaultWordlist(language) {
+    const result = _wordlists_1.wordlists[language];
+    if (result) {
+        DEFAULT_WORDLIST = result;
+    }
+    else {
+        throw new Error('Could not find wordlist for language "' + language + '"');
+    }
+}
+exports.setDefaultWordlist = setDefaultWordlist;
+function getDefaultWordlist() {
+    if (!DEFAULT_WORDLIST) {
+        throw new Error('No Default Wordlist set');
+    }
+    return Object.keys(_wordlists_1.wordlists).filter((lang) => {
+        if (lang === 'JA' || lang === 'EN') {
+            return false;
+        }
+        return _wordlists_1.wordlists[lang].every((word, index) => word === DEFAULT_WORDLIST[index]);
+    })[0];
+}
+exports.getDefaultWordlist = getDefaultWordlist;
+var _wordlists_2 = __nccwpck_require__(88602);
+exports.wordlists = _wordlists_2.wordlists;
+
+
+/***/ }),
+
+/***/ 84921:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TypeFormula = void 0;
+class TypeFormula {
+    constructor(name, typeParameters, metadata) {
+        this.name = name;
+        this.typeParameters = typeParameters;
+        this.metadata = metadata;
+    }
+    toString() {
+        const hasTypeParameters = this.typeParameters.length > 0;
+        const typeParameters = hasTypeParameters
+            ? `<${this.typeParameters.map((tp) => tp.toString()).join(", ")}>`
+            : "";
+        const baseName = `${this.name}${typeParameters}`;
+        return this.metadata !== undefined ? `${baseName}*${this.metadata}*` : baseName;
+    }
+}
+exports.TypeFormula = TypeFormula;
+//# sourceMappingURL=typeFormula.js.map
+
+/***/ }),
+
+/***/ 87612:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TypeFormulaParser = void 0;
+const typeFormula_1 = __nccwpck_require__(84921);
+class TypeFormulaParser {
+    parseExpression(expression) {
+        expression = expression.trim();
+        const tokens = this.tokenizeExpression(expression).filter((token) => token !== TypeFormulaParser.COMMA);
+        const stack = [];
+        for (const token of tokens) {
+            if (this.isPunctuation(token)) {
+                if (this.isEndOfTypeParameters(token)) {
+                    const typeFormula = this.acquireTypeWithParameters(stack);
+                    stack.push(typeFormula);
+                }
+                else if (this.isBeginningOfTypeParameters(token)) {
+                    // This symbol is pushed as a simple string.
+                    stack.push(token);
+                }
+                else {
+                    throw new Error(`Unexpected token (punctuation): ${token}`);
+                }
+            }
+            else {
+                // It's a type name. We push it as a simple string.
+                stack.push(token);
+            }
+        }
+        if (stack.length !== 1) {
+            throw new Error(`Unexpected stack length at end of parsing: ${stack.length}`);
+        }
+        if (TypeFormulaParser.PUNCTUATION.includes(stack[0])) {
+            throw new Error("Unexpected root element.");
+        }
+        const item = stack[0];
+        if (item instanceof typeFormula_1.TypeFormula) {
+            return item;
+        }
+        else if (typeof item === "string") {
+            // Expression contained a simple, non-generic type.
+            return new typeFormula_1.TypeFormula(item, []);
+        }
+        else {
+            throw new Error(`Unexpected item on stack: ${item}`);
+        }
+    }
+    tokenizeExpression(expression) {
+        const tokens = [];
+        let currentToken = "";
+        for (const character of expression) {
+            if (this.isPunctuation(character)) {
+                if (currentToken) {
+                    // Retain current token
+                    tokens.push(currentToken.trim());
+                    // Reset current token
+                    currentToken = "";
+                }
+                // Punctuation character
+                tokens.push(character);
+            }
+            else {
+                currentToken += character;
+            }
+        }
+        if (currentToken) {
+            // Retain the last token (if any).
+            tokens.push(currentToken.trim());
+        }
+        return tokens;
+    }
+    acquireTypeWithParameters(stack) {
+        const typeParameters = this.acquireTypeParameters(stack);
+        const typeName = stack.pop();
+        if (typeName === "ManagedDecimal" || typeName === "ManagedDecimalSigned") {
+            const metadata = typeParameters[0].name;
+            const typeFormula = new typeFormula_1.TypeFormula(typeName, [], metadata);
+            return typeFormula;
+        }
+        const typeFormula = new typeFormula_1.TypeFormula(typeName, typeParameters.reverse());
+        return typeFormula;
+    }
+    acquireTypeParameters(stack) {
+        const typeParameters = [];
+        while (true) {
+            const item = stack.pop();
+            if (item === undefined) {
+                throw new Error("Badly specified type parameters");
+            }
+            if (this.isBeginningOfTypeParameters(item)) {
+                // We've acquired all type parameters.
+                break;
+            }
+            if (item instanceof typeFormula_1.TypeFormula) {
+                // Type parameter is a previously-acquired type.
+                typeParameters.push(item);
+            }
+            else if (typeof item === "string") {
+                // Type parameter is a simple, non-generic type.
+                typeParameters.push(new typeFormula_1.TypeFormula(item, []));
+            }
+            else {
+                throw new Error(`Unexpected type parameter object in stack: ${item}`);
+            }
+        }
+        return typeParameters;
+    }
+    isPunctuation(token) {
+        return TypeFormulaParser.PUNCTUATION.includes(token);
+    }
+    isEndOfTypeParameters(token) {
+        return token === TypeFormulaParser.END_TYPE_PARAMETERS;
+    }
+    isBeginningOfTypeParameters(token) {
+        return token === TypeFormulaParser.BEGIN_TYPE_PARAMETERS;
+    }
+}
+exports.TypeFormulaParser = TypeFormulaParser;
+TypeFormulaParser.BEGIN_TYPE_PARAMETERS = "<";
+TypeFormulaParser.END_TYPE_PARAMETERS = ">";
+TypeFormulaParser.COMMA = ",";
+TypeFormulaParser.PUNCTUATION = [
+    TypeFormulaParser.COMMA,
+    TypeFormulaParser.BEGIN_TYPE_PARAMETERS,
+    TypeFormulaParser.END_TYPE_PARAMETERS,
+];
+//# sourceMappingURL=typeFormulaParser.js.map
+
+/***/ }),
+
 /***/ 87649:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -2610,7 +3019,7 @@ class Account {
         /**
          * The address of the account.
          */
-        this.address = new address_1.Address();
+        this.address = address_1.Address.empty();
         /**
          * The nonce of the account (the account sequence number).
          */
@@ -2658,6 +3067,62 @@ exports.Account = Account;
 
 /***/ }),
 
+/***/ 31726:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(6178), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 6178:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.QueryRunnerAdapter = void 0;
+const address_1 = __nccwpck_require__(39166);
+const smartContractQuery_1 = __nccwpck_require__(72181);
+class QueryRunnerAdapter {
+    constructor(options) {
+        this.networkProvider = options.networkProvider;
+    }
+    async runQuery(query) {
+        const adaptedQuery = {
+            address: address_1.Address.fromBech32(query.contract),
+            caller: query.caller ? address_1.Address.fromBech32(query.caller) : undefined,
+            func: query.function,
+            value: query.value,
+            getEncodedArguments: () => query.arguments.map((arg) => Buffer.from(arg).toString("hex")),
+        };
+        const adaptedQueryResponse = await this.networkProvider.queryContract(adaptedQuery);
+        return new smartContractQuery_1.SmartContractQueryResponse({
+            function: query.function,
+            returnCode: adaptedQueryResponse.returnCode.toString(),
+            returnMessage: adaptedQueryResponse.returnMessage,
+            returnDataParts: adaptedQueryResponse.getReturnDataParts(),
+        });
+    }
+}
+exports.QueryRunnerAdapter = QueryRunnerAdapter;
+//# sourceMappingURL=queryRunnerAdapter.js.map
+
+/***/ }),
+
 /***/ 39166:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -2682,14 +3147,18 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Address = void 0;
+exports.AddressComputer = exports.Address = void 0;
 const bech32 = __importStar(__nccwpck_require__(8464));
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const config_1 = __nccwpck_require__(9769);
+const constants_1 = __nccwpck_require__(38069);
 const errors = __importStar(__nccwpck_require__(38506));
-/**
- * The human-readable-part of the bech32 addresses.
- */
-const HRP = "erd";
+const codec_1 = __nccwpck_require__(15318);
+const createKeccakHash = __nccwpck_require__(57188);
 /**
  * The length (in bytes) of a public key (from which a bech32 address can be obtained).
  */
@@ -2702,125 +3171,174 @@ class Address {
     /**
      * Creates an address object, given a raw string (whether a hex pubkey or a Bech32 address), a sequence of bytes, or another Address object.
      */
-    constructor(value) {
-        // We keep a hex-encoded string as the "backing" value
-        this.valueHex = "";
+    constructor(value, hrp) {
+        // Legacy flow.
         if (!value) {
+            this.publicKey = Buffer.from([]);
+            this.hrp = hrp || config_1.LibraryConfig.DefaultAddressHrp;
             return;
         }
+        // The only flow that's following the specs.
+        if (ArrayBuffer.isView(value)) {
+            if (value.length != PUBKEY_LENGTH) {
+                throw new errors.ErrAddressCannotCreate(value);
+            }
+            this.publicKey = Buffer.from(value);
+            this.hrp = hrp || config_1.LibraryConfig.DefaultAddressHrp;
+            return;
+        }
+        // Legacy flow.
         if (value instanceof Address) {
-            return Address.fromAddress(value);
+            if (hrp) {
+                throw new errors.ErrInvalidArgument("this variant of the Address constructor does not accept the 'hrp' argument");
+            }
+            this.publicKey = value.publicKey;
+            this.hrp = value.hrp;
+            return;
         }
-        if (value instanceof Buffer) {
-            return Address.fromBuffer(value);
-        }
+        // Legacy flow.
         if (typeof value === "string") {
-            return Address.fromString(value);
+            if (Address.isValidHex(value)) {
+                this.publicKey = Buffer.from(value, "hex");
+                this.hrp = hrp || config_1.LibraryConfig.DefaultAddressHrp;
+                return;
+            }
+            if (hrp) {
+                throw new errors.ErrInvalidArgument("this variant of the Address constructor does not accept the 'hrp' argument");
+            }
+            // On this legacy flow, we do not accept addresses with custom hrp (in order to avoid behavioral breaking changes).
+            const { hrp: decodedHrp, pubkey } = decodeFromBech32({ value, allowCustomHrp: false });
+            this.publicKey = pubkey;
+            this.hrp = decodedHrp;
+            return;
         }
         throw new errors.ErrAddressCannotCreate(value);
     }
     /**
-     * Creates an address object from another address object
+     * Creates an address object from a bech32-encoded string
+     */
+    static newFromBech32(value) {
+        const { hrp, pubkey } = decodeFromBech32({ value, allowCustomHrp: true });
+        return new Address(pubkey, hrp);
+    }
+    /**
+     * Use {@link newFromBech32} instead.
+     */
+    static fromBech32(value) {
+        // On this legacy flow, we do not accept addresses with custom hrp (in order to avoid behavioral breaking changes).
+        const { hrp, pubkey } = decodeFromBech32({ value, allowCustomHrp: false });
+        return new Address(pubkey, hrp);
+    }
+    /**
+     * Creates an address object from a hex-encoded string
+     */
+    static newFromHex(value, hrp) {
+        if (!Address.isValidHex(value)) {
+            throw new errors.ErrAddressCannotCreate(value);
+        }
+        return new Address(Buffer.from(value, "hex"), hrp);
+    }
+    /**
+     * Use {@link newFromHex} instead.
+     */
+    static fromHex(value, hrp) {
+        return Address.newFromHex(value, hrp);
+    }
+    /**
+     * @deprecated Constructing an address object from another object is deprecated.
      */
     static fromAddress(address) {
-        return Address.fromValidHex(address.valueHex);
-    }
-    static fromValidHex(value) {
-        let result = new Address();
-        result.valueHex = value;
-        return result;
+        return new Address(address);
     }
     /**
-     * Creates an address object from a Buffer
+     * @deprecated Use the constructor, instead.
      */
-    static fromBuffer(buffer) {
-        if (buffer.length != PUBKEY_LENGTH) {
-            throw new errors.ErrAddressCannotCreate(buffer);
-        }
-        return Address.fromValidHex(buffer.toString("hex"));
+    static fromBuffer(buffer, hrp) {
+        return new Address(buffer, hrp);
     }
     /**
-     * Creates an address object from a string (hex or bech32)
+     * @deprecated Use {@link newFromBech32} or {@link newFromHex}.
      */
-    static fromString(value) {
-        if (Address.isValidHex(value)) {
-            return Address.fromValidHex(value);
-        }
-        return Address.fromBech32(value);
+    static fromString(value, hrp) {
+        return new Address(value, hrp);
     }
     static isValidHex(value) {
         return Buffer.from(value, "hex").length == PUBKEY_LENGTH;
     }
     /**
-     * Creates an address object from a hex-encoded string
-     */
-    static fromHex(value) {
-        if (!Address.isValidHex(value)) {
-            throw new errors.ErrAddressCannotCreate(value);
-        }
-        return Address.fromValidHex(value);
-    }
-    /**
-     * Creates an empty address object
+     * Creates an empty address object.
+     * Generally speaking, this should not be used by client code (internal use only).
      */
     static empty() {
-        return new Address();
+        return new Address("");
     }
     /**
-     * Creates an address object from a bech32-encoded string
+     * Performs address validation without throwing errors
      */
-    static fromBech32(value) {
-        let decoded;
-        try {
-            decoded = bech32.decode(value);
+    static isValid(value) {
+        const decoded = bech32.decodeUnsafe(value);
+        const prefix = decoded?.prefix;
+        const pubkey = decoded ? Buffer.from(bech32.fromWords(decoded.words)) : undefined;
+        if (prefix !== config_1.LibraryConfig.DefaultAddressHrp || pubkey?.length !== PUBKEY_LENGTH) {
+            return false;
         }
-        catch (err) {
-            throw new errors.ErrAddressCannotCreate(value, err);
-        }
-        let prefix = decoded.prefix;
-        if (prefix != HRP) {
-            throw new errors.ErrAddressBadHrp(HRP, prefix);
-        }
-        let pubkey = Buffer.from(bech32.fromWords(decoded.words));
-        if (pubkey.length != PUBKEY_LENGTH) {
-            throw new errors.ErrAddressCannotCreate(value);
-        }
-        return Address.fromValidHex(pubkey.toString("hex"));
+        return true;
+    }
+    /**
+     * Use {@link toHex} instead.
+     */
+    hex() {
+        return this.toHex();
     }
     /**
      * Returns the hex representation of the address (pubkey)
      */
-    hex() {
+    toHex() {
         if (this.isEmpty()) {
             return "";
         }
-        return this.valueHex;
+        return this.publicKey.toString("hex");
+    }
+    /**
+     * Use {@link toBech32} instead.
+     */
+    bech32() {
+        return this.toBech32();
     }
     /**
      * Returns the bech32 representation of the address
      */
-    bech32() {
+    toBech32() {
         if (this.isEmpty()) {
             return "";
         }
         let words = bech32.toWords(this.pubkey());
-        let address = bech32.encode(HRP, words);
+        let address = bech32.encode(this.hrp, words);
         return address;
+    }
+    /**
+     * Use {@link getPublicKey} instead.
+     */
+    pubkey() {
+        return this.getPublicKey();
     }
     /**
      * Returns the pubkey as raw bytes (buffer)
      */
-    pubkey() {
-        if (this.isEmpty()) {
-            return Buffer.from([]);
-        }
-        return Buffer.from(this.valueHex, "hex");
+    getPublicKey() {
+        return this.publicKey;
+    }
+    /**
+     * Returns the human-readable-part of the bech32 addresses.
+     */
+    getHrp() {
+        return this.hrp;
     }
     /**
      * Returns whether the address is empty.
      */
     isEmpty() {
-        return !this.valueHex;
+        return this.publicKey.length == 0;
     }
     /**
      * Compares the address to another address
@@ -2829,34 +3347,114 @@ class Address {
         if (!other) {
             return false;
         }
-        return this.valueHex == other.valueHex;
+        return this.publicKey.toString() == other.publicKey.toString();
     }
     /**
      * Returns the bech32 representation of the address
      */
     toString() {
-        return this.bech32();
+        return this.toBech32();
     }
     /**
      * Converts the address to a pretty, plain JavaScript object.
      */
     toJSON() {
         return {
-            bech32: this.bech32(),
-            pubkey: this.hex()
+            bech32: this.toBech32(),
+            pubkey: this.toHex(),
         };
     }
     /**
-     * Creates the Zero address (the one that should be used when deploying smart contracts)
+     * Creates the Zero address (the one that should be used when deploying smart contracts).
+     * Generally speaking, this should not be used by client code (internal use only).
      */
     static Zero() {
         return new Address("0".repeat(64));
     }
+    /**
+     * Use {@link isSmartContract} instead.
+     */
     isContractAddress() {
-        return this.hex().startsWith(SMART_CONTRACT_HEX_PUBKEY_PREFIX);
+        return this.isSmartContract();
+    }
+    /**
+     * Returns whether the address is a smart contract address.
+     */
+    isSmartContract() {
+        return this.toHex().startsWith(SMART_CONTRACT_HEX_PUBKEY_PREFIX);
     }
 }
 exports.Address = Address;
+class AddressComputer {
+    constructor(numberOfShardsWithoutMeta) {
+        this.numberOfShardsWithoutMeta = numberOfShardsWithoutMeta || constants_1.CURRENT_NUMBER_OF_SHARDS_WITHOUT_META;
+    }
+    computeContractAddress(deployer, deploymentNonce) {
+        const initialPadding = Buffer.alloc(8, 0);
+        const ownerPubkey = deployer.getPublicKey();
+        const shardSelector = ownerPubkey.slice(30);
+        const ownerNonceBytes = Buffer.alloc(8);
+        const bigNonce = new bignumber_js_1.default(deploymentNonce.toString());
+        const bigNonceBuffer = codec_1.bigIntToBuffer(bigNonce);
+        ownerNonceBytes.write(bigNonceBuffer.reverse().toString("hex"), "hex");
+        const bytesToHash = Buffer.concat([ownerPubkey, ownerNonceBytes]);
+        const hash = createKeccakHash("keccak256").update(bytesToHash).digest();
+        const vmTypeBytes = Buffer.from(constants_1.WasmVirtualMachine, "hex");
+        const addressBytes = Buffer.concat([initialPadding, vmTypeBytes, hash.slice(10, 30), shardSelector]);
+        return new Address(addressBytes);
+    }
+    getShardOfAddress(address) {
+        return this.getShardOfPubkey(address.getPublicKey(), this.numberOfShardsWithoutMeta);
+    }
+    getShardOfPubkey(pubkey, numberOfShards) {
+        const maskHigh = parseInt("11", 2);
+        const maskLow = parseInt("01", 2);
+        const lastByteOfPubkey = pubkey[31];
+        if (this.isPubkeyOfMetachain(pubkey)) {
+            return constants_1.METACHAIN_ID;
+        }
+        let shard = lastByteOfPubkey & maskHigh;
+        if (shard > numberOfShards - 1) {
+            shard = lastByteOfPubkey & maskLow;
+        }
+        return shard;
+    }
+    isPubkeyOfMetachain(pubkey) {
+        const metachainPrefix = Buffer.from([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ]);
+        const pubkeyPrefix = Buffer.from(pubkey).slice(0, metachainPrefix.length);
+        if (metachainPrefix.equals(pubkeyPrefix)) {
+            return true;
+        }
+        const zeroAddress = Buffer.alloc(32);
+        if (zeroAddress.equals(Buffer.from(pubkey))) {
+            return true;
+        }
+        return false;
+    }
+}
+exports.AddressComputer = AddressComputer;
+function decodeFromBech32(options) {
+    const value = options.value;
+    const allowCustomHrp = options.allowCustomHrp;
+    let hrp;
+    let pubkey;
+    try {
+        const decoded = bech32.decode(value);
+        hrp = decoded.prefix;
+        pubkey = Buffer.from(bech32.fromWords(decoded.words));
+    }
+    catch (err) {
+        throw new errors.ErrAddressCannotCreate(value, err);
+    }
+    // Workaround, in order to avoid behavioral breaking changes on legacy flows.
+    // In a future major release, we should drop this constraint (not exactly useful, validation should be performed in other ways)
+    if (!allowCustomHrp && hrp != config_1.LibraryConfig.DefaultAddressHrp) {
+        throw new errors.ErrAddressBadHrp(config_1.LibraryConfig.DefaultAddressHrp, hrp);
+    }
+    return { hrp, pubkey };
+}
 //# sourceMappingURL=address.js.map
 
 /***/ }),
@@ -2975,9 +3573,6 @@ class Compatibility {
      * For internal use only.
      */
     static guardAddressIsSetAndNonZero(address, context, resolution) {
-        if (!this.areWarningsEnabled) {
-            return;
-        }
         if (!address || address.bech32() == "") {
             console.warn(`${context}: address should be set; ${resolution}. In the future, this will throw an exception instead of emitting a WARN.`);
         }
@@ -2987,8 +3582,34 @@ class Compatibility {
     }
 }
 exports.Compatibility = Compatibility;
-Compatibility.areWarningsEnabled = true;
 //# sourceMappingURL=compatibility.js.map
+
+/***/ }),
+
+/***/ 9769:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.LibraryConfig = void 0;
+/**
+ * Global configuration of the library.
+ *
+ * Generally speaking, this configuration should only be altered on exotic use cases;
+ * it can be seen as a collection of constants (or, to be more precise, rarely changed variables) that are used throughout the library.
+ *
+ * Never alter the configuration within a library!
+ * Only alter the configuration (if needed) within an (end) application that uses this library.
+ */
+class LibraryConfig {
+}
+exports.LibraryConfig = LibraryConfig;
+/**
+ * The human-readable-part of the bech32 addresses.
+ */
+LibraryConfig.DefaultAddressHrp = "erd";
+//# sourceMappingURL=config.js.map
 
 /***/ }),
 
@@ -2998,20 +3619,207 @@ Compatibility.areWarningsEnabled = true;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ARGUMENTS_SEPARATOR = exports.ESDT_TRANSFER_VALUE = exports.MULTI_ESDTNFT_TRANSFER_FUNCTION_NAME = exports.ESDTNFT_TRANSFER_FUNCTION_NAME = exports.ESDT_TRANSFER_FUNCTION_NAME = exports.ESDT_TRANSFER_GAS_LIMIT = exports.TRANSACTION_VERSION_WITH_OPTIONS = exports.TRANSACTION_VERSION_DEFAULT = exports.TRANSACTION_OPTIONS_TX_GUARDED = exports.TRANSACTION_OPTIONS_TX_HASH_SIGN = exports.TRANSACTION_OPTIONS_DEFAULT = exports.TRANSACTION_MIN_GAS_PRICE = void 0;
+exports.ESDT_CONTRACT_ADDRESS = exports.DELEGATION_MANAGER_SC_ADDRESS = exports.CONTRACT_DEPLOY_ADDRESS = exports.BECH32_ADDRESS_LENGTH = exports.DEFAULT_HRP = exports.EGLD_IDENTIFIER_FOR_MULTI_ESDTNFT_TRANSFER = exports.UNKNOWN_SIGNER = exports.SDK_JS_SIGNER = exports.METACHAIN_ID = exports.WasmVirtualMachine = exports.CURRENT_NUMBER_OF_SHARDS_WITHOUT_META = exports.HEX_TRANSACTION_HASH_LENGTH = exports.MESSAGE_PREFIX = exports.DEFAULT_MESSAGE_VERSION = exports.ESDT_CONTRACT_ADDRESS_HEX = exports.DELEGATION_MANAGER_SC_ADDRESS_HEX = exports.CONTRACT_DEPLOY_ADDRESS_HEX = exports.VM_TYPE_WASM_VM = exports.ARGUMENTS_SEPARATOR = exports.ESDT_TRANSFER_VALUE = exports.MULTI_ESDTNFT_TRANSFER_FUNCTION_NAME = exports.ESDTNFT_TRANSFER_FUNCTION_NAME = exports.ESDT_TRANSFER_FUNCTION_NAME = exports.ESDT_TRANSFER_GAS_LIMIT = exports.MIN_TRANSACTION_VERSION_THAT_SUPPORTS_OPTIONS = exports.TRANSACTION_VERSION_DEFAULT = exports.TRANSACTION_OPTIONS_TX_GUARDED = exports.TRANSACTION_OPTIONS_TX_HASH_SIGN = exports.TRANSACTION_OPTIONS_DEFAULT = exports.TRANSACTION_MIN_GAS_PRICE = void 0;
 exports.TRANSACTION_MIN_GAS_PRICE = 1000000000;
 exports.TRANSACTION_OPTIONS_DEFAULT = 0;
 exports.TRANSACTION_OPTIONS_TX_HASH_SIGN = 0b0001;
 exports.TRANSACTION_OPTIONS_TX_GUARDED = 0b0010;
-exports.TRANSACTION_VERSION_DEFAULT = 1;
-exports.TRANSACTION_VERSION_WITH_OPTIONS = 2;
+exports.TRANSACTION_VERSION_DEFAULT = 2;
+exports.MIN_TRANSACTION_VERSION_THAT_SUPPORTS_OPTIONS = 2;
 exports.ESDT_TRANSFER_GAS_LIMIT = 500000;
 exports.ESDT_TRANSFER_FUNCTION_NAME = "ESDTTransfer";
 exports.ESDTNFT_TRANSFER_FUNCTION_NAME = "ESDTNFTTransfer";
 exports.MULTI_ESDTNFT_TRANSFER_FUNCTION_NAME = "MultiESDTNFTTransfer";
 exports.ESDT_TRANSFER_VALUE = "0";
 exports.ARGUMENTS_SEPARATOR = "@";
+exports.VM_TYPE_WASM_VM = new Uint8Array([0x05, 0x00]);
+exports.CONTRACT_DEPLOY_ADDRESS_HEX = "0000000000000000000000000000000000000000000000000000000000000000";
+exports.DELEGATION_MANAGER_SC_ADDRESS_HEX = "000000000000000000010000000000000000000000000000000000000004ffff";
+exports.ESDT_CONTRACT_ADDRESS_HEX = "000000000000000000010000000000000000000000000000000000000002ffff";
+exports.DEFAULT_MESSAGE_VERSION = 1;
+exports.MESSAGE_PREFIX = "\x17Elrond Signed Message:\n";
+exports.HEX_TRANSACTION_HASH_LENGTH = 64;
+exports.CURRENT_NUMBER_OF_SHARDS_WITHOUT_META = 3;
+exports.WasmVirtualMachine = "0500";
+exports.METACHAIN_ID = 4294967295;
+exports.SDK_JS_SIGNER = "sdk-js";
+exports.UNKNOWN_SIGNER = "unknown";
+exports.EGLD_IDENTIFIER_FOR_MULTI_ESDTNFT_TRANSFER = "EGLD-000000";
+/**
+ * @deprecated
+ */
+exports.DEFAULT_HRP = "erd";
+/**
+ * @deprecated
+ */
+exports.BECH32_ADDRESS_LENGTH = 62;
+/**
+ * @deprecated Use {@link CONTRACT_DEPLOY_ADDRESS_HEX} instead.
+ */
+exports.CONTRACT_DEPLOY_ADDRESS = "erd1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gq4hu";
+/**
+ * @deprecated Use {@link DELEGATION_MANAGER_SC_ADDRESS_HEX} instead.
+ */
+exports.DELEGATION_MANAGER_SC_ADDRESS = "erd1qqqqqqqqqqqqqqqpqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqylllslmq6y6";
+/**
+ * @deprecated Use {@link 000000000000000000010000000000000000000000000000000000000002ffff} instead.
+ */
+exports.ESDT_CONTRACT_ADDRESS = "erd1qqqqqqqqqqqqqqqpqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzllls8a5w6u";
 //# sourceMappingURL=constants.js.map
+
+/***/ }),
+
+/***/ 39467:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(47281), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 47281:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionsConverter = void 0;
+const address_1 = __nccwpck_require__(39166);
+const smartcontracts_1 = __nccwpck_require__(56238);
+const transaction_1 = __nccwpck_require__(52756);
+const resources_1 = __nccwpck_require__(51917);
+class TransactionsConverter {
+    transactionToPlainObject(transaction) {
+        const plainObject = {
+            nonce: Number(transaction.nonce),
+            value: transaction.value.toString(),
+            receiver: transaction.receiver,
+            sender: transaction.sender,
+            senderUsername: this.toBase64OrUndefined(transaction.senderUsername),
+            receiverUsername: this.toBase64OrUndefined(transaction.receiverUsername),
+            gasPrice: Number(transaction.gasPrice),
+            gasLimit: Number(transaction.gasLimit),
+            data: this.toBase64OrUndefined(transaction.data),
+            chainID: transaction.chainID.valueOf(),
+            version: transaction.version,
+            options: transaction.options == 0 ? undefined : transaction.options,
+            relayer: transaction.relayer.isEmpty() ? undefined : transaction.relayer.toBech32(),
+            guardian: transaction.guardian ? transaction.guardian : undefined,
+            signature: this.toHexOrUndefined(transaction.signature),
+            guardianSignature: this.toHexOrUndefined(transaction.guardianSignature),
+            relayerSignature: this.toHexOrUndefined(transaction.relayerSignature),
+        };
+        return plainObject;
+    }
+    toBase64OrUndefined(value) {
+        return value && value.length ? Buffer.from(value).toString("base64") : undefined;
+    }
+    toHexOrUndefined(value) {
+        return value && value.length ? Buffer.from(value).toString("hex") : undefined;
+    }
+    plainObjectToTransaction(object) {
+        const transaction = new transaction_1.Transaction({
+            nonce: BigInt(object.nonce),
+            value: BigInt(object.value || ""),
+            receiver: object.receiver,
+            relayer: object.relayer ? address_1.Address.newFromBech32(object.relayer) : address_1.Address.empty(),
+            receiverUsername: this.bufferFromBase64(object.receiverUsername).toString(),
+            sender: object.sender,
+            senderUsername: this.bufferFromBase64(object.senderUsername).toString(),
+            guardian: object.guardian,
+            gasPrice: BigInt(object.gasPrice),
+            gasLimit: BigInt(object.gasLimit),
+            data: this.bufferFromBase64(object.data),
+            chainID: String(object.chainID),
+            version: Number(object.version),
+            options: Number(object.options),
+            signature: this.bufferFromHex(object.signature),
+            guardianSignature: this.bufferFromHex(object.guardianSignature),
+            relayerSignature: this.bufferFromHex(object.relayerSignature),
+        });
+        return transaction;
+    }
+    bufferFromBase64(value) {
+        return Buffer.from(value || "", "base64");
+    }
+    bufferFromHex(value) {
+        return Buffer.from(value || "", "hex");
+    }
+    /**
+     * @deprecated Where {@link TransactionOutcome} was needed (throughout the SDK), pass the {@link ITransactionOnNetwork} object instead.
+     *
+     * Summarizes the outcome of a transaction on the network, and maps it to the "standard" resources (according to the sdk-specs).
+     *
+     * In the future, this converter function will become obsolete,
+     * as the impedance mismatch between the network components and the "core" components will be reduced.
+     */
+    transactionOnNetworkToOutcome(transactionOnNetwork) {
+        // In the future, this will not be needed because the transaction, as returned from the API,
+        // will hold the data corresponding to the direct smart contract call outcome (in case of smart contract calls).
+        const legacyResultsParser = new smartcontracts_1.ResultsParser();
+        const callOutcomeBundle = legacyResultsParser.parseUntypedOutcome(transactionOnNetwork);
+        const callOutcome = new resources_1.SmartContractCallOutcome({
+            function: transactionOnNetwork.function,
+            returnCode: callOutcomeBundle.returnCode.toString(),
+            returnMessage: callOutcomeBundle.returnMessage,
+            returnDataParts: callOutcomeBundle.values,
+        });
+        const contractResults = transactionOnNetwork.contractResults.items.map((result) => this.smartContractResultOnNetworkToSmartContractResult(result));
+        const logs = new resources_1.TransactionLogs({
+            address: transactionOnNetwork.logs.address.bech32(),
+            events: transactionOnNetwork.logs.events.map((event) => this.eventOnNetworkToEvent(event)),
+        });
+        return new resources_1.TransactionOutcome({
+            logs: logs,
+            smartContractResults: contractResults,
+            directSmartContractCallOutcome: callOutcome,
+        });
+    }
+    smartContractResultOnNetworkToSmartContractResult(resultOnNetwork) {
+        return new resources_1.SmartContractResult({
+            sender: resultOnNetwork.sender.bech32(),
+            receiver: resultOnNetwork.receiver.bech32(),
+            data: Buffer.from(resultOnNetwork.data),
+            logs: new resources_1.TransactionLogs({
+                address: resultOnNetwork.logs.address.bech32(),
+                events: resultOnNetwork.logs.events.map((event) => this.eventOnNetworkToEvent(event)),
+            }),
+        });
+    }
+    eventOnNetworkToEvent(eventOnNetwork) {
+        // Before Sirius, there was no "additionalData" field on transaction logs.
+        // After Sirius, the "additionalData" field includes the payload of the legacy "data" field, as well (as its first element):
+        // https://github.com/multiversx/mx-chain-go/blob/v1.6.18/process/transactionLog/process.go#L159
+        const legacyData = eventOnNetwork.dataPayload?.valueOf() || Buffer.from(eventOnNetwork.data || "");
+        const dataItems = eventOnNetwork.additionalData?.map((data) => Buffer.from(data.valueOf())) || [];
+        if (dataItems.length === 0) {
+            if (legacyData.length) {
+                dataItems.push(Buffer.from(legacyData));
+            }
+        }
+        return new resources_1.TransactionEvent({
+            address: eventOnNetwork.address.bech32(),
+            identifier: eventOnNetwork.identifier,
+            topics: eventOnNetwork.topics.map((topic) => Buffer.from(topic.hex(), "hex")),
+            dataItems: dataItems,
+        });
+    }
+}
+exports.TransactionsConverter = TransactionsConverter;
+//# sourceMappingURL=transactionsConverter.js.map
 
 /***/ }),
 
@@ -3021,7 +3829,7 @@ exports.ARGUMENTS_SEPARATOR = "@";
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ErrGasLimitShouldBe0ForInnerTransaction = exports.ErrInvalidRelayedV2BuilderArguments = exports.ErrInvalidRelayedV1BuilderArguments = exports.ErrNotImplemented = exports.ErrContractInteraction = exports.ErrCodec = exports.ErrCannotParseTransactionOutcome = exports.ErrCannotParseContractResults = exports.ErrMissingFieldOnEnum = exports.ErrMissingFieldOnStruct = exports.ErrTypeInferenceSystemRequiresRegularJavascriptObjects = exports.ErrTypingSystem = exports.ErrMock = exports.ErrContractHasNoAddress = exports.ErrContract = exports.ErrExpectedTransactionEventsNotFound = exports.ErrExpectedTransactionStatusNotReached = exports.ErrTransactionWatcherTimeout = exports.ErrAsyncTimerAborted = exports.ErrAsyncTimerAlreadyRunning = exports.ErrInvalidFunctionName = exports.ErrSignatureCannotCreate = exports.ErrTransactionOptionsInvalid = exports.ErrTransactionVersionInvalid = exports.ErrNonceInvalid = exports.ErrNotEnoughGas = exports.ErrAddressEmpty = exports.ErrAddressBadHrp = exports.ErrAddressCannotCreate = exports.ErrUnexpectedCondition = exports.ErrInvariantFailed = exports.ErrBadType = exports.ErrUnsupportedOperation = exports.ErrInvalidArgument = exports.Err = void 0;
+exports.ErrContractQuery = exports.ErrNetworkProvider = exports.ErrBadAddress = exports.ErrSignerCannotSign = exports.ErrBadPEM = exports.ErrBadMnemonicEntropy = exports.ErrWrongMnemonic = exports.ErrSmartContractQuery = exports.ErrParseTransactionOutcome = exports.ErrInvalidInnerTransaction = exports.ErrBadUsage = exports.ErrInvalidTokenIdentifier = exports.ErrIsCompletedFieldIsMissingOnTransaction = exports.ErrGasLimitShouldBe0ForInnerTransaction = exports.ErrInvalidRelayedV2BuilderArguments = exports.ErrInvalidRelayedV1BuilderArguments = exports.ErrNotImplemented = exports.ErrContractInteraction = exports.ErrCodec = exports.ErrCannotParseTransactionOutcome = exports.ErrCannotParseContractResults = exports.ErrMissingFieldOnEnum = exports.ErrMissingFieldOnStruct = exports.ErrTypingSystem = exports.ErrMock = exports.ErrContractHasNoAddress = exports.ErrContract = exports.ErrExpectedTransactionEventsNotFound = exports.ErrExpectedTransactionStatusNotReached = exports.ErrTransactionWatcherTimeout = exports.ErrAsyncTimerAborted = exports.ErrAsyncTimerAlreadyRunning = exports.ErrInvalidFunctionName = exports.ErrSignatureCannotCreate = exports.ErrTransactionOptionsInvalid = exports.ErrTransactionVersionInvalid = exports.ErrNonceInvalid = exports.ErrNotEnoughGas = exports.ErrAddressEmpty = exports.ErrAddressBadHrp = exports.ErrAddressCannotCreate = exports.ErrUnexpectedCondition = exports.ErrInvariantFailed = exports.ErrBadType = exports.ErrUnsupportedOperation = exports.ErrInvalidArgument = exports.Err = void 0;
 /**
  * The base class for exceptions (errors).
  */
@@ -3035,7 +3843,7 @@ class Err extends Error {
      * Returns a pretty, friendly summary for the error or for the chain of errros (if appropriate).
      */
     summary() {
-        let result = [];
+        const result = [];
         result.push({ name: this.name, message: this.message });
         let inner = this.inner;
         while (inner) {
@@ -3096,7 +3904,7 @@ exports.ErrUnexpectedCondition = ErrUnexpectedCondition;
  */
 class ErrAddressCannotCreate extends Err {
     constructor(input, inner) {
-        let message = `Cannot create address from: ${input}`;
+        const message = `Cannot create address from: ${input}`;
         super(message, inner);
     }
 }
@@ -3160,7 +3968,7 @@ exports.ErrTransactionOptionsInvalid = ErrTransactionOptionsInvalid;
  */
 class ErrSignatureCannotCreate extends Err {
     constructor(input, inner) {
-        let message = `Cannot create signature from: ${input}`;
+        const message = `Cannot create signature from: ${input}`;
         super(message, inner);
     }
 }
@@ -3256,19 +4064,6 @@ class ErrTypingSystem extends Err {
 }
 exports.ErrTypingSystem = ErrTypingSystem;
 /**
- * Signals a usage error related to "contract.methods" vs. "contract.methodsExplicit".
- */
-class ErrTypeInferenceSystemRequiresRegularJavascriptObjects extends ErrTypingSystem {
-    constructor(index) {
-        super(`
-argument at position ${index} seems to be a TypedValue. The automatic type inference system requires regular javascript objects as input.
-This error might occur when you pass a TypedValue to contract.methods.myFunction([...]). For passing TypedValues instead of regular javascript objects, and bypass the automatic type inference system, use contract.methodsExplicit.myFunction([...]) instead.
-Also see https://github.com/multiversx/mx-sdk-js-core/pull/187.
-`);
-    }
-}
-exports.ErrTypeInferenceSystemRequiresRegularJavascriptObjects = ErrTypeInferenceSystemRequiresRegularJavascriptObjects;
-/**
  * Signals a missing field on a struct.
  */
 class ErrMissingFieldOnStruct extends Err {
@@ -3358,6 +4153,125 @@ class ErrGasLimitShouldBe0ForInnerTransaction extends Err {
     }
 }
 exports.ErrGasLimitShouldBe0ForInnerTransaction = ErrGasLimitShouldBe0ForInnerTransaction;
+/**
+ * Signals that the `isCompleted` property is missing on the transaction obect and is needed for the Transaction Watcher
+ */
+class ErrIsCompletedFieldIsMissingOnTransaction extends Err {
+    constructor() {
+        super("The transaction watcher requires the `isCompleted` property to be defined on the transaction object. Perhaps you've used the sdk-network-provider's `ProxyNetworkProvider.getTransaction()` and in that case you should also pass `withProcessStatus=true`.");
+    }
+}
+exports.ErrIsCompletedFieldIsMissingOnTransaction = ErrIsCompletedFieldIsMissingOnTransaction;
+/**
+ * Signals that the provided token identifier is not valid
+ */
+class ErrInvalidTokenIdentifier extends Err {
+    constructor(message) {
+        super(message);
+    }
+}
+exports.ErrInvalidTokenIdentifier = ErrInvalidTokenIdentifier;
+/**
+ * Signals a generic bad usage error
+ */
+class ErrBadUsage extends Err {
+    constructor(message) {
+        super(message);
+    }
+}
+exports.ErrBadUsage = ErrBadUsage;
+/**
+ * Signals an invalid inner transaction for relayed transactions
+ */
+class ErrInvalidInnerTransaction extends Err {
+    constructor(message) {
+        super(message);
+    }
+}
+exports.ErrInvalidInnerTransaction = ErrInvalidInnerTransaction;
+/**
+ * Signals an error when parsing the logs of a transaction.
+ */
+class ErrParseTransactionOutcome extends Err {
+    constructor(message) {
+        super(message);
+    }
+}
+exports.ErrParseTransactionOutcome = ErrParseTransactionOutcome;
+/**
+ * Signals an error when querying a smart contract.
+ */
+class ErrSmartContractQuery extends Err {
+    constructor(returnCode, message) {
+        super(message);
+        this.returnCode = returnCode;
+    }
+}
+exports.ErrSmartContractQuery = ErrSmartContractQuery;
+/**
+ * Signals a wrong mnemonic format.
+ */
+class ErrWrongMnemonic extends Err {
+    constructor() {
+        super("Wrong mnemonic format");
+    }
+}
+exports.ErrWrongMnemonic = ErrWrongMnemonic;
+/**
+ * Signals a bad mnemonic entropy.
+ */
+class ErrBadMnemonicEntropy extends Err {
+    constructor(inner) {
+        super("Bad mnemonic entropy", inner);
+    }
+}
+exports.ErrBadMnemonicEntropy = ErrBadMnemonicEntropy;
+/**
+ * Signals a bad PEM file.
+ */
+class ErrBadPEM extends Err {
+    constructor(message) {
+        super(message ? `Bad PEM: ${message}` : `Bad PEM`);
+    }
+}
+exports.ErrBadPEM = ErrBadPEM;
+/**
+ * Signals an error related to signing a message (a transaction).
+ */
+class ErrSignerCannotSign extends Err {
+    constructor(inner) {
+        super(`Cannot sign`, inner);
+    }
+}
+exports.ErrSignerCannotSign = ErrSignerCannotSign;
+/**
+ * Signals a bad address.
+ */
+class ErrBadAddress extends Err {
+    constructor(value, inner) {
+        super(`Bad address: ${value}`, inner);
+    }
+}
+exports.ErrBadAddress = ErrBadAddress;
+/**
+ * Signals an error that happened during a request against the Network.
+ */
+class ErrNetworkProvider extends Err {
+    constructor(url, error, inner) {
+        const message = `Request error on url [${url}]: [${error}]`;
+        super(message, inner);
+    }
+}
+exports.ErrNetworkProvider = ErrNetworkProvider;
+/**
+ * Signals a generic error in the context of querying Smart Contracts.
+ */
+class ErrContractQuery extends Err {
+    constructor(originalError) {
+        super(originalError.message.replace("executeQuery:", ""));
+    }
+}
+exports.ErrContractQuery = ErrContractQuery;
 //# sourceMappingURL=errors.js.map
 
 /***/ }),
@@ -3380,20 +4294,22 @@ exports.DefaultGasConfiguration = {
     gasPerDataByte: 1500,
     gasCostESDTTransfer: 200000,
     gasCostESDTNFTTransfer: 200000,
-    gasCostESDTNFTMultiTransfer: 200000
+    gasCostESDTNFTMultiTransfer: 200000,
 };
 // Additional gas to account for eventual increases in gas requirements (thus avoid fast-breaking changes in clients of the library).
 const ADDITIONAL_GAS_FOR_ESDT_TRANSFER = 100000;
-// Additional gas to account for extra blockchain operations (e.g. data movement (between accounts) for NFTs), 
+// Additional gas to account for extra blockchain operations (e.g. data movement (between accounts) for NFTs),
 // and for eventual increases in gas requirements (thus avoid fast-breaking changes in clients of the library).
 const ADDITIONAL_GAS_FOR_ESDT_NFT_TRANSFER = 800000;
+/**
+ * @deprecated This will be remove with the next release as the only place where it is used is a deprecated constructor.
+ */
 class GasEstimator {
     constructor(gasConfiguration) {
         this.gasConfiguration = gasConfiguration || exports.DefaultGasConfiguration;
     }
     forEGLDTransfer(dataLength) {
-        const gasLimit = this.gasConfiguration.minGasLimit +
-            this.gasConfiguration.gasPerDataByte * dataLength;
+        const gasLimit = this.gasConfiguration.minGasLimit + this.gasConfiguration.gasPerDataByte * dataLength;
         return gasLimit;
     }
     forESDTTransfer(dataLength) {
@@ -3510,6 +4426,11 @@ exports.Hash = Hash;
 
 "use strict";
 
+/**
+ * A library for interacting with the MultiversX blockchain (in general) and Smart Contracts (in particular).
+ *
+ * @packageDocumentation
+ */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
@@ -3523,25 +4444,34 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 __nccwpck_require__(55342);
 __exportStar(__nccwpck_require__(87649), exports);
+__exportStar(__nccwpck_require__(31726), exports);
 __exportStar(__nccwpck_require__(39166), exports);
 __exportStar(__nccwpck_require__(52187), exports);
+__exportStar(__nccwpck_require__(9769), exports);
+__exportStar(__nccwpck_require__(39467), exports);
 __exportStar(__nccwpck_require__(38506), exports);
 __exportStar(__nccwpck_require__(54233), exports);
 __exportStar(__nccwpck_require__(21941), exports);
 __exportStar(__nccwpck_require__(70858), exports);
 __exportStar(__nccwpck_require__(70055), exports);
+__exportStar(__nccwpck_require__(93615), exports);
 __exportStar(__nccwpck_require__(28995), exports);
 __exportStar(__nccwpck_require__(40994), exports);
 __exportStar(__nccwpck_require__(71300), exports);
 __exportStar(__nccwpck_require__(46140), exports);
+__exportStar(__nccwpck_require__(64792), exports);
 __exportStar(__nccwpck_require__(56238), exports);
 __exportStar(__nccwpck_require__(68), exports);
-__exportStar(__nccwpck_require__(60588), exports);
+__exportStar(__nccwpck_require__(49272), exports);
 __exportStar(__nccwpck_require__(52756), exports);
+__exportStar(__nccwpck_require__(84792), exports);
 __exportStar(__nccwpck_require__(14224), exports);
 __exportStar(__nccwpck_require__(20955), exports);
-__exportStar(__nccwpck_require__(15270), exports);
+__exportStar(__nccwpck_require__(51404), exports);
+__exportStar(__nccwpck_require__(32755), exports);
 __exportStar(__nccwpck_require__(14719), exports);
+__exportStar(__nccwpck_require__(82716), exports);
+__exportStar(__nccwpck_require__(18871), exports);
 //# sourceMappingURL=index.js.map
 
 /***/ }),
@@ -3623,6 +4553,77 @@ Logger.logLevel = LogLevel.Debug;
 
 /***/ }),
 
+/***/ 93615:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.MessageComputer = exports.Message = void 0;
+const constants_1 = __nccwpck_require__(38069);
+const address_1 = __nccwpck_require__(39166);
+const createKeccakHash = __nccwpck_require__(57188);
+class Message {
+    constructor(options) {
+        this.data = options.data;
+        this.signature = options.signature;
+        this.address = options.address;
+        this.version = options.version || constants_1.DEFAULT_MESSAGE_VERSION;
+        this.signer = options.signer || constants_1.SDK_JS_SIGNER;
+    }
+}
+exports.Message = Message;
+class MessageComputer {
+    constructor() { }
+    computeBytesForSigning(message) {
+        const messageSize = Buffer.from(message.data.length.toString());
+        const signableMessage = Buffer.concat([messageSize, message.data]);
+        let bytesToHash = Buffer.concat([Buffer.from(constants_1.MESSAGE_PREFIX), signableMessage]);
+        return createKeccakHash("keccak256").update(bytesToHash).digest();
+    }
+    computeBytesForVerifying(message) {
+        return this.computeBytesForSigning(message);
+    }
+    packMessage(message) {
+        return {
+            message: Buffer.from(message.data).toString("hex"),
+            signature: message.signature ? Buffer.from(message.signature).toString("hex") : "",
+            address: message.address ? message.address.bech32() : "",
+            version: message.version,
+            signer: message.signer,
+        };
+    }
+    unpackMessage(packedMessage) {
+        const dataHex = this.trimHexPrefix(packedMessage.message);
+        const data = Buffer.from(dataHex, "hex");
+        const signatureHex = this.trimHexPrefix(packedMessage.signature || "");
+        const signature = Buffer.from(signatureHex, "hex");
+        let address = undefined;
+        if (packedMessage.address) {
+            address = address_1.Address.fromBech32(packedMessage.address);
+        }
+        const version = packedMessage.version || constants_1.DEFAULT_MESSAGE_VERSION;
+        const signer = packedMessage.signer || constants_1.UNKNOWN_SIGNER;
+        return new Message({
+            data: data,
+            signature: signature,
+            address: address,
+            version: version,
+            signer: signer,
+        });
+    }
+    trimHexPrefix(data) {
+        if (data.startsWith("0x") || data.startsWith("0X")) {
+            return data.slice(2);
+        }
+        return data;
+    }
+}
+exports.MessageComputer = MessageComputer;
+//# sourceMappingURL=message.js.map
+
+/***/ }),
+
 /***/ 28995:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -3672,7 +4673,7 @@ class TransactionVersion {
      * Creates a TransactionVersion object with the VERSION setting for enabling options
      */
     static withTxOptions() {
-        return new TransactionVersion(constants_1.TRANSACTION_VERSION_WITH_OPTIONS);
+        return new TransactionVersion(constants_1.TRANSACTION_VERSION_DEFAULT);
     }
     valueOf() {
         return this.value;
@@ -3742,630 +4743,2336 @@ exports.TransactionOptions = TransactionOptions;
 
 /***/ }),
 
-/***/ 83178:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+/***/ 71369:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
-/*eslint-disable block-scoped-var, id-length, no-control-regex, no-magic-numbers, no-prototype-builtins, no-redeclare, no-shadow, no-var, sort-vars*/
 
-var $protobuf = __nccwpck_require__(96916);
-// Common aliases
-var $Reader = $protobuf.Reader, $Writer = $protobuf.Writer, $util = $protobuf.util;
-// Exported root namespace
-var $root = $protobuf.roots["default"] || ($protobuf.roots["default"] = {});
-$root.proto = (function () {
-    /**
-     * Namespace proto.
-     * @exports proto
-     * @namespace
-     */
-    var proto = {};
-    proto.Transaction = (function () {
-        /**
-         * Properties of a Transaction.
-         * @memberof proto
-         * @interface ITransaction
-         * @property {number|Long|null} [Nonce] Transaction Nonce
-         * @property {Uint8Array|null} [Value] Transaction Value
-         * @property {Uint8Array|null} [RcvAddr] Transaction RcvAddr
-         * @property {Uint8Array|null} [RcvUserName] Transaction RcvUserName
-         * @property {Uint8Array|null} [SndAddr] Transaction SndAddr
-         * @property {Uint8Array|null} [SndUserName] Transaction SndUserName
-         * @property {number|Long|null} [GasPrice] Transaction GasPrice
-         * @property {number|Long|null} [GasLimit] Transaction GasLimit
-         * @property {Uint8Array|null} [Data] Transaction Data
-         * @property {Uint8Array|null} [ChainID] Transaction ChainID
-         * @property {number|null} [Version] Transaction Version
-         * @property {Uint8Array|null} [Signature] Transaction Signature
-         * @property {number|null} [Options] Transaction Options
-         * @property {Uint8Array|null} [GuardAddr] Transaction GuardAddr
-         * @property {Uint8Array|null} [GuardSignature] Transaction GuardSignature
-         */
-        /**
-         * Constructs a new Transaction.
-         * @memberof proto
-         * @classdesc Represents a Transaction.
-         * @implements ITransaction
-         * @constructor
-         * @param {proto.ITransaction=} [properties] Properties to set
-         */
-        function Transaction(properties) {
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GuardianData = exports.AccountOnNetwork = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const address_1 = __nccwpck_require__(39166);
+/**
+ * A plain view of an account, as queried from the Network.
+ */
+class AccountOnNetwork {
+    constructor(init) {
+        this.address = address_1.Address.empty();
+        this.nonce = 0;
+        this.balance = new bignumber_js_1.default(0);
+        this.code = "";
+        this.userName = "";
+        Object.assign(this, init);
+    }
+    static fromHttpResponse(payload) {
+        let result = new AccountOnNetwork();
+        result.address = new address_1.Address(payload["address"] || "");
+        result.nonce = Number(payload["nonce"] || 0);
+        result.balance = new bignumber_js_1.default(payload["balance"] || 0);
+        result.code = payload["code"] || "";
+        result.userName = payload["username"] || "";
+        return result;
+    }
+}
+exports.AccountOnNetwork = AccountOnNetwork;
+class GuardianData {
+    constructor(init) {
+        this.guarded = false;
+        Object.assign(this, init);
+    }
+    static fromHttpResponse(response) {
+        const result = new GuardianData();
+        result.guarded = response["guarded"] || false;
+        if (response["activeGuardian"]) {
+            result.activeGuardian = Guardian.fromHttpResponse(response["activeGuardian"]);
         }
-        /**
-         * Transaction Nonce.
-         * @member {number|Long} Nonce
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.Nonce = $util.Long ? $util.Long.fromBits(0, 0, true) : 0;
-        /**
-         * Transaction Value.
-         * @member {Uint8Array} Value
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.Value = $util.newBuffer([]);
-        /**
-         * Transaction RcvAddr.
-         * @member {Uint8Array} RcvAddr
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.RcvAddr = $util.newBuffer([]);
-        /**
-         * Transaction RcvUserName.
-         * @member {Uint8Array} RcvUserName
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.RcvUserName = $util.newBuffer([]);
-        /**
-         * Transaction SndAddr.
-         * @member {Uint8Array} SndAddr
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.SndAddr = $util.newBuffer([]);
-        /**
-         * Transaction SndUserName.
-         * @member {Uint8Array} SndUserName
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.SndUserName = $util.newBuffer([]);
-        /**
-         * Transaction GasPrice.
-         * @member {number|Long} GasPrice
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.GasPrice = $util.Long ? $util.Long.fromBits(0, 0, true) : 0;
-        /**
-         * Transaction GasLimit.
-         * @member {number|Long} GasLimit
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.GasLimit = $util.Long ? $util.Long.fromBits(0, 0, true) : 0;
-        /**
-         * Transaction Data.
-         * @member {Uint8Array} Data
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.Data = $util.newBuffer([]);
-        /**
-         * Transaction ChainID.
-         * @member {Uint8Array} ChainID
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.ChainID = $util.newBuffer([]);
-        /**
-         * Transaction Version.
-         * @member {number} Version
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.Version = 0;
-        /**
-         * Transaction Signature.
-         * @member {Uint8Array} Signature
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.Signature = $util.newBuffer([]);
-        /**
-         * Transaction Options.
-         * @member {number} Options
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.Options = 0;
-        /**
-         * Transaction GuardAddr.
-         * @member {Uint8Array} GuardAddr
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.GuardAddr = $util.newBuffer([]);
-        /**
-         * Transaction GuardSignature.
-         * @member {Uint8Array} GuardSignature
-         * @memberof proto.Transaction
-         * @instance
-         */
-        Transaction.prototype.GuardSignature = $util.newBuffer([]);
-        /**
-         * Creates a new Transaction instance using the specified properties.
-         * @function create
-         * @memberof proto.Transaction
-         * @static
-         * @param {proto.ITransaction=} [properties] Properties to set
-         * @returns {proto.Transaction} Transaction instance
-         */
-        Transaction.create = function create(properties) {
-            return new Transaction(properties);
+        if (response["pendingGuardian"]) {
+            result.pendingGuardian = Guardian.fromHttpResponse(response["pendingGuardian"]);
+        }
+        return result;
+    }
+    getCurrentGuardianAddress() {
+        if (!this.guarded) {
+            return undefined;
+        }
+        return this.activeGuardian?.address;
+    }
+}
+exports.GuardianData = GuardianData;
+class Guardian {
+    constructor() {
+        this.activationEpoch = 0;
+        this.address = address_1.Address.empty();
+        this.serviceUID = "";
+    }
+    static fromHttpResponse(responsePart) {
+        const result = new Guardian();
+        result.activationEpoch = Number(responsePart["activationEpoch"] || 0);
+        result.address = new address_1.Address(responsePart["address"] || "");
+        result.serviceUID = responsePart["serviceUID"] || "";
+        return result;
+    }
+}
+//# sourceMappingURL=accounts.js.map
+
+/***/ }),
+
+/***/ 39641:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ApiNetworkProvider = void 0;
+const errors_1 = __nccwpck_require__(38506);
+const utils_1 = __nccwpck_require__(14719);
+const utils_codec_1 = __nccwpck_require__(44534);
+const accounts_1 = __nccwpck_require__(71369);
+const config_1 = __nccwpck_require__(10817);
+const constants_1 = __nccwpck_require__(69307);
+const contractQueryRequest_1 = __nccwpck_require__(15235);
+const contractQueryResponse_1 = __nccwpck_require__(94596);
+const networkGeneralStatistics_1 = __nccwpck_require__(32200);
+const networkStake_1 = __nccwpck_require__(5501);
+const pairs_1 = __nccwpck_require__(19899);
+const proxyNetworkProvider_1 = __nccwpck_require__(90194);
+const tokenDefinitions_1 = __nccwpck_require__(28990);
+const tokens_1 = __nccwpck_require__(45577);
+const transactions_1 = __nccwpck_require__(7313);
+const transactionStatus_1 = __nccwpck_require__(31160);
+const userAgent_1 = __nccwpck_require__(92313);
+// TODO: Find & remove duplicate code between "ProxyNetworkProvider" and "ApiNetworkProvider".
+class ApiNetworkProvider {
+    constructor(url, config) {
+        this.userAgentPrefix = `${constants_1.BaseUserAgent}/api`;
+        this.url = url;
+        const proxyConfig = this.getProxyConfig(config);
+        this.config = { ...config_1.defaultAxiosConfig, ...config };
+        this.backingProxyNetworkProvider = new proxyNetworkProvider_1.ProxyNetworkProvider(url, proxyConfig);
+        this.axios = utils_1.getAxios();
+        userAgent_1.extendUserAgentIfBackend(this.userAgentPrefix, this.config);
+    }
+    getProxyConfig(config) {
+        let proxyConfig = JSON.parse(JSON.stringify(config || {}));
+        proxyConfig = { ...config_1.defaultAxiosConfig, ...proxyConfig };
+        return proxyConfig;
+    }
+    async getNetworkConfig() {
+        return await this.backingProxyNetworkProvider.getNetworkConfig();
+    }
+    async getNetworkStatus() {
+        return await this.backingProxyNetworkProvider.getNetworkStatus();
+    }
+    async getNetworkStakeStatistics() {
+        const response = await this.doGetGeneric("stake");
+        const networkStake = networkStake_1.NetworkStake.fromHttpResponse(response);
+        return networkStake;
+    }
+    async getNetworkGeneralStatistics() {
+        const response = await this.doGetGeneric("stats");
+        const stats = networkGeneralStatistics_1.NetworkGeneralStatistics.fromHttpResponse(response);
+        return stats;
+    }
+    async getAccount(address) {
+        const response = await this.doGetGeneric(`accounts/${address.bech32()}`);
+        const account = accounts_1.AccountOnNetwork.fromHttpResponse(response);
+        return account;
+    }
+    async getGuardianData(address) {
+        return await this.backingProxyNetworkProvider.getGuardianData(address);
+    }
+    async getFungibleTokensOfAccount(address, pagination) {
+        pagination = pagination || config_1.defaultPagination;
+        const url = `accounts/${address.bech32()}/tokens?${this.buildPaginationParams(pagination)}`;
+        const response = await this.doGetGeneric(url);
+        const tokens = response.map((item) => tokens_1.FungibleTokenOfAccountOnNetwork.fromHttpResponse(item));
+        // TODO: Fix sorting
+        tokens.sort((a, b) => a.identifier.localeCompare(b.identifier));
+        return tokens;
+    }
+    async getNonFungibleTokensOfAccount(address, pagination) {
+        pagination = pagination || config_1.defaultPagination;
+        const url = `accounts/${address.bech32()}/nfts?${this.buildPaginationParams(pagination)}`;
+        const response = await this.doGetGeneric(url);
+        const tokens = response.map((item) => tokens_1.NonFungibleTokenOfAccountOnNetwork.fromApiHttpResponse(item));
+        // TODO: Fix sorting
+        tokens.sort((a, b) => a.identifier.localeCompare(b.identifier));
+        return tokens;
+    }
+    async getFungibleTokenOfAccount(address, tokenIdentifier) {
+        const response = await this.doGetGeneric(`accounts/${address.bech32()}/tokens/${tokenIdentifier}`);
+        const tokenData = tokens_1.FungibleTokenOfAccountOnNetwork.fromHttpResponse(response);
+        return tokenData;
+    }
+    async getNonFungibleTokenOfAccount(address, collection, nonce) {
+        const nonceAsHex = utils_codec_1.numberToPaddedHex(nonce);
+        const response = await this.doGetGeneric(`accounts/${address.bech32()}/nfts/${collection}-${nonceAsHex}`);
+        const tokenData = tokens_1.NonFungibleTokenOfAccountOnNetwork.fromApiHttpResponse(response);
+        return tokenData;
+    }
+    async getMexPairs(pagination) {
+        let url = `mex/pairs`;
+        if (pagination) {
+            url = `${url}?from=${pagination.from}&size=${pagination.size}`;
+        }
+        const response = await this.doGetGeneric(url);
+        return response.map((item) => pairs_1.PairOnNetwork.fromApiHttpResponse(item));
+    }
+    async getTransaction(txHash) {
+        const response = await this.doGetGeneric(`transactions/${txHash}`);
+        const transaction = transactions_1.TransactionOnNetwork.fromApiHttpResponse(txHash, response);
+        return transaction;
+    }
+    async getTransactionStatus(txHash) {
+        const response = await this.doGetGeneric(`transactions/${txHash}?fields=status`);
+        const status = new transactionStatus_1.TransactionStatus(response.status);
+        return status;
+    }
+    async sendTransaction(tx) {
+        const transaction = transactions_1.prepareTransactionForBroadcasting(tx);
+        const response = await this.doPostGeneric("transactions", transaction);
+        return response.txHash;
+    }
+    async sendTransactions(txs) {
+        return await this.backingProxyNetworkProvider.sendTransactions(txs);
+    }
+    async simulateTransaction(tx) {
+        return await this.backingProxyNetworkProvider.simulateTransaction(tx);
+    }
+    async queryContract(query) {
+        try {
+            const request = new contractQueryRequest_1.ContractQueryRequest(query).toHttpRequest();
+            const response = await this.doPostGeneric("query", request);
+            return contractQueryResponse_1.ContractQueryResponse.fromHttpResponse(response);
+        }
+        catch (error) {
+            throw new errors_1.ErrContractQuery(error);
+        }
+    }
+    async getDefinitionOfFungibleToken(tokenIdentifier) {
+        const response = await this.doGetGeneric(`tokens/${tokenIdentifier}`);
+        const definition = tokenDefinitions_1.DefinitionOfFungibleTokenOnNetwork.fromApiHttpResponse(response);
+        return definition;
+    }
+    async getDefinitionOfTokenCollection(collection) {
+        const response = await this.doGetGeneric(`collections/${collection}`);
+        const definition = tokenDefinitions_1.DefinitionOfTokenCollectionOnNetwork.fromApiHttpResponse(response);
+        return definition;
+    }
+    async getNonFungibleToken(collection, nonce) {
+        const nonceAsHex = utils_codec_1.numberToPaddedHex(nonce);
+        const response = await this.doGetGeneric(`nfts/${collection}-${nonceAsHex}`);
+        const token = tokens_1.NonFungibleTokenOfAccountOnNetwork.fromApiHttpResponse(response);
+        return token;
+    }
+    async doGetGeneric(resourceUrl) {
+        const response = await this.doGet(resourceUrl);
+        return response;
+    }
+    async doPostGeneric(resourceUrl, payload) {
+        const response = await this.doPost(resourceUrl, payload);
+        return response;
+    }
+    buildPaginationParams(pagination) {
+        return `from=${pagination.from}&size=${pagination.size}`;
+    }
+    async doGet(resourceUrl) {
+        const url = `${this.url}/${resourceUrl}`;
+        try {
+            const response = await this.axios.default.get(url, this.config);
+            return response.data;
+        }
+        catch (error) {
+            this.handleApiError(error, resourceUrl);
+        }
+    }
+    async doPost(resourceUrl, payload) {
+        const url = `${this.url}/${resourceUrl}`;
+        try {
+            const response = await this.axios.default.post(url, payload, {
+                ...this.config,
+                headers: {
+                    "Content-Type": "application/json",
+                    ...this.config.headers,
+                },
+            });
+            const responsePayload = response.data;
+            return responsePayload;
+        }
+        catch (error) {
+            this.handleApiError(error, resourceUrl);
+        }
+    }
+    handleApiError(error, resourceUrl) {
+        if (!error.response) {
+            throw new errors_1.ErrNetworkProvider(resourceUrl, error.toString(), error);
+        }
+        const errorData = error.response.data;
+        const originalErrorMessage = errorData.message || errorData.error || JSON.stringify(errorData);
+        throw new errors_1.ErrNetworkProvider(resourceUrl, originalErrorMessage, error);
+    }
+}
+exports.ApiNetworkProvider = ApiNetworkProvider;
+//# sourceMappingURL=apiNetworkProvider.js.map
+
+/***/ }),
+
+/***/ 10817:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.defaultPagination = exports.defaultAxiosConfig = void 0;
+const JSONbig = __nccwpck_require__(55031)({ constructorAction: 'ignore' });
+exports.defaultAxiosConfig = {
+    timeout: 5000,
+    // See: https://github.com/axios/axios/issues/983 regarding transformResponse
+    transformResponse: [
+        function (data) {
+            return JSONbig.parse(data);
+        }
+    ]
+};
+exports.defaultPagination = {
+    from: 0,
+    size: 100
+};
+//# sourceMappingURL=config.js.map
+
+/***/ }),
+
+/***/ 69307:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UnknownClientName = exports.BaseUserAgent = exports.EsdtContractAddress = exports.MaxUint64AsBigNumber = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const address_1 = __nccwpck_require__(39166);
+exports.MaxUint64AsBigNumber = new bignumber_js_1.default("18446744073709551615");
+exports.EsdtContractAddress = new address_1.Address("erd1qqqqqqqqqqqqqqqpqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzllls8a5w6u");
+exports.BaseUserAgent = "multiversx-sdk";
+exports.UnknownClientName = "unknown";
+//# sourceMappingURL=constants.js.map
+
+/***/ }),
+
+/***/ 15235:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ContractQueryRequest = void 0;
+class ContractQueryRequest {
+    constructor(query) {
+        this.query = query;
+    }
+    toHttpRequest() {
+        let request = {};
+        let query = this.query;
+        request.scAddress = query.address.bech32();
+        request.caller = query.caller?.bech32() ? query.caller.bech32() : undefined;
+        request.funcName = query.func.toString();
+        request.value = query.value ? query.value.toString() : undefined;
+        request.args = query.getEncodedArguments();
+        return request;
+    }
+}
+exports.ContractQueryRequest = ContractQueryRequest;
+//# sourceMappingURL=contractQueryRequest.js.map
+
+/***/ }),
+
+/***/ 94596:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ContractQueryResponse = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const constants_1 = __nccwpck_require__(69307);
+class ContractQueryResponse {
+    constructor(init) {
+        this.returnData = init?.returnData || [];
+        this.returnCode = init?.returnCode || "";
+        this.returnMessage = init?.returnMessage || "";
+        this.gasUsed = init?.gasUsed || 0;
+    }
+    /**
+     * Constructs a QueryResponse object from a HTTP response (as returned by the provider).
+     */
+    static fromHttpResponse(payload) {
+        let returnData = payload["returnData"] || payload["ReturnData"];
+        let returnCode = payload["returnCode"] || payload["ReturnCode"];
+        let returnMessage = payload["returnMessage"] || payload["ReturnMessage"];
+        let gasRemaining = new bignumber_js_1.default(payload["gasRemaining"] || payload["GasRemaining"] || 0);
+        let gasUsed = constants_1.MaxUint64AsBigNumber.minus(gasRemaining).toNumber();
+        return new ContractQueryResponse({
+            returnData: returnData,
+            returnCode: returnCode,
+            returnMessage: returnMessage,
+            gasUsed: gasUsed,
+        });
+    }
+    getReturnDataParts() {
+        return this.returnData.map((item) => Buffer.from(item || "", "base64"));
+    }
+    /**
+     * Converts the object to a pretty, plain JavaScript object.
+     */
+    toJSON() {
+        return {
+            returnData: this.returnData,
+            returnCode: this.returnCode,
+            returnMessage: this.returnMessage,
+            gasUsed: this.gasUsed.valueOf(),
         };
-        /**
-         * Encodes the specified Transaction message. Does not implicitly {@link proto.Transaction.verify|verify} messages.
-         * @function encode
-         * @memberof proto.Transaction
-         * @static
-         * @param {proto.ITransaction} message Transaction message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Transaction.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.Nonce != null && Object.hasOwnProperty.call(message, "Nonce"))
-                writer.uint32(/* id 1, wireType 0 =*/ 8).uint64(message.Nonce);
-            if (message.Value != null && Object.hasOwnProperty.call(message, "Value"))
-                writer.uint32(/* id 2, wireType 2 =*/ 18).bytes(message.Value);
-            if (message.RcvAddr != null && Object.hasOwnProperty.call(message, "RcvAddr"))
-                writer.uint32(/* id 3, wireType 2 =*/ 26).bytes(message.RcvAddr);
-            if (message.RcvUserName != null && Object.hasOwnProperty.call(message, "RcvUserName"))
-                writer.uint32(/* id 4, wireType 2 =*/ 34).bytes(message.RcvUserName);
-            if (message.SndAddr != null && Object.hasOwnProperty.call(message, "SndAddr"))
-                writer.uint32(/* id 5, wireType 2 =*/ 42).bytes(message.SndAddr);
-            if (message.SndUserName != null && Object.hasOwnProperty.call(message, "SndUserName"))
-                writer.uint32(/* id 6, wireType 2 =*/ 50).bytes(message.SndUserName);
-            if (message.GasPrice != null && Object.hasOwnProperty.call(message, "GasPrice"))
-                writer.uint32(/* id 7, wireType 0 =*/ 56).uint64(message.GasPrice);
-            if (message.GasLimit != null && Object.hasOwnProperty.call(message, "GasLimit"))
-                writer.uint32(/* id 8, wireType 0 =*/ 64).uint64(message.GasLimit);
-            if (message.Data != null && Object.hasOwnProperty.call(message, "Data"))
-                writer.uint32(/* id 9, wireType 2 =*/ 74).bytes(message.Data);
-            if (message.ChainID != null && Object.hasOwnProperty.call(message, "ChainID"))
-                writer.uint32(/* id 10, wireType 2 =*/ 82).bytes(message.ChainID);
-            if (message.Version != null && Object.hasOwnProperty.call(message, "Version"))
-                writer.uint32(/* id 11, wireType 0 =*/ 88).uint32(message.Version);
-            if (message.Signature != null && Object.hasOwnProperty.call(message, "Signature"))
-                writer.uint32(/* id 12, wireType 2 =*/ 98).bytes(message.Signature);
-            if (message.Options != null && Object.hasOwnProperty.call(message, "Options"))
-                writer.uint32(/* id 13, wireType 0 =*/ 104).uint32(message.Options);
-            if (message.GuardAddr != null && Object.hasOwnProperty.call(message, "GuardAddr"))
-                writer.uint32(/* id 14, wireType 2 =*/ 114).bytes(message.GuardAddr);
-            if (message.GuardSignature != null && Object.hasOwnProperty.call(message, "GuardSignature"))
-                writer.uint32(/* id 15, wireType 2 =*/ 122).bytes(message.GuardSignature);
-            return writer;
-        };
-        /**
-         * Encodes the specified Transaction message, length delimited. Does not implicitly {@link proto.Transaction.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof proto.Transaction
-         * @static
-         * @param {proto.ITransaction} message Transaction message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Transaction.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-        /**
-         * Decodes a Transaction message from the specified reader or buffer.
-         * @function decode
-         * @memberof proto.Transaction
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {proto.Transaction} Transaction
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Transaction.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.proto.Transaction();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                    case 1:
-                        message.Nonce = reader.uint64();
-                        break;
-                    case 2:
-                        message.Value = reader.bytes();
-                        break;
-                    case 3:
-                        message.RcvAddr = reader.bytes();
-                        break;
-                    case 4:
-                        message.RcvUserName = reader.bytes();
-                        break;
-                    case 5:
-                        message.SndAddr = reader.bytes();
-                        break;
-                    case 6:
-                        message.SndUserName = reader.bytes();
-                        break;
-                    case 7:
-                        message.GasPrice = reader.uint64();
-                        break;
-                    case 8:
-                        message.GasLimit = reader.uint64();
-                        break;
-                    case 9:
-                        message.Data = reader.bytes();
-                        break;
-                    case 10:
-                        message.ChainID = reader.bytes();
-                        break;
-                    case 11:
-                        message.Version = reader.uint32();
-                        break;
-                    case 12:
-                        message.Signature = reader.bytes();
-                        break;
-                    case 13:
-                        message.Options = reader.uint32();
-                        break;
-                    case 14:
-                        message.GuardAddr = reader.bytes();
-                        break;
-                    case 15:
-                        message.GuardSignature = reader.bytes();
-                        break;
-                    default:
-                        reader.skipType(tag & 7);
-                        break;
-                }
+    }
+}
+exports.ContractQueryResponse = ContractQueryResponse;
+//# sourceMappingURL=contractQueryResponse.js.map
+
+/***/ }),
+
+/***/ 10879:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ContractResultItem = exports.ContractResults = void 0;
+const address_1 = __nccwpck_require__(39166);
+const transactionLogs_1 = __nccwpck_require__(76376);
+class ContractResults {
+    constructor(items) {
+        this.items = items;
+        this.items.sort(function (a, b) {
+            return a.nonce.valueOf() - b.nonce.valueOf();
+        });
+    }
+    static fromProxyHttpResponse(results) {
+        let items = results.map((item) => ContractResultItem.fromProxyHttpResponse(item));
+        return new ContractResults(items);
+    }
+    static fromApiHttpResponse(results) {
+        let items = results.map((item) => ContractResultItem.fromApiHttpResponse(item));
+        return new ContractResults(items);
+    }
+}
+exports.ContractResults = ContractResults;
+class ContractResultItem {
+    constructor(init) {
+        this.hash = "";
+        this.nonce = 0;
+        this.value = "";
+        this.receiver = address_1.Address.empty();
+        this.sender = address_1.Address.empty();
+        this.data = "";
+        this.previousHash = "";
+        this.originalHash = "";
+        this.gasLimit = 0;
+        this.gasPrice = 0;
+        this.callType = 0;
+        this.returnMessage = "";
+        this.logs = new transactionLogs_1.TransactionLogs();
+        Object.assign(this, init);
+    }
+    static fromProxyHttpResponse(response) {
+        let item = ContractResultItem.fromHttpResponse(response);
+        return item;
+    }
+    static fromApiHttpResponse(response) {
+        let item = ContractResultItem.fromHttpResponse(response);
+        item.data = Buffer.from(item.data, "base64").toString();
+        item.callType = Number(item.callType);
+        return item;
+    }
+    static fromHttpResponse(response) {
+        let item = new ContractResultItem();
+        item.hash = response.hash;
+        item.nonce = Number(response.nonce || 0);
+        item.value = (response.value || 0).toString();
+        item.receiver = new address_1.Address(response.receiver);
+        item.sender = new address_1.Address(response.sender);
+        item.previousHash = response.prevTxHash;
+        item.originalHash = response.originalTxHash;
+        item.gasLimit = Number(response.gasLimit || 0);
+        item.gasPrice = Number(response.gasPrice || 0);
+        item.data = response.data || "";
+        item.callType = response.callType;
+        item.returnMessage = response.returnMessage;
+        item.logs = transactionLogs_1.TransactionLogs.fromHttpResponse(response.logs || {});
+        return item;
+    }
+}
+exports.ContractResultItem = ContractResultItem;
+//# sourceMappingURL=contractResults.js.map
+
+/***/ }),
+
+/***/ 82716:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NetworkStatus = exports.NetworkStake = exports.NetworkGeneralStatistics = exports.NetworkConfig = exports.NonFungibleTokenOfAccountOnNetwork = exports.FungibleTokenOfAccountOnNetwork = exports.DefinitionOfTokenCollectionOnNetwork = exports.DefinitionOfFungibleTokenOnNetwork = exports.TransactionStatus = exports.TransactionOnNetwork = exports.TransactionReceipt = exports.TransactionLogsOnNetwork = exports.TransactionEventTopic = exports.TransactionEventOnNetwork = exports.TransactionEventData = exports.ContractResults = exports.ContractResultItem = exports.ContractQueryResponse = exports.AccountOnNetwork = exports.ProxyNetworkProvider = exports.ApiNetworkProvider = void 0;
+var apiNetworkProvider_1 = __nccwpck_require__(39641);
+Object.defineProperty(exports, "ApiNetworkProvider", ({ enumerable: true, get: function () { return apiNetworkProvider_1.ApiNetworkProvider; } }));
+var proxyNetworkProvider_1 = __nccwpck_require__(90194);
+Object.defineProperty(exports, "ProxyNetworkProvider", ({ enumerable: true, get: function () { return proxyNetworkProvider_1.ProxyNetworkProvider; } }));
+var accounts_1 = __nccwpck_require__(71369);
+Object.defineProperty(exports, "AccountOnNetwork", ({ enumerable: true, get: function () { return accounts_1.AccountOnNetwork; } }));
+var contractQueryResponse_1 = __nccwpck_require__(94596);
+Object.defineProperty(exports, "ContractQueryResponse", ({ enumerable: true, get: function () { return contractQueryResponse_1.ContractQueryResponse; } }));
+var contractResults_1 = __nccwpck_require__(10879);
+Object.defineProperty(exports, "ContractResultItem", ({ enumerable: true, get: function () { return contractResults_1.ContractResultItem; } }));
+Object.defineProperty(exports, "ContractResults", ({ enumerable: true, get: function () { return contractResults_1.ContractResults; } }));
+var transactionEvents_1 = __nccwpck_require__(726);
+Object.defineProperty(exports, "TransactionEventData", ({ enumerable: true, get: function () { return transactionEvents_1.TransactionEventData; } }));
+Object.defineProperty(exports, "TransactionEventOnNetwork", ({ enumerable: true, get: function () { return transactionEvents_1.TransactionEvent; } }));
+Object.defineProperty(exports, "TransactionEventTopic", ({ enumerable: true, get: function () { return transactionEvents_1.TransactionEventTopic; } }));
+var transactionLogs_1 = __nccwpck_require__(76376);
+Object.defineProperty(exports, "TransactionLogsOnNetwork", ({ enumerable: true, get: function () { return transactionLogs_1.TransactionLogs; } }));
+var transactionReceipt_1 = __nccwpck_require__(40796);
+Object.defineProperty(exports, "TransactionReceipt", ({ enumerable: true, get: function () { return transactionReceipt_1.TransactionReceipt; } }));
+var transactions_1 = __nccwpck_require__(7313);
+Object.defineProperty(exports, "TransactionOnNetwork", ({ enumerable: true, get: function () { return transactions_1.TransactionOnNetwork; } }));
+var transactionStatus_1 = __nccwpck_require__(31160);
+Object.defineProperty(exports, "TransactionStatus", ({ enumerable: true, get: function () { return transactionStatus_1.TransactionStatus; } }));
+var tokenDefinitions_1 = __nccwpck_require__(28990);
+Object.defineProperty(exports, "DefinitionOfFungibleTokenOnNetwork", ({ enumerable: true, get: function () { return tokenDefinitions_1.DefinitionOfFungibleTokenOnNetwork; } }));
+Object.defineProperty(exports, "DefinitionOfTokenCollectionOnNetwork", ({ enumerable: true, get: function () { return tokenDefinitions_1.DefinitionOfTokenCollectionOnNetwork; } }));
+var tokens_1 = __nccwpck_require__(45577);
+Object.defineProperty(exports, "FungibleTokenOfAccountOnNetwork", ({ enumerable: true, get: function () { return tokens_1.FungibleTokenOfAccountOnNetwork; } }));
+Object.defineProperty(exports, "NonFungibleTokenOfAccountOnNetwork", ({ enumerable: true, get: function () { return tokens_1.NonFungibleTokenOfAccountOnNetwork; } }));
+var networkConfig_1 = __nccwpck_require__(15395);
+Object.defineProperty(exports, "NetworkConfig", ({ enumerable: true, get: function () { return networkConfig_1.NetworkConfig; } }));
+var networkGeneralStatistics_1 = __nccwpck_require__(32200);
+Object.defineProperty(exports, "NetworkGeneralStatistics", ({ enumerable: true, get: function () { return networkGeneralStatistics_1.NetworkGeneralStatistics; } }));
+var networkStake_1 = __nccwpck_require__(5501);
+Object.defineProperty(exports, "NetworkStake", ({ enumerable: true, get: function () { return networkStake_1.NetworkStake; } }));
+var networkStatus_1 = __nccwpck_require__(92837);
+Object.defineProperty(exports, "NetworkStatus", ({ enumerable: true, get: function () { return networkStatus_1.NetworkStatus; } }));
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 15395:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NetworkConfig = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+/**
+ * An object holding Network configuration parameters.
+ */
+class NetworkConfig {
+    constructor() {
+        this.ChainID = "T";
+        this.GasPerDataByte = 1500;
+        this.TopUpFactor = 0;
+        this.RoundDuration = 0;
+        this.RoundsPerEpoch = 0;
+        this.TopUpRewardsGradientPoint = new bignumber_js_1.default(0);
+        this.MinGasLimit = 50000;
+        this.MinGasPrice = 1000000000;
+        this.GasPriceModifier = 1;
+        this.MinTransactionVersion = 1;
+    }
+    /**
+     * Constructs a configuration object from a HTTP response (as returned by the provider).
+     */
+    static fromHttpResponse(payload) {
+        let networkConfig = new NetworkConfig();
+        networkConfig.ChainID = String(payload["erd_chain_id"]);
+        networkConfig.GasPerDataByte = Number(payload["erd_gas_per_data_byte"]);
+        networkConfig.TopUpFactor = Number(payload["erd_top_up_factor"]);
+        networkConfig.RoundDuration = Number(payload["erd_round_duration"]);
+        networkConfig.RoundsPerEpoch = Number(payload["erd_rounds_per_epoch"]);
+        networkConfig.TopUpRewardsGradientPoint = new bignumber_js_1.default(payload["erd_rewards_top_up_gradient_point"]);
+        networkConfig.MinGasLimit = Number(payload["erd_min_gas_limit"]);
+        networkConfig.MinGasPrice = Number(payload["erd_min_gas_price"]);
+        networkConfig.MinTransactionVersion = Number(payload["erd_min_transaction_version"]);
+        networkConfig.GasPriceModifier = Number(payload["erd_gas_price_modifier"]);
+        return networkConfig;
+    }
+}
+exports.NetworkConfig = NetworkConfig;
+//# sourceMappingURL=networkConfig.js.map
+
+/***/ }),
+
+/***/ 32200:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NetworkGeneralStatistics = void 0;
+/**
+ * An object holding general Network statistics and parameters.
+ */
+class NetworkGeneralStatistics {
+    constructor() {
+        this.Shards = 0;
+        this.Blocks = 0;
+        this.Accounts = 0;
+        this.Transactions = 0;
+        this.RefreshRate = 0;
+        this.Epoch = 0;
+        this.RoundsPassed = 0;
+        this.RoundsPerEpoch = 0;
+    }
+    /**
+     * Constructs a stats object from a HTTP response (as returned by the provider).
+     */
+    static fromHttpResponse(payload) {
+        let stats = new NetworkGeneralStatistics();
+        stats.Shards = Number(payload["shards"]);
+        stats.Blocks = Number(payload["blocks"]);
+        stats.Accounts = Number(payload["accounts"]);
+        stats.Transactions = Number(payload["transactions"]);
+        stats.RefreshRate = Number(payload["refreshRate"]);
+        stats.Epoch = Number(payload["epoch"]);
+        stats.RoundsPassed = Number(payload["roundsPassed"]);
+        stats.RoundsPerEpoch = Number(payload["roundsPerEpoch"]);
+        return stats;
+    }
+}
+exports.NetworkGeneralStatistics = NetworkGeneralStatistics;
+//# sourceMappingURL=networkGeneralStatistics.js.map
+
+/***/ }),
+
+/***/ 5501:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NetworkStake = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+/**
+ * An object holding Network stake parameters.
+ */
+class NetworkStake {
+    constructor() {
+        this.TotalValidators = 0;
+        this.ActiveValidators = 0;
+        this.QueueSize = 0;
+        this.TotalStaked = new bignumber_js_1.default(0);
+    }
+    /**
+     * Constructs a configuration object from a HTTP response (as returned by the provider).
+     */
+    static fromHttpResponse(payload) {
+        let networkStake = new NetworkStake();
+        networkStake.TotalValidators = Number(payload["totalValidators"]);
+        networkStake.ActiveValidators = Number(payload["activeValidators"]);
+        networkStake.QueueSize = Number(payload["queueSize"]);
+        networkStake.TotalStaked = new bignumber_js_1.default(payload["totalStaked"]);
+        return networkStake;
+    }
+}
+exports.NetworkStake = NetworkStake;
+//# sourceMappingURL=networkStake.js.map
+
+/***/ }),
+
+/***/ 92837:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NetworkStatus = void 0;
+/**
+ * An object holding network status configuration parameters.
+ */
+class NetworkStatus {
+    constructor() {
+        this.CurrentRound = 0;
+        this.EpochNumber = 0;
+        this.HighestFinalNonce = 0;
+        this.Nonce = 0;
+        this.NonceAtEpochStart = 0;
+        this.NoncesPassedInCurrentEpoch = 0;
+        this.RoundAtEpochStart = 0;
+        this.RoundsPassedInCurrentEpoch = 0;
+        this.RoundsPerEpoch = 0;
+    }
+    /**
+     * Constructs a configuration object from a HTTP response (as returned by the provider).
+     */
+    static fromHttpResponse(payload) {
+        let networkStatus = new NetworkStatus();
+        networkStatus.CurrentRound = Number(payload["erd_current_round"]);
+        networkStatus.EpochNumber = Number(payload["erd_epoch_number"]);
+        networkStatus.HighestFinalNonce = Number(payload["erd_highest_final_nonce"]);
+        networkStatus.Nonce = Number(payload["erd_nonce"]);
+        networkStatus.NonceAtEpochStart = Number(payload["erd_nonce_at_epoch_start"]);
+        networkStatus.NoncesPassedInCurrentEpoch = Number(payload["erd_nonces_passed_in_current_epoch"]);
+        networkStatus.RoundAtEpochStart = Number(payload["erd_round_at_epoch_start"]);
+        networkStatus.RoundsPassedInCurrentEpoch = Number(payload["erd_rounds_passed_in_current_epoch"]);
+        networkStatus.RoundsPerEpoch = Number(payload["erd_rounds_per_epoch"]);
+        return networkStatus;
+    }
+}
+exports.NetworkStatus = NetworkStatus;
+//# sourceMappingURL=networkStatus.js.map
+
+/***/ }),
+
+/***/ 19899:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PairOnNetwork = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const address_1 = __nccwpck_require__(39166);
+class PairOnNetwork {
+    constructor(init) {
+        this.address = address_1.Address.empty();
+        this.id = "";
+        this.symbol = "";
+        this.name = "";
+        this.price = new bignumber_js_1.default(0);
+        this.baseId = "";
+        this.basePrice = new bignumber_js_1.default(0);
+        this.baseSymbol = "";
+        this.baseName = "";
+        this.quoteId = "";
+        this.quotePrice = new bignumber_js_1.default(0);
+        this.quoteSymbol = "";
+        this.quoteName = "";
+        this.totalValue = new bignumber_js_1.default(0);
+        this.volume24h = new bignumber_js_1.default(0);
+        this.state = "";
+        this.type = "";
+        this.rawResponse = {};
+        Object.assign(this, init);
+    }
+    static fromApiHttpResponse(payload) {
+        let result = new PairOnNetwork();
+        result.address = new address_1.Address(payload.address || "");
+        result.id = payload.id || "";
+        result.symbol = payload.symbol || "";
+        result.name = payload.name || "";
+        result.price = new bignumber_js_1.default(payload.price || 0);
+        result.baseId = payload.baseId || "";
+        result.basePrice = new bignumber_js_1.default(payload.basePrice || 0);
+        result.baseSymbol = payload.baseSymbol || "";
+        result.baseName = payload.baseName || "";
+        result.quoteId = payload.quoteId || "";
+        result.quotePrice = new bignumber_js_1.default(payload.quotePrice || 0);
+        result.quoteSymbol = payload.quoteSymbol || "";
+        result.quoteName = payload.quoteName || "";
+        result.totalValue = new bignumber_js_1.default(payload.totalValue || 0);
+        result.volume24h = new bignumber_js_1.default(payload.volume24h || 0);
+        result.state = payload.state || "";
+        result.type = payload.type || "";
+        result.rawResponse = payload;
+        return result;
+    }
+}
+exports.PairOnNetwork = PairOnNetwork;
+//# sourceMappingURL=pairs.js.map
+
+/***/ }),
+
+/***/ 90194:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ProxyNetworkProvider = void 0;
+const errors_1 = __nccwpck_require__(38506);
+const utils_1 = __nccwpck_require__(14719);
+const accounts_1 = __nccwpck_require__(71369);
+const config_1 = __nccwpck_require__(10817);
+const constants_1 = __nccwpck_require__(69307);
+const contractQueryRequest_1 = __nccwpck_require__(15235);
+const contractQueryResponse_1 = __nccwpck_require__(94596);
+const networkConfig_1 = __nccwpck_require__(15395);
+const networkStatus_1 = __nccwpck_require__(92837);
+const tokenDefinitions_1 = __nccwpck_require__(28990);
+const tokens_1 = __nccwpck_require__(45577);
+const transactions_1 = __nccwpck_require__(7313);
+const transactionStatus_1 = __nccwpck_require__(31160);
+const userAgent_1 = __nccwpck_require__(92313);
+// TODO: Find & remove duplicate code between "ProxyNetworkProvider" and "ApiNetworkProvider".
+class ProxyNetworkProvider {
+    constructor(url, config) {
+        this.userAgentPrefix = `${constants_1.BaseUserAgent}/proxy`;
+        this.url = url;
+        this.config = { ...config_1.defaultAxiosConfig, ...config };
+        this.axios = utils_1.getAxios();
+        userAgent_1.extendUserAgentIfBackend(this.userAgentPrefix, this.config);
+    }
+    async getNetworkConfig() {
+        const response = await this.doGetGeneric("network/config");
+        const networkConfig = networkConfig_1.NetworkConfig.fromHttpResponse(response.config);
+        return networkConfig;
+    }
+    async getNetworkStatus() {
+        const response = await this.doGetGeneric("network/status/4294967295");
+        const networkStatus = networkStatus_1.NetworkStatus.fromHttpResponse(response.status);
+        return networkStatus;
+    }
+    async getNetworkStakeStatistics() {
+        // TODO: Implement wrt.:
+        // https://github.com/multiversx/mx-api-service/blob/main/src/endpoints/stake/stake.service.ts
+        throw new Error("Method not implemented.");
+    }
+    async getNetworkGeneralStatistics() {
+        // TODO: Implement wrt. (full implementation may not be possible):
+        // https://github.com/multiversx/mx-api-service/blob/main/src/endpoints/network/network.service.ts
+        throw new Error("Method not implemented.");
+    }
+    async getAccount(address) {
+        const response = await this.doGetGeneric(`address/${address.bech32()}`);
+        const account = accounts_1.AccountOnNetwork.fromHttpResponse(response.account);
+        return account;
+    }
+    async getGuardianData(address) {
+        const response = await this.doGetGeneric(`address/${address.bech32()}/guardian-data`);
+        const accountGuardian = accounts_1.GuardianData.fromHttpResponse(response.guardianData);
+        return accountGuardian;
+    }
+    async getFungibleTokensOfAccount(address, _pagination) {
+        const url = `address/${address.bech32()}/esdt`;
+        const response = await this.doGetGeneric(url);
+        const responseItems = Object.values(response.esdts);
+        // Skip NFTs / SFTs.
+        const responseItemsFiltered = responseItems.filter((item) => !item.nonce);
+        const tokens = responseItemsFiltered.map((item) => tokens_1.FungibleTokenOfAccountOnNetwork.fromHttpResponse(item));
+        // TODO: Fix sorting
+        tokens.sort((a, b) => a.identifier.localeCompare(b.identifier));
+        return tokens;
+    }
+    async getNonFungibleTokensOfAccount(address, _pagination) {
+        const url = `address/${address.bech32()}/esdt`;
+        const response = await this.doGetGeneric(url);
+        const responseItems = Object.values(response.esdts);
+        // Skip fungible tokens.
+        const responseItemsFiltered = responseItems.filter((item) => item.nonce >= 0);
+        const tokens = responseItemsFiltered.map((item) => tokens_1.NonFungibleTokenOfAccountOnNetwork.fromProxyHttpResponse(item));
+        // TODO: Fix sorting
+        tokens.sort((a, b) => a.identifier.localeCompare(b.identifier));
+        return tokens;
+    }
+    async getFungibleTokenOfAccount(address, tokenIdentifier) {
+        const response = await this.doGetGeneric(`address/${address.bech32()}/esdt/${tokenIdentifier}`);
+        const tokenData = tokens_1.FungibleTokenOfAccountOnNetwork.fromHttpResponse(response.tokenData);
+        return tokenData;
+    }
+    async getNonFungibleTokenOfAccount(address, collection, nonce) {
+        const response = await this.doGetGeneric(`address/${address.bech32()}/nft/${collection}/nonce/${nonce.valueOf()}`);
+        const tokenData = tokens_1.NonFungibleTokenOfAccountOnNetwork.fromProxyHttpResponseByNonce(response.tokenData);
+        return tokenData;
+    }
+    async getTransaction(txHash, _) {
+        const url = this.buildUrlWithQueryParameters(`transaction/${txHash}`, { withResults: "true" });
+        const [data, status] = await Promise.all([this.doGetGeneric(url), this.getTransactionStatus(txHash)]);
+        return transactions_1.TransactionOnNetwork.fromProxyHttpResponse(txHash, data.transaction, status);
+    }
+    async getTransactionStatus(txHash) {
+        const response = await this.doGetGeneric(`transaction/${txHash}/process-status`);
+        const status = new transactionStatus_1.TransactionStatus(response.status);
+        return status;
+    }
+    async sendTransaction(tx) {
+        const transaction = transactions_1.prepareTransactionForBroadcasting(tx);
+        const response = await this.doPostGeneric("transaction/send", transaction);
+        return response.txHash;
+    }
+    async sendTransactions(txs) {
+        const data = txs.map((tx) => transactions_1.prepareTransactionForBroadcasting(tx));
+        const response = await this.doPostGeneric("transaction/send-multiple", data);
+        const hashes = Array(txs.length).fill(null);
+        for (let i = 0; i < txs.length; i++) {
+            hashes[i] = response.txsHashes[i.toString()] || null;
+        }
+        return hashes;
+    }
+    async simulateTransaction(tx) {
+        const transaction = transactions_1.prepareTransactionForBroadcasting(tx);
+        const response = await this.doPostGeneric("transaction/simulate", transaction);
+        return response;
+    }
+    async queryContract(query) {
+        try {
+            const request = new contractQueryRequest_1.ContractQueryRequest(query).toHttpRequest();
+            const response = await this.doPostGeneric("vm-values/query", request);
+            return contractQueryResponse_1.ContractQueryResponse.fromHttpResponse(response.data);
+        }
+        catch (error) {
+            throw new errors_1.ErrContractQuery(error);
+        }
+    }
+    async getDefinitionOfFungibleToken(tokenIdentifier) {
+        const properties = await this.getTokenProperties(tokenIdentifier);
+        const definition = tokenDefinitions_1.DefinitionOfFungibleTokenOnNetwork.fromResponseOfGetTokenProperties(tokenIdentifier, properties);
+        return definition;
+    }
+    async getTokenProperties(identifier) {
+        const encodedIdentifier = Buffer.from(identifier).toString("hex");
+        const queryResponse = await this.queryContract({
+            address: constants_1.EsdtContractAddress,
+            func: "getTokenProperties",
+            getEncodedArguments: () => [encodedIdentifier],
+        });
+        const properties = queryResponse.getReturnDataParts();
+        return properties;
+    }
+    async getDefinitionOfTokenCollection(collection) {
+        const properties = await this.getTokenProperties(collection);
+        const definition = tokenDefinitions_1.DefinitionOfTokenCollectionOnNetwork.fromResponseOfGetTokenProperties(collection, properties);
+        return definition;
+    }
+    async getNonFungibleToken(_collection, _nonce) {
+        throw new Error("Method not implemented.");
+    }
+    async doGetGeneric(resourceUrl) {
+        const response = await this.doGet(resourceUrl);
+        return response;
+    }
+    async doPostGeneric(resourceUrl, payload) {
+        const response = await this.doPost(resourceUrl, payload);
+        return response;
+    }
+    async doGet(resourceUrl) {
+        const url = `${this.url}/${resourceUrl}`;
+        try {
+            const response = await this.axios.default.get(url, this.config);
+            const payload = response.data.data;
+            return payload;
+        }
+        catch (error) {
+            this.handleApiError(error, resourceUrl);
+        }
+    }
+    async doPost(resourceUrl, payload) {
+        const url = `${this.url}/${resourceUrl}`;
+        try {
+            const response = await this.axios.default.post(url, payload, {
+                ...this.config,
+                headers: {
+                    "Content-Type": "application/json",
+                    ...this.config.headers,
+                },
+            });
+            const responsePayload = response.data.data;
+            return responsePayload;
+        }
+        catch (error) {
+            this.handleApiError(error, resourceUrl);
+        }
+    }
+    buildUrlWithQueryParameters(endpoint, params) {
+        const searchParams = new URLSearchParams();
+        for (let [key, value] of Object.entries(params)) {
+            if (value) {
+                searchParams.append(key, value);
             }
-            return message;
-        };
+        }
+        return `${endpoint}?${searchParams.toString()}`;
+    }
+    handleApiError(error, resourceUrl) {
+        if (!error.response) {
+            throw new errors_1.ErrNetworkProvider(resourceUrl, error.toString(), error);
+        }
+        const errorData = error.response.data;
+        const originalErrorMessage = errorData.message || errorData.error || JSON.stringify(errorData);
+        throw new errors_1.ErrNetworkProvider(resourceUrl, originalErrorMessage, error);
+    }
+}
+exports.ProxyNetworkProvider = ProxyNetworkProvider;
+//# sourceMappingURL=proxyNetworkProvider.js.map
+
+/***/ }),
+
+/***/ 28990:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DefinitionOfTokenCollectionOnNetwork = exports.DefinitionOfFungibleTokenOnNetwork = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const address_1 = __nccwpck_require__(39166);
+class DefinitionOfFungibleTokenOnNetwork {
+    constructor() {
+        this.identifier = "";
+        this.name = "";
+        this.ticker = "";
+        this.owner = address_1.Address.empty();
+        this.decimals = 0;
+        this.supply = new bignumber_js_1.default(0);
+        this.isPaused = false;
+        this.canUpgrade = false;
+        this.canMint = false;
+        this.canBurn = false;
+        this.canChangeOwner = false;
+        this.canPause = false;
+        this.canFreeze = false;
+        this.canWipe = false;
+        this.canAddSpecialRoles = false;
+        this.assets = {};
+    }
+    static fromApiHttpResponse(payload) {
+        let result = new DefinitionOfFungibleTokenOnNetwork();
+        result.identifier = payload.identifier || "";
+        result.name = payload.name || "";
+        result.ticker = payload.ticker || "";
+        result.owner = new address_1.Address(payload.owner || "");
+        result.decimals = payload.decimals || 0;
+        result.supply = new bignumber_js_1.default(payload.supply || "0");
+        result.isPaused = payload.isPaused || false;
+        result.canUpgrade = payload.canUpgrade || false;
+        result.canMint = payload.canMint || false;
+        result.canBurn = payload.canBurn || false;
+        result.canChangeOwner = payload.canChangeOwner || false;
+        result.canPause = payload.canPause || false;
+        result.canFreeze = payload.canFreeze || false;
+        result.canWipe = payload.canWipe || false;
+        result.assets = payload.assets || {};
+        return result;
+    }
+    /**
+     * The implementation has been moved here from the following location:
+     * https://github.com/multiversx/mx-sdk-js-core/blob/release/v9/src/token.ts
+     */
+    static fromResponseOfGetTokenProperties(identifier, data) {
+        let result = new DefinitionOfFungibleTokenOnNetwork();
+        let [tokenName, _tokenType, owner, supply, ...propertiesBuffers] = data;
+        let properties = parseTokenProperties(propertiesBuffers);
+        result.identifier = identifier;
+        result.name = tokenName.toString();
+        result.ticker = identifier;
+        result.owner = new address_1.Address(owner);
+        result.decimals = properties.NumDecimals.toNumber();
+        result.supply = new bignumber_js_1.default(supply.toString()).shiftedBy(-result.decimals);
+        result.isPaused = properties.IsPaused;
+        result.canUpgrade = properties.CanUpgrade;
+        result.canMint = properties.CanMint;
+        result.canBurn = properties.CanBurn;
+        result.canChangeOwner = properties.CanChangeOwner;
+        result.canPause = properties.CanPause;
+        result.canFreeze = properties.CanFreeze;
+        result.canWipe = properties.CanWipe;
+        return result;
+    }
+}
+exports.DefinitionOfFungibleTokenOnNetwork = DefinitionOfFungibleTokenOnNetwork;
+class DefinitionOfTokenCollectionOnNetwork {
+    constructor() {
+        this.collection = "";
+        this.type = "";
+        this.name = "";
+        this.ticker = "";
+        this.owner = address_1.Address.empty();
+        this.decimals = 0;
+        this.canPause = false;
+        this.canFreeze = false;
+        this.canWipe = false;
+        this.canUpgrade = false;
+        this.canChangeOwner = false;
+        this.canAddSpecialRoles = false;
+        this.canTransferNftCreateRole = false;
+        this.canCreateMultiShard = false;
+    }
+    static fromApiHttpResponse(payload) {
+        let result = new DefinitionOfTokenCollectionOnNetwork();
+        result.collection = payload.collection || "";
+        result.type = payload.type || "";
+        result.name = payload.name || "";
+        result.ticker = payload.ticker || "";
+        result.owner = new address_1.Address(payload.owner || "");
+        result.decimals = payload.decimals || 0;
+        result.canPause = payload.canPause || false;
+        result.canFreeze = payload.canFreeze || false;
+        result.canWipe = payload.canWipe || false;
+        result.canUpgrade = payload.canUpgrade || false;
+        result.canAddSpecialRoles = payload.canAddSpecialRoles || false;
+        result.canTransferNftCreateRole = payload.canTransferNftCreateRole || false;
+        return result;
+    }
+    /**
+     * The implementation has been moved here from the following location:
+     * https://github.com/multiversx/mx-sdk-js-core/blob/release/v9/src/token.ts
+     */
+    static fromResponseOfGetTokenProperties(collection, data) {
+        let result = new DefinitionOfTokenCollectionOnNetwork();
+        let [tokenName, tokenType, owner, _, __, ...propertiesBuffers] = data;
+        let properties = parseTokenProperties(propertiesBuffers);
+        result.collection = collection;
+        result.type = tokenType.toString();
+        result.name = tokenName.toString();
+        result.ticker = collection;
+        result.owner = new address_1.Address(owner);
+        result.decimals = properties.NumDecimals.toNumber() ?? 0;
+        result.canPause = properties.CanPause || false;
+        result.canFreeze = properties.CanFreeze || false;
+        result.canWipe = properties.CanWipe || false;
+        result.canUpgrade = properties.CanUpgrade || false;
+        result.canChangeOwner = properties.CanChangeOwner || false;
+        result.canAddSpecialRoles = properties.CanAddSpecialRoles || false;
+        result.canTransferNftCreateRole = properties.CanTransferNFTCreateRole || false;
+        result.canCreateMultiShard = properties.CanCreateMultiShard || false;
+        return result;
+    }
+}
+exports.DefinitionOfTokenCollectionOnNetwork = DefinitionOfTokenCollectionOnNetwork;
+// Token properties have the following format: {PropertyName}-{PropertyValue}.
+function parseTokenProperties(propertiesBuffers) {
+    let properties = {};
+    for (let buffer of propertiesBuffers) {
+        let [name, value] = buffer.toString().split("-");
+        properties[name] = parseValueOfTokenProperty(value);
+    }
+    return properties;
+}
+// This only handles booleans and numbers.
+function parseValueOfTokenProperty(value) {
+    switch (value) {
+        case "true":
+            return true;
+        case "false":
+            return false;
+        default:
+            return new bignumber_js_1.default(value);
+    }
+}
+//# sourceMappingURL=tokenDefinitions.js.map
+
+/***/ }),
+
+/***/ 45577:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NonFungibleTokenOfAccountOnNetwork = exports.FungibleTokenOfAccountOnNetwork = void 0;
+const bignumber_js_1 = __nccwpck_require__(87558);
+const address_1 = __nccwpck_require__(39166);
+const utils_codec_1 = __nccwpck_require__(44534);
+class FungibleTokenOfAccountOnNetwork {
+    constructor() {
+        this.identifier = "";
+        this.balance = new bignumber_js_1.BigNumber(0);
+        this.rawResponse = {};
+    }
+    static fromHttpResponse(payload) {
+        let result = new FungibleTokenOfAccountOnNetwork();
+        result.identifier = payload.tokenIdentifier || payload.identifier || "";
+        result.balance = new bignumber_js_1.BigNumber(payload.balance || 0);
+        result.rawResponse = payload;
+        return result;
+    }
+}
+exports.FungibleTokenOfAccountOnNetwork = FungibleTokenOfAccountOnNetwork;
+class NonFungibleTokenOfAccountOnNetwork {
+    constructor(init) {
+        this.identifier = "";
+        this.collection = "";
+        this.timestamp = 0;
+        this.attributes = Buffer.from([]);
+        this.nonce = 0;
+        this.type = "";
+        this.name = "";
+        this.creator = address_1.Address.empty();
+        this.supply = new bignumber_js_1.BigNumber(0);
+        this.decimals = 0;
+        this.royalties = new bignumber_js_1.BigNumber(0);
+        this.assets = [];
+        this.balance = new bignumber_js_1.BigNumber(0);
+        Object.assign(this, init);
+    }
+    static fromProxyHttpResponse(payload) {
+        let result = NonFungibleTokenOfAccountOnNetwork.fromHttpResponse(payload);
+        result.identifier = payload.tokenIdentifier || "";
+        result.collection = NonFungibleTokenOfAccountOnNetwork.parseCollectionFromIdentifier(result.identifier);
+        result.royalties = new bignumber_js_1.BigNumber(payload.royalties || 0).div(100);
+        return result;
+    }
+    static fromProxyHttpResponseByNonce(payload) {
+        let result = NonFungibleTokenOfAccountOnNetwork.fromHttpResponse(payload);
+        let nonceAsHex = utils_codec_1.numberToPaddedHex(result.nonce);
+        result.identifier = `${payload.tokenIdentifier}-${nonceAsHex}`;
+        result.collection = payload.tokenIdentifier || "";
+        result.royalties = new bignumber_js_1.BigNumber(payload.royalties || 0).div(100);
+        return result;
+    }
+    static fromApiHttpResponse(payload) {
+        let result = NonFungibleTokenOfAccountOnNetwork.fromHttpResponse(payload);
+        result.identifier = payload.identifier || "";
+        result.collection = payload.collection || "";
+        return result;
+    }
+    // TODO: Compare results from Proxy and API and try to reconciliate them.
+    static fromHttpResponse(payload) {
+        let result = new NonFungibleTokenOfAccountOnNetwork();
+        result.timestamp = Number(payload.timestamp || 0);
+        result.attributes = Buffer.from(payload.attributes || "", "base64");
+        result.nonce = payload.nonce || 0;
+        result.type = payload.type || "";
+        result.name = payload.name || "";
+        result.creator = new address_1.Address(payload.creator || "");
+        result.decimals = Number(payload.decimals || 0);
+        result.supply = new bignumber_js_1.BigNumber(payload.balance || 1);
+        result.royalties = new bignumber_js_1.BigNumber(payload.royalties || 0);
+        result.assets = payload.assets || [];
+        result.balance = new bignumber_js_1.BigNumber(payload.balance || 1);
+        return result;
+    }
+    static parseCollectionFromIdentifier(identifier) {
+        let parts = identifier.split("-");
+        let collection = parts.slice(0, 2).join("-");
+        return collection;
+    }
+}
+exports.NonFungibleTokenOfAccountOnNetwork = NonFungibleTokenOfAccountOnNetwork;
+//# sourceMappingURL=tokens.js.map
+
+/***/ }),
+
+/***/ 726:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionEventTopic = exports.TransactionEventData = exports.TransactionEvent = void 0;
+const address_1 = __nccwpck_require__(39166);
+class TransactionEvent {
+    constructor(init) {
+        this.address = address_1.Address.empty();
+        this.identifier = "";
+        this.topics = [];
         /**
-         * Decodes a Transaction message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof proto.Transaction
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {proto.Transaction} Transaction
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         * @deprecated Use "dataPayload" instead.
          */
-        Transaction.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
+        this.data = "";
+        this.dataPayload = new TransactionEventData(Buffer.from("", "utf8"));
+        this.additionalData = [];
+        Object.assign(this, init);
+    }
+    static fromHttpResponse(responsePart) {
+        let result = new TransactionEvent();
+        result.address = new address_1.Address(responsePart.address);
+        result.identifier = responsePart.identifier || "";
+        result.topics = (responsePart.topics || []).map((topic) => new TransactionEventTopic(topic));
+        result.dataPayload = TransactionEventData.fromBase64(responsePart.data);
+        result.additionalData = (responsePart.additionalData || []).map(TransactionEventData.fromBase64);
+        result.data = result.dataPayload.toString();
+        return result;
+    }
+    findFirstOrNoneTopic(predicate) {
+        return this.topics.filter((topic) => predicate(topic))[0];
+    }
+    getLastTopic() {
+        return this.topics[this.topics.length - 1];
+    }
+}
+exports.TransactionEvent = TransactionEvent;
+class TransactionEventData {
+    constructor(data) {
+        this.raw = data;
+    }
+    static fromBase64(str) {
+        return new TransactionEventData(Buffer.from(str || "", "base64"));
+    }
+    toString() {
+        return this.raw.toString("utf8");
+    }
+    hex() {
+        return this.raw.toString("hex");
+    }
+    valueOf() {
+        return this.raw;
+    }
+}
+exports.TransactionEventData = TransactionEventData;
+class TransactionEventTopic {
+    constructor(topic) {
+        this.raw = Buffer.from(topic || "", "base64");
+    }
+    toString() {
+        return this.raw.toString("utf8");
+    }
+    hex() {
+        return this.raw.toString("hex");
+    }
+    valueOf() {
+        return this.raw;
+    }
+}
+exports.TransactionEventTopic = TransactionEventTopic;
+//# sourceMappingURL=transactionEvents.js.map
+
+/***/ }),
+
+/***/ 76376:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionLogs = void 0;
+const address_1 = __nccwpck_require__(39166);
+const errors_1 = __nccwpck_require__(38506);
+const transactionEvents_1 = __nccwpck_require__(726);
+class TransactionLogs {
+    constructor(init) {
+        this.address = address_1.Address.empty();
+        this.events = [];
+        Object.assign(this, init);
+    }
+    static fromHttpResponse(logs) {
+        let result = new TransactionLogs();
+        result.address = new address_1.Address(logs.address);
+        result.events = (logs.events || []).map((event) => transactionEvents_1.TransactionEvent.fromHttpResponse(event));
+        return result;
+    }
+    findSingleOrNoneEvent(identifier, predicate) {
+        let events = this.findEvents(identifier, predicate);
+        if (events.length > 1) {
+            throw new errors_1.ErrUnexpectedCondition(`more than one event of type ${identifier}`);
+        }
+        return events[0];
+    }
+    findFirstOrNoneEvent(identifier, predicate) {
+        return this.findEvents(identifier, predicate)[0];
+    }
+    findEvents(identifier, predicate) {
+        let events = this.events.filter((event) => event.identifier == identifier);
+        if (predicate) {
+            events = events.filter((event) => predicate(event));
+        }
+        return events;
+    }
+}
+exports.TransactionLogs = TransactionLogs;
+//# sourceMappingURL=transactionLogs.js.map
+
+/***/ }),
+
+/***/ 40796:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionReceipt = void 0;
+const address_1 = __nccwpck_require__(39166);
+class TransactionReceipt {
+    constructor() {
+        this.value = "";
+        this.sender = address_1.Address.empty();
+        this.data = "";
+        this.hash = "";
+    }
+    static fromHttpResponse(response) {
+        let receipt = new TransactionReceipt();
+        receipt.value = (response.value || 0).toString();
+        receipt.sender = new address_1.Address(response.sender);
+        receipt.data = response.data;
+        receipt.hash = response.txHash;
+        return receipt;
+    }
+}
+exports.TransactionReceipt = TransactionReceipt;
+//# sourceMappingURL=transactionReceipt.js.map
+
+/***/ }),
+
+/***/ 31160:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionStatus = void 0;
+/**
+ * An abstraction for handling and interpreting the "status" field of a transaction.
+ */
+class TransactionStatus {
+    /**
+     * Creates a new TransactionStatus object.
+     */
+    constructor(status) {
+        this.status = (status || "").toLowerCase();
+    }
+    /**
+     * Creates an unknown status.
+     */
+    static createUnknown() {
+        return new TransactionStatus("unknown");
+    }
+    /**
+     * Returns whether the transaction is pending (e.g. in mempool).
+     */
+    isPending() {
+        return (this.status == "received" ||
+            this.status == "pending");
+    }
+    /**
+     * Returns whether the transaction has been executed (not necessarily with success).
+     */
+    isExecuted() {
+        return this.isSuccessful() || this.isFailed() || this.isInvalid();
+    }
+    /**
+     * Returns whether the transaction has been executed successfully.
+     */
+    isSuccessful() {
+        return (this.status == "executed" ||
+            this.status == "success" ||
+            this.status == "successful");
+    }
+    /**
+     * Returns whether the transaction has been executed, but with a failure.
+     */
+    isFailed() {
+        return (this.status == "fail" ||
+            this.status == "failed" ||
+            this.status == "unsuccessful" ||
+            this.isInvalid());
+    }
+    /**
+     * Returns whether the transaction has been executed, but marked as invalid (e.g. due to "insufficient funds").
+     */
+    isInvalid() {
+        return this.status == "invalid";
+    }
+    toString() {
+        return this.status;
+    }
+    valueOf() {
+        return this.status;
+    }
+    equals(other) {
+        if (!other) {
+            return false;
+        }
+        return this.status == other.status;
+    }
+}
+exports.TransactionStatus = TransactionStatus;
+//# sourceMappingURL=transactionStatus.js.map
+
+/***/ }),
+
+/***/ 7313:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionOnNetwork = exports.prepareTransactionForBroadcasting = void 0;
+const address_1 = __nccwpck_require__(39166);
+const contractResults_1 = __nccwpck_require__(10879);
+const transactionLogs_1 = __nccwpck_require__(76376);
+const transactionReceipt_1 = __nccwpck_require__(40796);
+const transactionStatus_1 = __nccwpck_require__(31160);
+function prepareTransactionForBroadcasting(transaction) {
+    if ("toSendable" in transaction) {
+        return transaction.toSendable();
+    }
+    return {
+        nonce: Number(transaction.nonce),
+        value: transaction.value.toString(),
+        receiver: transaction.receiver,
+        sender: transaction.sender,
+        senderUsername: transaction.senderUsername
+            ? Buffer.from(transaction.senderUsername).toString("base64")
+            : undefined,
+        receiverUsername: transaction.receiverUsername
+            ? Buffer.from(transaction.receiverUsername).toString("base64")
+            : undefined,
+        gasPrice: Number(transaction.gasPrice),
+        gasLimit: Number(transaction.gasLimit),
+        data: transaction.data.length === 0 ? undefined : Buffer.from(transaction.data).toString("base64"),
+        chainID: transaction.chainID,
+        version: transaction.version,
+        options: transaction.options,
+        guardian: transaction.guardian || undefined,
+        relayer: transaction.relayer.toBech32() || undefined,
+        relayerSignature: transaction.relayerSignature.length === 0
+            ? undefined
+            : Buffer.from(transaction.relayerSignature).toString("hex"),
+        signature: Buffer.from(transaction.signature).toString("hex"),
+        guardianSignature: transaction.guardianSignature.length === 0
+            ? undefined
+            : Buffer.from(transaction.guardianSignature).toString("hex"),
+    };
+}
+exports.prepareTransactionForBroadcasting = prepareTransactionForBroadcasting;
+class TransactionOnNetwork {
+    constructor(init) {
+        this.hash = "";
+        this.type = "";
+        this.nonce = 0;
+        this.round = 0;
+        this.epoch = 0;
+        this.value = "";
+        this.receiver = address_1.Address.empty();
+        this.sender = address_1.Address.empty();
+        this.gasLimit = 0;
+        this.gasPrice = 0;
+        this.function = "";
+        this.data = Buffer.from([]);
+        this.signature = "";
+        this.status = transactionStatus_1.TransactionStatus.createUnknown();
+        this.timestamp = 0;
+        this.blockNonce = 0;
+        this.hyperblockNonce = 0;
+        this.hyperblockHash = "";
+        this.receipt = new transactionReceipt_1.TransactionReceipt();
+        this.contractResults = new contractResults_1.ContractResults([]);
+        this.logs = new transactionLogs_1.TransactionLogs();
+        Object.assign(this, init);
+    }
+    static fromProxyHttpResponse(txHash, response, processStatus) {
+        let result = TransactionOnNetwork.fromHttpResponse(txHash, response);
+        result.contractResults = contractResults_1.ContractResults.fromProxyHttpResponse(response.smartContractResults || []);
+        if (processStatus) {
+            result.status = processStatus;
+            result.isCompleted = result.status.isSuccessful() || result.status.isFailed();
+        }
+        return result;
+    }
+    static fromApiHttpResponse(txHash, response) {
+        let result = TransactionOnNetwork.fromHttpResponse(txHash, response);
+        result.contractResults = contractResults_1.ContractResults.fromApiHttpResponse(response.results || []);
+        result.isCompleted = !result.status.isPending();
+        return result;
+    }
+    static fromHttpResponse(txHash, response) {
+        let result = new TransactionOnNetwork();
+        result.hash = txHash;
+        result.type = response.type || "";
+        result.nonce = response.nonce || 0;
+        result.round = response.round;
+        result.epoch = response.epoch || 0;
+        result.value = (response.value || 0).toString();
+        result.sender = new address_1.Address(response.sender);
+        result.receiver = new address_1.Address(response.receiver);
+        result.gasPrice = response.gasPrice || 0;
+        result.gasLimit = response.gasLimit || 0;
+        result.function = response.function || "";
+        result.data = Buffer.from(response.data || "", "base64");
+        result.status = new transactionStatus_1.TransactionStatus(response.status);
+        result.timestamp = response.timestamp || 0;
+        result.blockNonce = response.blockNonce || 0;
+        result.hyperblockNonce = response.hyperblockNonce || 0;
+        result.hyperblockHash = response.hyperblockHash || "";
+        result.receipt = transactionReceipt_1.TransactionReceipt.fromHttpResponse(response.receipt || {});
+        result.logs = transactionLogs_1.TransactionLogs.fromHttpResponse(response.logs || {});
+        return result;
+    }
+    getDateTime() {
+        return new Date(this.timestamp * 1000);
+    }
+}
+exports.TransactionOnNetwork = TransactionOnNetwork;
+//# sourceMappingURL=transactions.js.map
+
+/***/ }),
+
+/***/ 92313:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.extendUserAgentIfBackend = void 0;
+const axios_1 = __nccwpck_require__(88757);
+const constants_1 = __nccwpck_require__(69307);
+function extendUserAgentIfBackend(userAgentPrefix, config) {
+    if (isBackend()) {
+        extendUserAgent(userAgentPrefix, config);
+    }
+}
+exports.extendUserAgentIfBackend = extendUserAgentIfBackend;
+function extendUserAgent(userAgentPrefix, config) {
+    if (!config.headers) {
+        config.headers = new axios_1.AxiosHeaders({});
+    }
+    if (!config.clientName) {
+        console.log("We recommend providing the `clientName` when instantiating a NetworkProvider (e.g. ProxyNetworkProvider, ApiNetworkProvider). This information will be used for metrics collection and improving our services.");
+    }
+    const headers = axios_1.AxiosHeaders.from(config.headers).normalize(true);
+    const resolvedClientName = config.clientName || constants_1.UnknownClientName;
+    const currentUserAgent = headers.hasUserAgent() ? headers.getUserAgent() : "";
+    const newUserAgent = currentUserAgent
+        ? `${currentUserAgent} ${userAgentPrefix}/${resolvedClientName}`
+        : `${userAgentPrefix}/${resolvedClientName}`;
+    headers.setUserAgent(newUserAgent, true);
+}
+function isBackend() {
+    return typeof window === "undefined";
+}
+//# sourceMappingURL=userAgent.js.map
+
+/***/ }),
+
+/***/ 83178:
+/***/ (function(module, __unused_webpack_exports, __nccwpck_require__) {
+
+"use strict";
+/* module decorator */ module = __nccwpck_require__.nmd(module);
+
+/*eslint-disable block-scoped-var, id-length, no-control-regex, no-magic-numbers, no-prototype-builtins, no-redeclare, no-shadow, no-var, sort-vars*/
+(function (global, factory) {
+    /* AMD */ if (typeof define === 'function' && define.amd)
+        define(["protobufjs/minimal"], factory);
+    /* CommonJS */ else if ( true && module && module.exports)
+        module.exports = factory(__nccwpck_require__(96916));
+})(this, function ($protobuf) {
+    "use strict";
+    // Common aliases
+    var $Reader = $protobuf.Reader, $Writer = $protobuf.Writer, $util = $protobuf.util;
+    // Exported root namespace
+    var $root = $protobuf.roots["default"] || ($protobuf.roots["default"] = {});
+    $root.proto = (function () {
         /**
-         * Verifies a Transaction message.
-         * @function verify
-         * @memberof proto.Transaction
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         * Namespace proto.
+         * @exports proto
+         * @namespace
          */
-        Transaction.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.Nonce != null && message.hasOwnProperty("Nonce"))
-                if (!$util.isInteger(message.Nonce) && !(message.Nonce && $util.isInteger(message.Nonce.low) && $util.isInteger(message.Nonce.high)))
-                    return "Nonce: integer|Long expected";
-            if (message.Value != null && message.hasOwnProperty("Value"))
-                if (!(message.Value && typeof message.Value.length === "number" || $util.isString(message.Value)))
-                    return "Value: buffer expected";
-            if (message.RcvAddr != null && message.hasOwnProperty("RcvAddr"))
-                if (!(message.RcvAddr && typeof message.RcvAddr.length === "number" || $util.isString(message.RcvAddr)))
-                    return "RcvAddr: buffer expected";
-            if (message.RcvUserName != null && message.hasOwnProperty("RcvUserName"))
-                if (!(message.RcvUserName && typeof message.RcvUserName.length === "number" || $util.isString(message.RcvUserName)))
-                    return "RcvUserName: buffer expected";
-            if (message.SndAddr != null && message.hasOwnProperty("SndAddr"))
-                if (!(message.SndAddr && typeof message.SndAddr.length === "number" || $util.isString(message.SndAddr)))
-                    return "SndAddr: buffer expected";
-            if (message.SndUserName != null && message.hasOwnProperty("SndUserName"))
-                if (!(message.SndUserName && typeof message.SndUserName.length === "number" || $util.isString(message.SndUserName)))
-                    return "SndUserName: buffer expected";
-            if (message.GasPrice != null && message.hasOwnProperty("GasPrice"))
-                if (!$util.isInteger(message.GasPrice) && !(message.GasPrice && $util.isInteger(message.GasPrice.low) && $util.isInteger(message.GasPrice.high)))
-                    return "GasPrice: integer|Long expected";
-            if (message.GasLimit != null && message.hasOwnProperty("GasLimit"))
-                if (!$util.isInteger(message.GasLimit) && !(message.GasLimit && $util.isInteger(message.GasLimit.low) && $util.isInteger(message.GasLimit.high)))
-                    return "GasLimit: integer|Long expected";
-            if (message.Data != null && message.hasOwnProperty("Data"))
-                if (!(message.Data && typeof message.Data.length === "number" || $util.isString(message.Data)))
-                    return "Data: buffer expected";
-            if (message.ChainID != null && message.hasOwnProperty("ChainID"))
-                if (!(message.ChainID && typeof message.ChainID.length === "number" || $util.isString(message.ChainID)))
-                    return "ChainID: buffer expected";
-            if (message.Version != null && message.hasOwnProperty("Version"))
-                if (!$util.isInteger(message.Version))
-                    return "Version: integer expected";
-            if (message.Signature != null && message.hasOwnProperty("Signature"))
-                if (!(message.Signature && typeof message.Signature.length === "number" || $util.isString(message.Signature)))
-                    return "Signature: buffer expected";
-            if (message.Options != null && message.hasOwnProperty("Options"))
-                if (!$util.isInteger(message.Options))
-                    return "Options: integer expected";
-            if (message.GuardAddr != null && message.hasOwnProperty("GuardAddr"))
-                if (!(message.GuardAddr && typeof message.GuardAddr.length === "number" || $util.isString(message.GuardAddr)))
-                    return "GuardAddr: buffer expected";
-            if (message.GuardSignature != null && message.hasOwnProperty("GuardSignature"))
-                if (!(message.GuardSignature && typeof message.GuardSignature.length === "number" || $util.isString(message.GuardSignature)))
-                    return "GuardSignature: buffer expected";
-            return null;
-        };
-        /**
-         * Creates a Transaction message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof proto.Transaction
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {proto.Transaction} Transaction
-         */
-        Transaction.fromObject = function fromObject(object) {
-            if (object instanceof $root.proto.Transaction)
+        var proto = {};
+        proto.Transaction = (function () {
+            /**
+             * Properties of a Transaction.
+             * @memberof proto
+             * @interface ITransaction
+             * @property {number|Long|null} [Nonce] Transaction Nonce
+             * @property {Uint8Array|null} [Value] Transaction Value
+             * @property {Uint8Array|null} [RcvAddr] Transaction RcvAddr
+             * @property {Uint8Array|null} [RcvUserName] Transaction RcvUserName
+             * @property {Uint8Array|null} [SndAddr] Transaction SndAddr
+             * @property {Uint8Array|null} [SndUserName] Transaction SndUserName
+             * @property {number|Long|null} [GasPrice] Transaction GasPrice
+             * @property {number|Long|null} [GasLimit] Transaction GasLimit
+             * @property {Uint8Array|null} [Data] Transaction Data
+             * @property {Uint8Array|null} [ChainID] Transaction ChainID
+             * @property {number|null} [Version] Transaction Version
+             * @property {Uint8Array|null} [Signature] Transaction Signature
+             * @property {number|null} [Options] Transaction Options
+             * @property {Uint8Array|null} [GuardianAddr] Transaction GuardianAddr
+             * @property {Uint8Array|null} [GuardianSignature] Transaction GuardianSignature
+             * @property {Uint8Array|null} [Relayer] Transaction Relayer
+             * @property {Uint8Array|null} [RelayerSignature] Transaction RelayerSignature
+             */
+            /**
+             * Constructs a new Transaction.
+             * @memberof proto
+             * @classdesc Represents a Transaction.
+             * @implements ITransaction
+             * @constructor
+             * @param {proto.ITransaction=} [properties] Properties to set
+             */
+            function Transaction(properties) {
+                if (properties)
+                    for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null)
+                            this[keys[i]] = properties[keys[i]];
+            }
+            /**
+             * Transaction Nonce.
+             * @member {number|Long} Nonce
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.Nonce = $util.Long ? $util.Long.fromBits(0, 0, true) : 0;
+            /**
+             * Transaction Value.
+             * @member {Uint8Array} Value
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.Value = $util.newBuffer([]);
+            /**
+             * Transaction RcvAddr.
+             * @member {Uint8Array} RcvAddr
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.RcvAddr = $util.newBuffer([]);
+            /**
+             * Transaction RcvUserName.
+             * @member {Uint8Array} RcvUserName
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.RcvUserName = $util.newBuffer([]);
+            /**
+             * Transaction SndAddr.
+             * @member {Uint8Array} SndAddr
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.SndAddr = $util.newBuffer([]);
+            /**
+             * Transaction SndUserName.
+             * @member {Uint8Array} SndUserName
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.SndUserName = $util.newBuffer([]);
+            /**
+             * Transaction GasPrice.
+             * @member {number|Long} GasPrice
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.GasPrice = $util.Long ? $util.Long.fromBits(0, 0, true) : 0;
+            /**
+             * Transaction GasLimit.
+             * @member {number|Long} GasLimit
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.GasLimit = $util.Long ? $util.Long.fromBits(0, 0, true) : 0;
+            /**
+             * Transaction Data.
+             * @member {Uint8Array} Data
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.Data = $util.newBuffer([]);
+            /**
+             * Transaction ChainID.
+             * @member {Uint8Array} ChainID
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.ChainID = $util.newBuffer([]);
+            /**
+             * Transaction Version.
+             * @member {number} Version
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.Version = 0;
+            /**
+             * Transaction Signature.
+             * @member {Uint8Array} Signature
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.Signature = $util.newBuffer([]);
+            /**
+             * Transaction Options.
+             * @member {number} Options
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.Options = 0;
+            /**
+             * Transaction GuardianAddr.
+             * @member {Uint8Array} GuardianAddr
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.GuardianAddr = $util.newBuffer([]);
+            /**
+             * Transaction GuardianSignature.
+             * @member {Uint8Array} GuardianSignature
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.GuardianSignature = $util.newBuffer([]);
+            /**
+             * Transaction Relayer.
+             * @member {Uint8Array} Relayer
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.Relayer = $util.newBuffer([]);
+            /**
+             * Transaction RelayerSignature.
+             * @member {Uint8Array} RelayerSignature
+             * @memberof proto.Transaction
+             * @instance
+             */
+            Transaction.prototype.RelayerSignature = $util.newBuffer([]);
+            /**
+             * Creates a new Transaction instance using the specified properties.
+             * @function create
+             * @memberof proto.Transaction
+             * @static
+             * @param {proto.ITransaction=} [properties] Properties to set
+             * @returns {proto.Transaction} Transaction instance
+             */
+            Transaction.create = function create(properties) {
+                return new Transaction(properties);
+            };
+            /**
+             * Encodes the specified Transaction message. Does not implicitly {@link proto.Transaction.verify|verify} messages.
+             * @function encode
+             * @memberof proto.Transaction
+             * @static
+             * @param {proto.ITransaction} message Transaction message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            Transaction.encode = function encode(message, writer) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (message.Nonce != null && Object.hasOwnProperty.call(message, "Nonce"))
+                    writer.uint32(/* id 1, wireType 0 =*/ 8).uint64(message.Nonce);
+                if (message.Value != null && Object.hasOwnProperty.call(message, "Value"))
+                    writer.uint32(/* id 2, wireType 2 =*/ 18).bytes(message.Value);
+                if (message.RcvAddr != null && Object.hasOwnProperty.call(message, "RcvAddr"))
+                    writer.uint32(/* id 3, wireType 2 =*/ 26).bytes(message.RcvAddr);
+                if (message.RcvUserName != null && Object.hasOwnProperty.call(message, "RcvUserName"))
+                    writer.uint32(/* id 4, wireType 2 =*/ 34).bytes(message.RcvUserName);
+                if (message.SndAddr != null && Object.hasOwnProperty.call(message, "SndAddr"))
+                    writer.uint32(/* id 5, wireType 2 =*/ 42).bytes(message.SndAddr);
+                if (message.SndUserName != null && Object.hasOwnProperty.call(message, "SndUserName"))
+                    writer.uint32(/* id 6, wireType 2 =*/ 50).bytes(message.SndUserName);
+                if (message.GasPrice != null && Object.hasOwnProperty.call(message, "GasPrice"))
+                    writer.uint32(/* id 7, wireType 0 =*/ 56).uint64(message.GasPrice);
+                if (message.GasLimit != null && Object.hasOwnProperty.call(message, "GasLimit"))
+                    writer.uint32(/* id 8, wireType 0 =*/ 64).uint64(message.GasLimit);
+                if (message.Data != null && Object.hasOwnProperty.call(message, "Data"))
+                    writer.uint32(/* id 9, wireType 2 =*/ 74).bytes(message.Data);
+                if (message.ChainID != null && Object.hasOwnProperty.call(message, "ChainID"))
+                    writer.uint32(/* id 10, wireType 2 =*/ 82).bytes(message.ChainID);
+                if (message.Version != null && Object.hasOwnProperty.call(message, "Version"))
+                    writer.uint32(/* id 11, wireType 0 =*/ 88).uint32(message.Version);
+                if (message.Signature != null && Object.hasOwnProperty.call(message, "Signature"))
+                    writer.uint32(/* id 12, wireType 2 =*/ 98).bytes(message.Signature);
+                if (message.Options != null && Object.hasOwnProperty.call(message, "Options"))
+                    writer.uint32(/* id 13, wireType 0 =*/ 104).uint32(message.Options);
+                if (message.GuardianAddr != null && Object.hasOwnProperty.call(message, "GuardianAddr"))
+                    writer.uint32(/* id 14, wireType 2 =*/ 114).bytes(message.GuardianAddr);
+                if (message.GuardianSignature != null && Object.hasOwnProperty.call(message, "GuardianSignature"))
+                    writer.uint32(/* id 15, wireType 2 =*/ 122).bytes(message.GuardianSignature);
+                if (message.Relayer != null && Object.hasOwnProperty.call(message, "Relayer"))
+                    writer.uint32(/* id 16, wireType 2 =*/ 130).bytes(message.Relayer);
+                if (message.RelayerSignature != null && Object.hasOwnProperty.call(message, "RelayerSignature"))
+                    writer.uint32(/* id 17, wireType 2 =*/ 138).bytes(message.RelayerSignature);
+                return writer;
+            };
+            /**
+             * Encodes the specified Transaction message, length delimited. Does not implicitly {@link proto.Transaction.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof proto.Transaction
+             * @static
+             * @param {proto.ITransaction} message Transaction message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            Transaction.encodeDelimited = function encodeDelimited(message, writer) {
+                return this.encode(message, writer).ldelim();
+            };
+            /**
+             * Decodes a Transaction message from the specified reader or buffer.
+             * @function decode
+             * @memberof proto.Transaction
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {proto.Transaction} Transaction
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            Transaction.decode = function decode(reader, length) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.proto.Transaction();
+                while (reader.pos < end) {
+                    var tag = reader.uint32();
+                    switch (tag >>> 3) {
+                        case 1: {
+                            message.Nonce = reader.uint64();
+                            break;
+                        }
+                        case 2: {
+                            message.Value = reader.bytes();
+                            break;
+                        }
+                        case 3: {
+                            message.RcvAddr = reader.bytes();
+                            break;
+                        }
+                        case 4: {
+                            message.RcvUserName = reader.bytes();
+                            break;
+                        }
+                        case 5: {
+                            message.SndAddr = reader.bytes();
+                            break;
+                        }
+                        case 6: {
+                            message.SndUserName = reader.bytes();
+                            break;
+                        }
+                        case 7: {
+                            message.GasPrice = reader.uint64();
+                            break;
+                        }
+                        case 8: {
+                            message.GasLimit = reader.uint64();
+                            break;
+                        }
+                        case 9: {
+                            message.Data = reader.bytes();
+                            break;
+                        }
+                        case 10: {
+                            message.ChainID = reader.bytes();
+                            break;
+                        }
+                        case 11: {
+                            message.Version = reader.uint32();
+                            break;
+                        }
+                        case 12: {
+                            message.Signature = reader.bytes();
+                            break;
+                        }
+                        case 13: {
+                            message.Options = reader.uint32();
+                            break;
+                        }
+                        case 14: {
+                            message.GuardianAddr = reader.bytes();
+                            break;
+                        }
+                        case 15: {
+                            message.GuardianSignature = reader.bytes();
+                            break;
+                        }
+                        case 16: {
+                            message.Relayer = reader.bytes();
+                            break;
+                        }
+                        case 17: {
+                            message.RelayerSignature = reader.bytes();
+                            break;
+                        }
+                        default:
+                            reader.skipType(tag & 7);
+                            break;
+                    }
+                }
+                return message;
+            };
+            /**
+             * Decodes a Transaction message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof proto.Transaction
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {proto.Transaction} Transaction
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            Transaction.decodeDelimited = function decodeDelimited(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+            /**
+             * Verifies a Transaction message.
+             * @function verify
+             * @memberof proto.Transaction
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            Transaction.verify = function verify(message) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (message.Nonce != null && message.hasOwnProperty("Nonce"))
+                    if (!$util.isInteger(message.Nonce) && !(message.Nonce && $util.isInteger(message.Nonce.low) && $util.isInteger(message.Nonce.high)))
+                        return "Nonce: integer|Long expected";
+                if (message.Value != null && message.hasOwnProperty("Value"))
+                    if (!(message.Value && typeof message.Value.length === "number" || $util.isString(message.Value)))
+                        return "Value: buffer expected";
+                if (message.RcvAddr != null && message.hasOwnProperty("RcvAddr"))
+                    if (!(message.RcvAddr && typeof message.RcvAddr.length === "number" || $util.isString(message.RcvAddr)))
+                        return "RcvAddr: buffer expected";
+                if (message.RcvUserName != null && message.hasOwnProperty("RcvUserName"))
+                    if (!(message.RcvUserName && typeof message.RcvUserName.length === "number" || $util.isString(message.RcvUserName)))
+                        return "RcvUserName: buffer expected";
+                if (message.SndAddr != null && message.hasOwnProperty("SndAddr"))
+                    if (!(message.SndAddr && typeof message.SndAddr.length === "number" || $util.isString(message.SndAddr)))
+                        return "SndAddr: buffer expected";
+                if (message.SndUserName != null && message.hasOwnProperty("SndUserName"))
+                    if (!(message.SndUserName && typeof message.SndUserName.length === "number" || $util.isString(message.SndUserName)))
+                        return "SndUserName: buffer expected";
+                if (message.GasPrice != null && message.hasOwnProperty("GasPrice"))
+                    if (!$util.isInteger(message.GasPrice) && !(message.GasPrice && $util.isInteger(message.GasPrice.low) && $util.isInteger(message.GasPrice.high)))
+                        return "GasPrice: integer|Long expected";
+                if (message.GasLimit != null && message.hasOwnProperty("GasLimit"))
+                    if (!$util.isInteger(message.GasLimit) && !(message.GasLimit && $util.isInteger(message.GasLimit.low) && $util.isInteger(message.GasLimit.high)))
+                        return "GasLimit: integer|Long expected";
+                if (message.Data != null && message.hasOwnProperty("Data"))
+                    if (!(message.Data && typeof message.Data.length === "number" || $util.isString(message.Data)))
+                        return "Data: buffer expected";
+                if (message.ChainID != null && message.hasOwnProperty("ChainID"))
+                    if (!(message.ChainID && typeof message.ChainID.length === "number" || $util.isString(message.ChainID)))
+                        return "ChainID: buffer expected";
+                if (message.Version != null && message.hasOwnProperty("Version"))
+                    if (!$util.isInteger(message.Version))
+                        return "Version: integer expected";
+                if (message.Signature != null && message.hasOwnProperty("Signature"))
+                    if (!(message.Signature && typeof message.Signature.length === "number" || $util.isString(message.Signature)))
+                        return "Signature: buffer expected";
+                if (message.Options != null && message.hasOwnProperty("Options"))
+                    if (!$util.isInteger(message.Options))
+                        return "Options: integer expected";
+                if (message.GuardianAddr != null && message.hasOwnProperty("GuardianAddr"))
+                    if (!(message.GuardianAddr && typeof message.GuardianAddr.length === "number" || $util.isString(message.GuardianAddr)))
+                        return "GuardianAddr: buffer expected";
+                if (message.GuardianSignature != null && message.hasOwnProperty("GuardianSignature"))
+                    if (!(message.GuardianSignature && typeof message.GuardianSignature.length === "number" || $util.isString(message.GuardianSignature)))
+                        return "GuardianSignature: buffer expected";
+                if (message.Relayer != null && message.hasOwnProperty("Relayer"))
+                    if (!(message.Relayer && typeof message.Relayer.length === "number" || $util.isString(message.Relayer)))
+                        return "Relayer: buffer expected";
+                if (message.RelayerSignature != null && message.hasOwnProperty("RelayerSignature"))
+                    if (!(message.RelayerSignature && typeof message.RelayerSignature.length === "number" || $util.isString(message.RelayerSignature)))
+                        return "RelayerSignature: buffer expected";
+                return null;
+            };
+            /**
+             * Creates a Transaction message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof proto.Transaction
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {proto.Transaction} Transaction
+             */
+            Transaction.fromObject = function fromObject(object) {
+                if (object instanceof $root.proto.Transaction)
+                    return object;
+                var message = new $root.proto.Transaction();
+                if (object.Nonce != null)
+                    if ($util.Long)
+                        (message.Nonce = $util.Long.fromValue(object.Nonce)).unsigned = true;
+                    else if (typeof object.Nonce === "string")
+                        message.Nonce = parseInt(object.Nonce, 10);
+                    else if (typeof object.Nonce === "number")
+                        message.Nonce = object.Nonce;
+                    else if (typeof object.Nonce === "object")
+                        message.Nonce = new $util.LongBits(object.Nonce.low >>> 0, object.Nonce.high >>> 0).toNumber(true);
+                if (object.Value != null)
+                    if (typeof object.Value === "string")
+                        $util.base64.decode(object.Value, message.Value = $util.newBuffer($util.base64.length(object.Value)), 0);
+                    else if (object.Value.length >= 0)
+                        message.Value = object.Value;
+                if (object.RcvAddr != null)
+                    if (typeof object.RcvAddr === "string")
+                        $util.base64.decode(object.RcvAddr, message.RcvAddr = $util.newBuffer($util.base64.length(object.RcvAddr)), 0);
+                    else if (object.RcvAddr.length >= 0)
+                        message.RcvAddr = object.RcvAddr;
+                if (object.RcvUserName != null)
+                    if (typeof object.RcvUserName === "string")
+                        $util.base64.decode(object.RcvUserName, message.RcvUserName = $util.newBuffer($util.base64.length(object.RcvUserName)), 0);
+                    else if (object.RcvUserName.length >= 0)
+                        message.RcvUserName = object.RcvUserName;
+                if (object.SndAddr != null)
+                    if (typeof object.SndAddr === "string")
+                        $util.base64.decode(object.SndAddr, message.SndAddr = $util.newBuffer($util.base64.length(object.SndAddr)), 0);
+                    else if (object.SndAddr.length >= 0)
+                        message.SndAddr = object.SndAddr;
+                if (object.SndUserName != null)
+                    if (typeof object.SndUserName === "string")
+                        $util.base64.decode(object.SndUserName, message.SndUserName = $util.newBuffer($util.base64.length(object.SndUserName)), 0);
+                    else if (object.SndUserName.length >= 0)
+                        message.SndUserName = object.SndUserName;
+                if (object.GasPrice != null)
+                    if ($util.Long)
+                        (message.GasPrice = $util.Long.fromValue(object.GasPrice)).unsigned = true;
+                    else if (typeof object.GasPrice === "string")
+                        message.GasPrice = parseInt(object.GasPrice, 10);
+                    else if (typeof object.GasPrice === "number")
+                        message.GasPrice = object.GasPrice;
+                    else if (typeof object.GasPrice === "object")
+                        message.GasPrice = new $util.LongBits(object.GasPrice.low >>> 0, object.GasPrice.high >>> 0).toNumber(true);
+                if (object.GasLimit != null)
+                    if ($util.Long)
+                        (message.GasLimit = $util.Long.fromValue(object.GasLimit)).unsigned = true;
+                    else if (typeof object.GasLimit === "string")
+                        message.GasLimit = parseInt(object.GasLimit, 10);
+                    else if (typeof object.GasLimit === "number")
+                        message.GasLimit = object.GasLimit;
+                    else if (typeof object.GasLimit === "object")
+                        message.GasLimit = new $util.LongBits(object.GasLimit.low >>> 0, object.GasLimit.high >>> 0).toNumber(true);
+                if (object.Data != null)
+                    if (typeof object.Data === "string")
+                        $util.base64.decode(object.Data, message.Data = $util.newBuffer($util.base64.length(object.Data)), 0);
+                    else if (object.Data.length >= 0)
+                        message.Data = object.Data;
+                if (object.ChainID != null)
+                    if (typeof object.ChainID === "string")
+                        $util.base64.decode(object.ChainID, message.ChainID = $util.newBuffer($util.base64.length(object.ChainID)), 0);
+                    else if (object.ChainID.length >= 0)
+                        message.ChainID = object.ChainID;
+                if (object.Version != null)
+                    message.Version = object.Version >>> 0;
+                if (object.Signature != null)
+                    if (typeof object.Signature === "string")
+                        $util.base64.decode(object.Signature, message.Signature = $util.newBuffer($util.base64.length(object.Signature)), 0);
+                    else if (object.Signature.length >= 0)
+                        message.Signature = object.Signature;
+                if (object.Options != null)
+                    message.Options = object.Options >>> 0;
+                if (object.GuardianAddr != null)
+                    if (typeof object.GuardianAddr === "string")
+                        $util.base64.decode(object.GuardianAddr, message.GuardianAddr = $util.newBuffer($util.base64.length(object.GuardianAddr)), 0);
+                    else if (object.GuardianAddr.length >= 0)
+                        message.GuardianAddr = object.GuardianAddr;
+                if (object.GuardianSignature != null)
+                    if (typeof object.GuardianSignature === "string")
+                        $util.base64.decode(object.GuardianSignature, message.GuardianSignature = $util.newBuffer($util.base64.length(object.GuardianSignature)), 0);
+                    else if (object.GuardianSignature.length >= 0)
+                        message.GuardianSignature = object.GuardianSignature;
+                if (object.Relayer != null)
+                    if (typeof object.Relayer === "string")
+                        $util.base64.decode(object.Relayer, message.Relayer = $util.newBuffer($util.base64.length(object.Relayer)), 0);
+                    else if (object.Relayer.length >= 0)
+                        message.Relayer = object.Relayer;
+                if (object.RelayerSignature != null)
+                    if (typeof object.RelayerSignature === "string")
+                        $util.base64.decode(object.RelayerSignature, message.RelayerSignature = $util.newBuffer($util.base64.length(object.RelayerSignature)), 0);
+                    else if (object.RelayerSignature.length >= 0)
+                        message.RelayerSignature = object.RelayerSignature;
+                return message;
+            };
+            /**
+             * Creates a plain object from a Transaction message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof proto.Transaction
+             * @static
+             * @param {proto.Transaction} message Transaction
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            Transaction.toObject = function toObject(message, options) {
+                if (!options)
+                    options = {};
+                var object = {};
+                if (options.defaults) {
+                    if ($util.Long) {
+                        var long = new $util.Long(0, 0, true);
+                        object.Nonce = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                    }
+                    else
+                        object.Nonce = options.longs === String ? "0" : 0;
+                    if (options.bytes === String)
+                        object.Value = "";
+                    else {
+                        object.Value = [];
+                        if (options.bytes !== Array)
+                            object.Value = $util.newBuffer(object.Value);
+                    }
+                    if (options.bytes === String)
+                        object.RcvAddr = "";
+                    else {
+                        object.RcvAddr = [];
+                        if (options.bytes !== Array)
+                            object.RcvAddr = $util.newBuffer(object.RcvAddr);
+                    }
+                    if (options.bytes === String)
+                        object.RcvUserName = "";
+                    else {
+                        object.RcvUserName = [];
+                        if (options.bytes !== Array)
+                            object.RcvUserName = $util.newBuffer(object.RcvUserName);
+                    }
+                    if (options.bytes === String)
+                        object.SndAddr = "";
+                    else {
+                        object.SndAddr = [];
+                        if (options.bytes !== Array)
+                            object.SndAddr = $util.newBuffer(object.SndAddr);
+                    }
+                    if (options.bytes === String)
+                        object.SndUserName = "";
+                    else {
+                        object.SndUserName = [];
+                        if (options.bytes !== Array)
+                            object.SndUserName = $util.newBuffer(object.SndUserName);
+                    }
+                    if ($util.Long) {
+                        var long = new $util.Long(0, 0, true);
+                        object.GasPrice = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                    }
+                    else
+                        object.GasPrice = options.longs === String ? "0" : 0;
+                    if ($util.Long) {
+                        var long = new $util.Long(0, 0, true);
+                        object.GasLimit = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                    }
+                    else
+                        object.GasLimit = options.longs === String ? "0" : 0;
+                    if (options.bytes === String)
+                        object.Data = "";
+                    else {
+                        object.Data = [];
+                        if (options.bytes !== Array)
+                            object.Data = $util.newBuffer(object.Data);
+                    }
+                    if (options.bytes === String)
+                        object.ChainID = "";
+                    else {
+                        object.ChainID = [];
+                        if (options.bytes !== Array)
+                            object.ChainID = $util.newBuffer(object.ChainID);
+                    }
+                    object.Version = 0;
+                    if (options.bytes === String)
+                        object.Signature = "";
+                    else {
+                        object.Signature = [];
+                        if (options.bytes !== Array)
+                            object.Signature = $util.newBuffer(object.Signature);
+                    }
+                    object.Options = 0;
+                    if (options.bytes === String)
+                        object.GuardianAddr = "";
+                    else {
+                        object.GuardianAddr = [];
+                        if (options.bytes !== Array)
+                            object.GuardianAddr = $util.newBuffer(object.GuardianAddr);
+                    }
+                    if (options.bytes === String)
+                        object.GuardianSignature = "";
+                    else {
+                        object.GuardianSignature = [];
+                        if (options.bytes !== Array)
+                            object.GuardianSignature = $util.newBuffer(object.GuardianSignature);
+                    }
+                    if (options.bytes === String)
+                        object.Relayer = "";
+                    else {
+                        object.Relayer = [];
+                        if (options.bytes !== Array)
+                            object.Relayer = $util.newBuffer(object.Relayer);
+                    }
+                    if (options.bytes === String)
+                        object.RelayerSignature = "";
+                    else {
+                        object.RelayerSignature = [];
+                        if (options.bytes !== Array)
+                            object.RelayerSignature = $util.newBuffer(object.RelayerSignature);
+                    }
+                }
+                if (message.Nonce != null && message.hasOwnProperty("Nonce"))
+                    if (typeof message.Nonce === "number")
+                        object.Nonce = options.longs === String ? String(message.Nonce) : message.Nonce;
+                    else
+                        object.Nonce = options.longs === String ? $util.Long.prototype.toString.call(message.Nonce) : options.longs === Number ? new $util.LongBits(message.Nonce.low >>> 0, message.Nonce.high >>> 0).toNumber(true) : message.Nonce;
+                if (message.Value != null && message.hasOwnProperty("Value"))
+                    object.Value = options.bytes === String ? $util.base64.encode(message.Value, 0, message.Value.length) : options.bytes === Array ? Array.prototype.slice.call(message.Value) : message.Value;
+                if (message.RcvAddr != null && message.hasOwnProperty("RcvAddr"))
+                    object.RcvAddr = options.bytes === String ? $util.base64.encode(message.RcvAddr, 0, message.RcvAddr.length) : options.bytes === Array ? Array.prototype.slice.call(message.RcvAddr) : message.RcvAddr;
+                if (message.RcvUserName != null && message.hasOwnProperty("RcvUserName"))
+                    object.RcvUserName = options.bytes === String ? $util.base64.encode(message.RcvUserName, 0, message.RcvUserName.length) : options.bytes === Array ? Array.prototype.slice.call(message.RcvUserName) : message.RcvUserName;
+                if (message.SndAddr != null && message.hasOwnProperty("SndAddr"))
+                    object.SndAddr = options.bytes === String ? $util.base64.encode(message.SndAddr, 0, message.SndAddr.length) : options.bytes === Array ? Array.prototype.slice.call(message.SndAddr) : message.SndAddr;
+                if (message.SndUserName != null && message.hasOwnProperty("SndUserName"))
+                    object.SndUserName = options.bytes === String ? $util.base64.encode(message.SndUserName, 0, message.SndUserName.length) : options.bytes === Array ? Array.prototype.slice.call(message.SndUserName) : message.SndUserName;
+                if (message.GasPrice != null && message.hasOwnProperty("GasPrice"))
+                    if (typeof message.GasPrice === "number")
+                        object.GasPrice = options.longs === String ? String(message.GasPrice) : message.GasPrice;
+                    else
+                        object.GasPrice = options.longs === String ? $util.Long.prototype.toString.call(message.GasPrice) : options.longs === Number ? new $util.LongBits(message.GasPrice.low >>> 0, message.GasPrice.high >>> 0).toNumber(true) : message.GasPrice;
+                if (message.GasLimit != null && message.hasOwnProperty("GasLimit"))
+                    if (typeof message.GasLimit === "number")
+                        object.GasLimit = options.longs === String ? String(message.GasLimit) : message.GasLimit;
+                    else
+                        object.GasLimit = options.longs === String ? $util.Long.prototype.toString.call(message.GasLimit) : options.longs === Number ? new $util.LongBits(message.GasLimit.low >>> 0, message.GasLimit.high >>> 0).toNumber(true) : message.GasLimit;
+                if (message.Data != null && message.hasOwnProperty("Data"))
+                    object.Data = options.bytes === String ? $util.base64.encode(message.Data, 0, message.Data.length) : options.bytes === Array ? Array.prototype.slice.call(message.Data) : message.Data;
+                if (message.ChainID != null && message.hasOwnProperty("ChainID"))
+                    object.ChainID = options.bytes === String ? $util.base64.encode(message.ChainID, 0, message.ChainID.length) : options.bytes === Array ? Array.prototype.slice.call(message.ChainID) : message.ChainID;
+                if (message.Version != null && message.hasOwnProperty("Version"))
+                    object.Version = message.Version;
+                if (message.Signature != null && message.hasOwnProperty("Signature"))
+                    object.Signature = options.bytes === String ? $util.base64.encode(message.Signature, 0, message.Signature.length) : options.bytes === Array ? Array.prototype.slice.call(message.Signature) : message.Signature;
+                if (message.Options != null && message.hasOwnProperty("Options"))
+                    object.Options = message.Options;
+                if (message.GuardianAddr != null && message.hasOwnProperty("GuardianAddr"))
+                    object.GuardianAddr = options.bytes === String ? $util.base64.encode(message.GuardianAddr, 0, message.GuardianAddr.length) : options.bytes === Array ? Array.prototype.slice.call(message.GuardianAddr) : message.GuardianAddr;
+                if (message.GuardianSignature != null && message.hasOwnProperty("GuardianSignature"))
+                    object.GuardianSignature = options.bytes === String ? $util.base64.encode(message.GuardianSignature, 0, message.GuardianSignature.length) : options.bytes === Array ? Array.prototype.slice.call(message.GuardianSignature) : message.GuardianSignature;
+                if (message.Relayer != null && message.hasOwnProperty("Relayer"))
+                    object.Relayer = options.bytes === String ? $util.base64.encode(message.Relayer, 0, message.Relayer.length) : options.bytes === Array ? Array.prototype.slice.call(message.Relayer) : message.Relayer;
+                if (message.RelayerSignature != null && message.hasOwnProperty("RelayerSignature"))
+                    object.RelayerSignature = options.bytes === String ? $util.base64.encode(message.RelayerSignature, 0, message.RelayerSignature.length) : options.bytes === Array ? Array.prototype.slice.call(message.RelayerSignature) : message.RelayerSignature;
                 return object;
-            var message = new $root.proto.Transaction();
-            if (object.Nonce != null)
-                if ($util.Long)
-                    (message.Nonce = $util.Long.fromValue(object.Nonce)).unsigned = true;
-                else if (typeof object.Nonce === "string")
-                    message.Nonce = parseInt(object.Nonce, 10);
-                else if (typeof object.Nonce === "number")
-                    message.Nonce = object.Nonce;
-                else if (typeof object.Nonce === "object")
-                    message.Nonce = new $util.LongBits(object.Nonce.low >>> 0, object.Nonce.high >>> 0).toNumber(true);
-            if (object.Value != null)
-                if (typeof object.Value === "string")
-                    $util.base64.decode(object.Value, message.Value = $util.newBuffer($util.base64.length(object.Value)), 0);
-                else if (object.Value.length)
-                    message.Value = object.Value;
-            if (object.RcvAddr != null)
-                if (typeof object.RcvAddr === "string")
-                    $util.base64.decode(object.RcvAddr, message.RcvAddr = $util.newBuffer($util.base64.length(object.RcvAddr)), 0);
-                else if (object.RcvAddr.length)
-                    message.RcvAddr = object.RcvAddr;
-            if (object.RcvUserName != null)
-                if (typeof object.RcvUserName === "string")
-                    $util.base64.decode(object.RcvUserName, message.RcvUserName = $util.newBuffer($util.base64.length(object.RcvUserName)), 0);
-                else if (object.RcvUserName.length)
-                    message.RcvUserName = object.RcvUserName;
-            if (object.SndAddr != null)
-                if (typeof object.SndAddr === "string")
-                    $util.base64.decode(object.SndAddr, message.SndAddr = $util.newBuffer($util.base64.length(object.SndAddr)), 0);
-                else if (object.SndAddr.length)
-                    message.SndAddr = object.SndAddr;
-            if (object.SndUserName != null)
-                if (typeof object.SndUserName === "string")
-                    $util.base64.decode(object.SndUserName, message.SndUserName = $util.newBuffer($util.base64.length(object.SndUserName)), 0);
-                else if (object.SndUserName.length)
-                    message.SndUserName = object.SndUserName;
-            if (object.GasPrice != null)
-                if ($util.Long)
-                    (message.GasPrice = $util.Long.fromValue(object.GasPrice)).unsigned = true;
-                else if (typeof object.GasPrice === "string")
-                    message.GasPrice = parseInt(object.GasPrice, 10);
-                else if (typeof object.GasPrice === "number")
-                    message.GasPrice = object.GasPrice;
-                else if (typeof object.GasPrice === "object")
-                    message.GasPrice = new $util.LongBits(object.GasPrice.low >>> 0, object.GasPrice.high >>> 0).toNumber(true);
-            if (object.GasLimit != null)
-                if ($util.Long)
-                    (message.GasLimit = $util.Long.fromValue(object.GasLimit)).unsigned = true;
-                else if (typeof object.GasLimit === "string")
-                    message.GasLimit = parseInt(object.GasLimit, 10);
-                else if (typeof object.GasLimit === "number")
-                    message.GasLimit = object.GasLimit;
-                else if (typeof object.GasLimit === "object")
-                    message.GasLimit = new $util.LongBits(object.GasLimit.low >>> 0, object.GasLimit.high >>> 0).toNumber(true);
-            if (object.Data != null)
-                if (typeof object.Data === "string")
-                    $util.base64.decode(object.Data, message.Data = $util.newBuffer($util.base64.length(object.Data)), 0);
-                else if (object.Data.length)
-                    message.Data = object.Data;
-            if (object.ChainID != null)
-                if (typeof object.ChainID === "string")
-                    $util.base64.decode(object.ChainID, message.ChainID = $util.newBuffer($util.base64.length(object.ChainID)), 0);
-                else if (object.ChainID.length)
-                    message.ChainID = object.ChainID;
-            if (object.Version != null)
-                message.Version = object.Version >>> 0;
-            if (object.Signature != null)
-                if (typeof object.Signature === "string")
-                    $util.base64.decode(object.Signature, message.Signature = $util.newBuffer($util.base64.length(object.Signature)), 0);
-                else if (object.Signature.length)
-                    message.Signature = object.Signature;
-            if (object.Options != null)
-                message.Options = object.Options >>> 0;
-            if (object.GuardAddr != null)
-                if (typeof object.GuardAddr === "string")
-                    $util.base64.decode(object.GuardAddr, message.GuardAddr = $util.newBuffer($util.base64.length(object.GuardAddr)), 0);
-                else if (object.GuardAddr.length)
-                    message.GuardAddr = object.GuardAddr;
-            if (object.GuardSignature != null)
-                if (typeof object.GuardSignature === "string")
-                    $util.base64.decode(object.GuardSignature, message.GuardSignature = $util.newBuffer($util.base64.length(object.GuardSignature)), 0);
-                else if (object.GuardSignature.length)
-                    message.GuardSignature = object.GuardSignature;
-            return message;
-        };
-        /**
-         * Creates a plain object from a Transaction message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof proto.Transaction
-         * @static
-         * @param {proto.Transaction} message Transaction
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        Transaction.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.defaults) {
-                if ($util.Long) {
-                    var long = new $util.Long(0, 0, true);
-                    object.Nonce = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+            };
+            /**
+             * Converts this Transaction to JSON.
+             * @function toJSON
+             * @memberof proto.Transaction
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            Transaction.prototype.toJSON = function toJSON() {
+                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+            };
+            /**
+             * Gets the default type url for Transaction
+             * @function getTypeUrl
+             * @memberof proto.Transaction
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            Transaction.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
                 }
-                else
-                    object.Nonce = options.longs === String ? "0" : 0;
-                if (options.bytes === String)
-                    object.Value = "";
-                else {
-                    object.Value = [];
-                    if (options.bytes !== Array)
-                        object.Value = $util.newBuffer(object.Value);
-                }
-                if (options.bytes === String)
-                    object.RcvAddr = "";
-                else {
-                    object.RcvAddr = [];
-                    if (options.bytes !== Array)
-                        object.RcvAddr = $util.newBuffer(object.RcvAddr);
-                }
-                if (options.bytes === String)
-                    object.RcvUserName = "";
-                else {
-                    object.RcvUserName = [];
-                    if (options.bytes !== Array)
-                        object.RcvUserName = $util.newBuffer(object.RcvUserName);
-                }
-                if (options.bytes === String)
-                    object.SndAddr = "";
-                else {
-                    object.SndAddr = [];
-                    if (options.bytes !== Array)
-                        object.SndAddr = $util.newBuffer(object.SndAddr);
-                }
-                if (options.bytes === String)
-                    object.SndUserName = "";
-                else {
-                    object.SndUserName = [];
-                    if (options.bytes !== Array)
-                        object.SndUserName = $util.newBuffer(object.SndUserName);
-                }
-                if ($util.Long) {
-                    var long = new $util.Long(0, 0, true);
-                    object.GasPrice = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
-                }
-                else
-                    object.GasPrice = options.longs === String ? "0" : 0;
-                if ($util.Long) {
-                    var long = new $util.Long(0, 0, true);
-                    object.GasLimit = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
-                }
-                else
-                    object.GasLimit = options.longs === String ? "0" : 0;
-                if (options.bytes === String)
-                    object.Data = "";
-                else {
-                    object.Data = [];
-                    if (options.bytes !== Array)
-                        object.Data = $util.newBuffer(object.Data);
-                }
-                if (options.bytes === String)
-                    object.ChainID = "";
-                else {
-                    object.ChainID = [];
-                    if (options.bytes !== Array)
-                        object.ChainID = $util.newBuffer(object.ChainID);
-                }
-                object.Version = 0;
-                if (options.bytes === String)
-                    object.Signature = "";
-                else {
-                    object.Signature = [];
-                    if (options.bytes !== Array)
-                        object.Signature = $util.newBuffer(object.Signature);
-                }
-                object.Options = 0;
-                if (options.bytes === String)
-                    object.GuardAddr = "";
-                else {
-                    object.GuardAddr = [];
-                    if (options.bytes !== Array)
-                        object.GuardAddr = $util.newBuffer(object.GuardAddr);
-                }
-                if (options.bytes === String)
-                    object.GuardSignature = "";
-                else {
-                    object.GuardSignature = [];
-                    if (options.bytes !== Array)
-                        object.GuardSignature = $util.newBuffer(object.GuardSignature);
-                }
-            }
-            if (message.Nonce != null && message.hasOwnProperty("Nonce"))
-                if (typeof message.Nonce === "number")
-                    object.Nonce = options.longs === String ? String(message.Nonce) : message.Nonce;
-                else
-                    object.Nonce = options.longs === String ? $util.Long.prototype.toString.call(message.Nonce) : options.longs === Number ? new $util.LongBits(message.Nonce.low >>> 0, message.Nonce.high >>> 0).toNumber(true) : message.Nonce;
-            if (message.Value != null && message.hasOwnProperty("Value"))
-                object.Value = options.bytes === String ? $util.base64.encode(message.Value, 0, message.Value.length) : options.bytes === Array ? Array.prototype.slice.call(message.Value) : message.Value;
-            if (message.RcvAddr != null && message.hasOwnProperty("RcvAddr"))
-                object.RcvAddr = options.bytes === String ? $util.base64.encode(message.RcvAddr, 0, message.RcvAddr.length) : options.bytes === Array ? Array.prototype.slice.call(message.RcvAddr) : message.RcvAddr;
-            if (message.RcvUserName != null && message.hasOwnProperty("RcvUserName"))
-                object.RcvUserName = options.bytes === String ? $util.base64.encode(message.RcvUserName, 0, message.RcvUserName.length) : options.bytes === Array ? Array.prototype.slice.call(message.RcvUserName) : message.RcvUserName;
-            if (message.SndAddr != null && message.hasOwnProperty("SndAddr"))
-                object.SndAddr = options.bytes === String ? $util.base64.encode(message.SndAddr, 0, message.SndAddr.length) : options.bytes === Array ? Array.prototype.slice.call(message.SndAddr) : message.SndAddr;
-            if (message.SndUserName != null && message.hasOwnProperty("SndUserName"))
-                object.SndUserName = options.bytes === String ? $util.base64.encode(message.SndUserName, 0, message.SndUserName.length) : options.bytes === Array ? Array.prototype.slice.call(message.SndUserName) : message.SndUserName;
-            if (message.GasPrice != null && message.hasOwnProperty("GasPrice"))
-                if (typeof message.GasPrice === "number")
-                    object.GasPrice = options.longs === String ? String(message.GasPrice) : message.GasPrice;
-                else
-                    object.GasPrice = options.longs === String ? $util.Long.prototype.toString.call(message.GasPrice) : options.longs === Number ? new $util.LongBits(message.GasPrice.low >>> 0, message.GasPrice.high >>> 0).toNumber(true) : message.GasPrice;
-            if (message.GasLimit != null && message.hasOwnProperty("GasLimit"))
-                if (typeof message.GasLimit === "number")
-                    object.GasLimit = options.longs === String ? String(message.GasLimit) : message.GasLimit;
-                else
-                    object.GasLimit = options.longs === String ? $util.Long.prototype.toString.call(message.GasLimit) : options.longs === Number ? new $util.LongBits(message.GasLimit.low >>> 0, message.GasLimit.high >>> 0).toNumber(true) : message.GasLimit;
-            if (message.Data != null && message.hasOwnProperty("Data"))
-                object.Data = options.bytes === String ? $util.base64.encode(message.Data, 0, message.Data.length) : options.bytes === Array ? Array.prototype.slice.call(message.Data) : message.Data;
-            if (message.ChainID != null && message.hasOwnProperty("ChainID"))
-                object.ChainID = options.bytes === String ? $util.base64.encode(message.ChainID, 0, message.ChainID.length) : options.bytes === Array ? Array.prototype.slice.call(message.ChainID) : message.ChainID;
-            if (message.Version != null && message.hasOwnProperty("Version"))
-                object.Version = message.Version;
-            if (message.Signature != null && message.hasOwnProperty("Signature"))
-                object.Signature = options.bytes === String ? $util.base64.encode(message.Signature, 0, message.Signature.length) : options.bytes === Array ? Array.prototype.slice.call(message.Signature) : message.Signature;
-            if (message.Options != null && message.hasOwnProperty("Options"))
-                object.Options = message.Options;
-            if (message.GuardAddr != null && message.hasOwnProperty("GuardAddr"))
-                object.GuardAddr = options.bytes === String ? $util.base64.encode(message.GuardAddr, 0, message.GuardAddr.length) : options.bytes === Array ? Array.prototype.slice.call(message.GuardAddr) : message.GuardAddr;
-            if (message.GuardSignature != null && message.hasOwnProperty("GuardSignature"))
-                object.GuardSignature = options.bytes === String ? $util.base64.encode(message.GuardSignature, 0, message.GuardSignature.length) : options.bytes === Array ? Array.prototype.slice.call(message.GuardSignature) : message.GuardSignature;
-            return object;
-        };
-        /**
-         * Converts this Transaction to JSON.
-         * @function toJSON
-         * @memberof proto.Transaction
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Transaction.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-        return Transaction;
+                return typeUrlPrefix + "/proto.Transaction";
+            };
+            return Transaction;
+        })();
+        return proto;
     })();
-    return proto;
-})();
-module.exports = $root;
+    return $root;
+});
 //# sourceMappingURL=compiled.js.map
 
 /***/ }),
@@ -4429,7 +7136,6 @@ const address_1 = __nccwpck_require__(39166);
 const constants_1 = __nccwpck_require__(38069);
 const errors = __importStar(__nccwpck_require__(38506));
 const utils_1 = __nccwpck_require__(58877);
-const compiled_1 = __nccwpck_require__(83178);
 /**
  * Hides away the serialization complexity, for each type of object (e.g. transactions).
  
@@ -4440,34 +7146,50 @@ class ProtoSerializer {
      * Serializes a Transaction object to a Buffer. Handles low-level conversion logic and field-mappings as well.
      */
     serializeTransaction(transaction) {
-        const receiverPubkey = new address_1.Address(transaction.getReceiver().bech32()).pubkey();
-        const senderPubkey = new address_1.Address(transaction.getSender().bech32()).pubkey();
-        let protoTransaction = new compiled_1.proto.Transaction({
-            // mx-chain-go's serializer handles nonce == 0 differently, thus we treat 0 as "undefined".
-            Nonce: transaction.getNonce().valueOf() ? transaction.getNonce().valueOf() : undefined,
-            Value: this.serializeTransactionValue(transaction.getValue()),
-            RcvAddr: receiverPubkey,
-            RcvUserName: null,
-            SndAddr: senderPubkey,
-            SndUserName: null,
-            GasPrice: transaction.getGasPrice().valueOf(),
-            GasLimit: transaction.getGasLimit().valueOf(),
-            Data: transaction.getData().length() == 0 ? null : transaction.getData().valueOf(),
-            ChainID: Buffer.from(transaction.getChainID().valueOf()),
-            Version: transaction.getVersion().valueOf(),
-            Signature: transaction.getSignature()
-        });
-        if (transaction.getOptions().valueOf() !== constants_1.TRANSACTION_OPTIONS_DEFAULT) {
-            protoTransaction.Options = transaction.getOptions().valueOf();
-        }
-        if (transaction.isGuardedTransaction()) {
-            const guardianAddress = transaction.getGuardian();
-            protoTransaction.GuardAddr = new address_1.Address(guardianAddress.bech32()).pubkey();
-            protoTransaction.GuardSignature = transaction.getGuardianSignature();
-        }
-        const encoded = compiled_1.proto.Transaction.encode(protoTransaction).finish();
+        const proto = (__nccwpck_require__(83178).proto);
+        const protoTransaction = this.convertToProtoMessage(transaction);
+        const encoded = proto.Transaction.encode(protoTransaction).finish();
         const buffer = Buffer.from(encoded);
         return buffer;
+    }
+    convertToProtoMessage(transaction) {
+        const proto = (__nccwpck_require__(83178).proto);
+        const receiverPubkey = new address_1.Address(transaction.receiver).getPublicKey();
+        const senderPubkey = new address_1.Address(transaction.sender).getPublicKey();
+        let protoTransaction = new proto.Transaction({
+            // mx-chain-go's serializer handles nonce == 0 differently, thus we treat 0 as "undefined".
+            Nonce: Number(transaction.nonce) ? Number(transaction.nonce) : undefined,
+            Value: this.serializeTransactionValue(transaction.value),
+            RcvAddr: receiverPubkey,
+            RcvUserName: transaction.receiverUsername
+                ? Buffer.from(transaction.receiverUsername).toString("base64")
+                : undefined,
+            SndAddr: senderPubkey,
+            SndUserName: transaction.senderUsername
+                ? Buffer.from(transaction.senderUsername).toString("base64")
+                : undefined,
+            GasPrice: Number(transaction.gasPrice),
+            GasLimit: Number(transaction.gasLimit),
+            Data: transaction.data.length == 0 ? null : transaction.data,
+            ChainID: Buffer.from(transaction.chainID),
+            Version: transaction.version,
+            Signature: transaction.signature,
+        });
+        if (transaction.options !== constants_1.TRANSACTION_OPTIONS_DEFAULT) {
+            protoTransaction.Options = transaction.options;
+        }
+        if (this.isGuardedTransaction(transaction)) {
+            protoTransaction.GuardianAddr = new address_1.Address(transaction.guardian).getPublicKey();
+            protoTransaction.GuardianSignature = transaction.guardianSignature;
+        }
+        if (this.isRelayedTransaction(transaction)) {
+            protoTransaction.Relayer = transaction.relayer?.getPublicKey();
+            protoTransaction.RelayerSignature = transaction.relayerSignature;
+        }
+        return protoTransaction;
+    }
+    isRelayedTransaction(transaction) {
+        return !transaction.relayer.isEmpty();
     }
     /**
      * Custom serialization, compatible with mx-chain-go.
@@ -4482,6 +7204,14 @@ class ProtoSerializer {
         // We prepend the "positive" sign marker, in order to be compatible with mx-chain-go's "sign & magnitude" proto-representation (a custom one).
         buffer = Buffer.concat([Buffer.from([0x00]), buffer]);
         return buffer;
+    }
+    isGuardedTransaction(transaction) {
+        const hasGuardian = transaction.guardian.length > 0;
+        const hasGuardianSignature = transaction.guardianSignature.length > 0;
+        return this.isWithGuardian(transaction) && hasGuardian && hasGuardianSignature;
+    }
+    isWithGuardian(transaction) {
+        return (transaction.options & constants_1.TRANSACTION_OPTIONS_TX_GUARDED) == constants_1.TRANSACTION_OPTIONS_TX_GUARDED;
     }
     deserializeTransaction(_buffer) {
         // Not needed (yet).
@@ -4515,20 +7245,20 @@ exports.getJavascriptPrototypesInHierarchy = getJavascriptPrototypesInHierarchy;
 /***/ }),
 
 /***/ 40994:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.RelayedTransactionV1Builder = void 0;
-const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
 const address_1 = __nccwpck_require__(39166);
 const errors_1 = __nccwpck_require__(38506);
 const transaction_1 = __nccwpck_require__(52756);
 const transactionPayload_1 = __nccwpck_require__(14224);
+const JSONbig = __nccwpck_require__(55031);
+/**
+ * @deprecated Use {@link RelayedTransactionsFactory} instead.
+ */
 class RelayedTransactionV1Builder {
     /**
      * Sets the inner transaction to be used. It has to be already signed.
@@ -4570,7 +7300,7 @@ class RelayedTransactionV1Builder {
      * (optional) Sets the version of the relayed transaction
      *
      * @param relayedTxVersion
-    */
+     */
     setRelayedTransactionVersion(relayedTxVersion) {
         this.relayedTransactionVersion = relayedTxVersion;
         return this;
@@ -4579,7 +7309,7 @@ class RelayedTransactionV1Builder {
      * (optional) Sets the options of the relayed transaction
      *
      * @param relayedTxOptions
-    */
+     */
     setRelayedTransactionOptions(relayedTxOptions) {
         this.relayedTransactionOptions = relayedTxOptions;
         return this;
@@ -4600,13 +7330,18 @@ class RelayedTransactionV1Builder {
      * @return Transaction
      */
     build() {
-        if (!this.innerTransaction || !this.netConfig || !this.relayerAddress || !this.innerTransaction.getSignature()) {
+        if (!this.innerTransaction ||
+            !this.netConfig ||
+            !this.relayerAddress ||
+            !this.innerTransaction.getSignature()) {
             throw new errors_1.ErrInvalidRelayedV1BuilderArguments();
         }
         const serializedTransaction = this.prepareInnerTransaction();
         const data = `relayedTx@${Buffer.from(serializedTransaction).toString("hex")}`;
         const payload = new transactionPayload_1.TransactionPayload(data);
-        const gasLimit = this.netConfig.MinGasLimit + this.netConfig.GasPerDataByte * payload.length() + this.innerTransaction.getGasLimit().valueOf();
+        const gasLimit = this.netConfig.MinGasLimit +
+            this.netConfig.GasPerDataByte * payload.length() +
+            this.innerTransaction.getGasLimit().valueOf();
         let relayedTransaction = new transaction_1.Transaction({
             nonce: this.relayerNonce,
             sender: this.relayerAddress,
@@ -4629,21 +7364,33 @@ class RelayedTransactionV1Builder {
             return "";
         }
         const txObject = {
-            "nonce": this.innerTransaction.getNonce().valueOf(),
-            "sender": new address_1.Address(this.innerTransaction.getSender().bech32()).pubkey().toString("base64"),
-            "receiver": new address_1.Address(this.innerTransaction.getReceiver().bech32()).pubkey().toString("base64"),
-            "value": new bignumber_js_1.default(this.innerTransaction.getValue().toString(), 10).toNumber(),
-            "gasPrice": this.innerTransaction.getGasPrice().valueOf(),
-            "gasLimit": this.innerTransaction.getGasLimit().valueOf(),
-            "data": this.innerTransaction.getData().valueOf().toString("base64"),
-            "signature": this.innerTransaction.getSignature().toString("base64"),
-            "chainID": Buffer.from(this.innerTransaction.getChainID().valueOf()).toString("base64"),
-            "version": this.innerTransaction.getVersion().valueOf(),
-            "options": this.innerTransaction.getOptions().valueOf() == 0 ? undefined : this.innerTransaction.getOptions().valueOf(),
-            "guardian": this.innerTransaction.getGuardian().bech32() ? new address_1.Address(this.innerTransaction.getGuardian().bech32()).pubkey().toString("base64") : undefined,
-            "guardianSignature": this.innerTransaction.getGuardianSignature().toString("hex") ? this.innerTransaction.getGuardianSignature().toString("base64") : undefined,
+            nonce: this.innerTransaction.getNonce().valueOf(),
+            sender: new address_1.Address(this.innerTransaction.getSender().bech32()).pubkey().toString("base64"),
+            receiver: new address_1.Address(this.innerTransaction.getReceiver().bech32()).pubkey().toString("base64"),
+            value: BigInt(this.innerTransaction.getValue().toString()),
+            gasPrice: this.innerTransaction.getGasPrice().valueOf(),
+            gasLimit: this.innerTransaction.getGasLimit().valueOf(),
+            data: this.innerTransaction.getData().valueOf().toString("base64"),
+            signature: this.innerTransaction.getSignature().toString("base64"),
+            chainID: Buffer.from(this.innerTransaction.getChainID().valueOf()).toString("base64"),
+            version: this.innerTransaction.getVersion().valueOf(),
+            options: this.innerTransaction.getOptions().valueOf() == 0
+                ? undefined
+                : this.innerTransaction.getOptions().valueOf(),
+            guardian: this.innerTransaction.getGuardian().bech32()
+                ? new address_1.Address(this.innerTransaction.getGuardian().bech32()).pubkey().toString("base64")
+                : undefined,
+            guardianSignature: this.innerTransaction.getGuardianSignature().toString("hex")
+                ? this.innerTransaction.getGuardianSignature().toString("base64")
+                : undefined,
+            sndUserName: this.innerTransaction.getSenderUsername()
+                ? Buffer.from(this.innerTransaction.getSenderUsername()).toString("base64")
+                : undefined,
+            rcvUserName: this.innerTransaction.getReceiverUsername()
+                ? Buffer.from(this.innerTransaction.getReceiverUsername()).toString("base64")
+                : undefined,
         };
-        return JSON.stringify(txObject);
+        return JSONbig.stringify(txObject);
     }
 }
 exports.RelayedTransactionV1Builder = RelayedTransactionV1Builder;
@@ -4662,6 +7409,9 @@ const errors_1 = __nccwpck_require__(38506);
 const smartcontracts_1 = __nccwpck_require__(56238);
 const transaction_1 = __nccwpck_require__(52756);
 const transactionPayload_1 = __nccwpck_require__(14224);
+/**
+ * @deprecated Use {@link RelayedTransactionsFactory} instead.
+ */
 class RelayedTransactionV2Builder {
     /**
      * Sets the inner transaction to be used. It has to be already signed and with gasLimit set to 0. These checks
@@ -4719,7 +7469,11 @@ class RelayedTransactionV2Builder {
      * @return Transaction
      */
     build() {
-        if (!this.innerTransaction || !this.innerTransactionGasLimit || !this.relayerAddress || !this.netConfig || !this.innerTransaction.getSignature()) {
+        if (!this.innerTransaction ||
+            !this.innerTransactionGasLimit ||
+            !this.relayerAddress ||
+            !this.netConfig ||
+            !this.innerTransaction.getSignature()) {
             throw new errors_1.ErrInvalidRelayedV2BuilderArguments();
         }
         if (this.innerTransaction.getGasLimit() != 0) {
@@ -4729,7 +7483,7 @@ class RelayedTransactionV2Builder {
             new smartcontracts_1.AddressValue(this.innerTransaction.getReceiver()),
             new smartcontracts_1.U64Value(this.innerTransaction.getNonce().valueOf()),
             new smartcontracts_1.BytesValue(this.innerTransaction.getData().valueOf()),
-            new smartcontracts_1.BytesValue(this.innerTransaction.getSignature())
+            new smartcontracts_1.BytesValue(this.innerTransaction.getSignature()),
         ]);
         const data = `relayedTxV2@${argumentsString}`;
         const payload = new transactionPayload_1.TransactionPayload(data);
@@ -4737,9 +7491,13 @@ class RelayedTransactionV2Builder {
             sender: this.relayerAddress,
             receiver: this.innerTransaction.getSender(),
             value: 0,
-            gasLimit: this.innerTransactionGasLimit.valueOf() + this.netConfig.MinGasLimit + this.netConfig.GasPerDataByte * payload.length(),
+            gasLimit: this.innerTransactionGasLimit.valueOf() +
+                this.netConfig.MinGasLimit +
+                this.netConfig.GasPerDataByte * payload.length(),
             data: payload,
             chainID: this.netConfig.ChainID,
+            version: this.innerTransaction.getVersion(),
+            options: this.innerTransaction.getOptions(),
         });
         if (this.relayerNonce) {
             relayedTransaction.setNonce(this.relayerNonce);
@@ -4758,23 +7516,27 @@ exports.RelayedTransactionV2Builder = RelayedTransactionV2Builder;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.SignableMessage = exports.MESSAGE_PREFIX = void 0;
+exports.SignableMessage = void 0;
 const address_1 = __nccwpck_require__(39166);
+const signature_1 = __nccwpck_require__(66443);
+const constants_1 = __nccwpck_require__(38069);
 const createKeccakHash = __nccwpck_require__(57188);
-exports.MESSAGE_PREFIX = "\x17Elrond Signed Message:\n";
+/**
+ * @deprecated Use {@link Message} instead.
+ */
 class SignableMessage {
     constructor(init) {
         this.message = Buffer.from([]);
         this.signature = Buffer.from([]);
         this.version = 1;
         this.signer = "ErdJS";
-        this.address = new address_1.Address();
+        this.address = address_1.Address.empty();
         Object.assign(this, init);
     }
     serializeForSigning() {
         const messageSize = Buffer.from(this.message.length.toString());
         const signableMessage = Buffer.concat([messageSize, this.message]);
-        let bytesToHash = Buffer.concat([Buffer.from(exports.MESSAGE_PREFIX), signableMessage]);
+        let bytesToHash = Buffer.concat([Buffer.from(constants_1.MESSAGE_PREFIX), signableMessage]);
         return createKeccakHash("keccak256").update(bytesToHash).digest();
     }
     serializeForSigningRaw() {
@@ -4784,12 +7546,7 @@ class SignableMessage {
         return this.signature;
     }
     applySignature(signature) {
-        if (signature instanceof Buffer) {
-            this.signature = signature;
-        }
-        else {
-            this.signature = Buffer.from(signature.hex(), "hex");
-        }
+        this.signature = signature_1.interpretSignatureAsBuffer(signature);
     }
     getMessageSize() {
         const messageSize = Buffer.alloc(4);
@@ -4836,7 +7593,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Signature = void 0;
+exports.interpretSignatureAsBuffer = exports.Signature = void 0;
 const errors = __importStar(__nccwpck_require__(38506));
 const SIGNATURE_LENGTH = 64;
 /**
@@ -4851,8 +7608,8 @@ class Signature {
         if (typeof value === "string") {
             return Signature.fromHex(value);
         }
-        if (value instanceof Buffer) {
-            return Signature.fromBuffer(value);
+        if (ArrayBuffer.isView(value)) {
+            return Signature.fromBuffer(Buffer.from(value));
         }
     }
     static empty() {
@@ -4886,7 +7643,136 @@ class Signature {
     }
 }
 exports.Signature = Signature;
+function interpretSignatureAsBuffer(signature) {
+    if (ArrayBuffer.isView(signature)) {
+        return Buffer.from(signature);
+    }
+    else if (signature.hex != null) {
+        return Buffer.from(signature.hex(), "hex");
+    }
+    throw new Error(`Object cannot be interpreted as a signature: ${signature}`);
+}
+exports.interpretSignatureAsBuffer = interpretSignatureAsBuffer;
 //# sourceMappingURL=signature.js.map
+
+/***/ }),
+
+/***/ 64792:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SmartContractQueriesController = void 0;
+const errors_1 = __nccwpck_require__(38506);
+const smartContractQuery_1 = __nccwpck_require__(72181);
+const smartcontracts_1 = __nccwpck_require__(56238);
+const typesystem_1 = __nccwpck_require__(16125);
+class SmartContractQueriesController {
+    constructor(options) {
+        this.abi = options.abi;
+        this.queryRunner = options.queryRunner;
+        this.legacyResultsParser = new smartcontracts_1.ResultsParser();
+    }
+    async query(options) {
+        const query = this.createQuery(options);
+        const queryResponse = await this.runQuery(query);
+        this.raiseForStatus(queryResponse);
+        return this.parseQueryResponse(queryResponse);
+    }
+    raiseForStatus(queryResponse) {
+        const isOk = queryResponse.returnCode === "ok";
+        if (!isOk) {
+            throw new errors_1.ErrSmartContractQuery(queryResponse.returnCode, queryResponse.returnMessage);
+        }
+    }
+    createQuery(options) {
+        const preparedArguments = this.encodeArguments(options.function, options.arguments);
+        return new smartContractQuery_1.SmartContractQuery({
+            contract: options.contract,
+            caller: options.caller,
+            function: options.function,
+            arguments: preparedArguments,
+            value: options.value,
+        });
+    }
+    encodeArguments(functionName, args) {
+        const endpoint = this.abi?.getEndpoint(functionName);
+        if (endpoint) {
+            const typedArgs = smartcontracts_1.NativeSerializer.nativeToTypedValues(args, endpoint);
+            return new smartcontracts_1.ArgSerializer().valuesToBuffers(typedArgs);
+        }
+        if (this.areArgsOfTypedValue(args)) {
+            return new smartcontracts_1.ArgSerializer().valuesToBuffers(args);
+        }
+        if (this.areArgsBuffers(args)) {
+            return args.map((arg) => Buffer.from(arg));
+        }
+        throw new errors_1.Err("cannot encode arguments: when ABI is not available, they must be either typed values or buffers");
+    }
+    areArgsOfTypedValue(args) {
+        return args.every((arg) => typesystem_1.isTyped(arg));
+    }
+    areArgsBuffers(args) {
+        for (const arg of args) {
+            if (!ArrayBuffer.isView(arg)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    async runQuery(query) {
+        const queryResponse = await this.queryRunner.runQuery(query);
+        return queryResponse;
+    }
+    parseQueryResponse(response) {
+        if (!this.abi) {
+            return response.returnDataParts;
+        }
+        const legacyQueryResponse = {
+            returnCode: response.returnCode,
+            returnMessage: response.returnMessage,
+            getReturnDataParts: () => response.returnDataParts.map((part) => Buffer.from(part)),
+        };
+        const functionName = response.function;
+        const endpoint = this.abi.getEndpoint(functionName);
+        const legacyBundle = this.legacyResultsParser.parseQueryResponse(legacyQueryResponse, endpoint);
+        const nativeValues = legacyBundle.values.map((value) => value.valueOf());
+        return nativeValues;
+    }
+}
+exports.SmartContractQueriesController = SmartContractQueriesController;
+//# sourceMappingURL=smartContractQueriesController.js.map
+
+/***/ }),
+
+/***/ 72181:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SmartContractQueryResponse = exports.SmartContractQuery = void 0;
+class SmartContractQuery {
+    constructor(options) {
+        this.contract = options.contract;
+        this.caller = options.caller;
+        this.value = options.value;
+        this.function = options.function;
+        this.arguments = options.arguments;
+    }
+}
+exports.SmartContractQuery = SmartContractQuery;
+class SmartContractQueryResponse {
+    constructor(obj) {
+        this.function = obj.function;
+        this.returnCode = obj.returnCode;
+        this.returnMessage = obj.returnMessage;
+        this.returnDataParts = obj.returnDataParts;
+    }
+}
+exports.SmartContractQueryResponse = SmartContractQueryResponse;
+//# sourceMappingURL=smartContractQuery.js.map
 
 /***/ }),
 
@@ -4899,17 +7785,18 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ArgSerializer = void 0;
 const constants_1 = __nccwpck_require__(38069);
 const codec_1 = __nccwpck_require__(57673);
+const typesystem_1 = __nccwpck_require__(16125);
 const algebraic_1 = __nccwpck_require__(70247);
 const composite_1 = __nccwpck_require__(12258);
 const variadic_1 = __nccwpck_require__(3320);
 // TODO: perhaps move default construction options to a factory (ArgSerializerFactory), instead of referencing them in the constructor
 // (postpone as much as possible, breaking change)
-const defaultArgSerializerrOptions = {
-    codec: new codec_1.BinaryCodec()
+const defaultArgSerializerOptions = {
+    codec: new codec_1.BinaryCodec(),
 };
 class ArgSerializer {
     constructor(options) {
-        options = Object.assign(Object.assign({}, defaultArgSerializerrOptions), options);
+        options = { ...defaultArgSerializerOptions, ...options };
         this.codec = options.codec;
     }
     /**
@@ -4925,13 +7812,14 @@ class ArgSerializer {
      */
     stringToBuffers(joinedString) {
         // We also keep the zero-length buffers (they could encode missing options, Option<T>).
-        return joinedString.split(constants_1.ARGUMENTS_SEPARATOR).map(item => Buffer.from(item, "hex"));
+        return joinedString.split(constants_1.ARGUMENTS_SEPARATOR).map((item) => Buffer.from(item, "hex"));
     }
     /**
      * Decodes a set of buffers into a set of typed values, given parameter definitions.
      */
     buffersToValues(buffers, parameters) {
         // TODO: Refactor, split (function is quite complex).
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
         const self = this;
         buffers = buffers || [];
         let values = [];
@@ -4945,31 +7833,41 @@ class ArgSerializer {
         }
         // This is a recursive function.
         function readValue(type) {
-            // TODO: Use matchers.
             if (type.hasExactClass(algebraic_1.OptionalType.ClassName)) {
-                let typedValue = readValue(type.getFirstTypeParameter());
+                const typedValue = readValue(type.getFirstTypeParameter());
                 return new algebraic_1.OptionalValue(type, typedValue);
             }
-            else if (type.hasExactClass(variadic_1.VariadicType.ClassName)) {
-                let typedValues = [];
-                while (!hasReachedTheEnd()) {
-                    typedValues.push(readValue(type.getFirstTypeParameter()));
-                }
-                return new variadic_1.VariadicValue(type, typedValues);
+            if (type.hasExactClass(variadic_1.VariadicType.ClassName)) {
+                return readVariadicValue(type);
             }
-            else if (type.hasExactClass(composite_1.CompositeType.ClassName)) {
-                let typedValues = [];
+            if (type.hasExactClass(composite_1.CompositeType.ClassName)) {
+                const typedValues = [];
                 for (const typeParameter of type.getTypeParameters()) {
                     typedValues.push(readValue(typeParameter));
                 }
                 return new composite_1.CompositeValue(type, typedValues);
             }
-            else {
-                // Non-composite (singular), non-variadic (fixed) type.
-                // The only branching without a recursive call.
-                let typedValue = decodeNextBuffer(type);
-                return typedValue;
+            // Non-composite (singular), non-variadic (fixed) type.
+            // The only branching without a recursive call.
+            const typedValue = decodeNextBuffer(type);
+            // TODO: Handle the case (maybe throw error) when "typedValue" is, actually, null.
+            return typedValue;
+        }
+        function readVariadicValue(type) {
+            const variadicType = type;
+            const typedValues = [];
+            if (variadicType.isCounted) {
+                const count = readValue(new typesystem_1.U32Type()).valueOf().toNumber();
+                for (let i = 0; i < count; i++) {
+                    typedValues.push(readValue(type.getFirstTypeParameter()));
+                }
             }
+            else {
+                while (!hasReachedTheEnd()) {
+                    typedValues.push(readValue(type.getFirstTypeParameter()));
+                }
+            }
+            return new variadic_1.VariadicValue(variadicType, typedValues);
         }
         function decodeNextBuffer(type) {
             if (hasReachedTheEnd()) {
@@ -4998,7 +7896,7 @@ class ArgSerializer {
      */
     valuesToStrings(values) {
         let buffers = this.valuesToBuffers(values);
-        let strings = buffers.map(buffer => buffer.toString("hex"));
+        let strings = buffers.map((buffer) => buffer.toString("hex"));
         return strings;
     }
     /**
@@ -5007,37 +7905,45 @@ class ArgSerializer {
      */
     valuesToBuffers(values) {
         // TODO: Refactor, split (function is quite complex).
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
         const self = this;
-        let buffers = [];
+        const buffers = [];
         for (const value of values) {
             handleValue(value);
         }
         // This is a recursive function. It appends to the "buffers" variable.
         function handleValue(value) {
-            // TODO: Use matchers.
             if (value.hasExactClass(algebraic_1.OptionalValue.ClassName)) {
-                let valueAsOptional = value;
+                const valueAsOptional = value;
                 if (valueAsOptional.isSet()) {
                     handleValue(valueAsOptional.getTypedValue());
                 }
+                return;
             }
-            else if (value.hasExactClass(variadic_1.VariadicValue.ClassName)) {
-                let valueAsVariadic = value;
-                for (const item of valueAsVariadic.getItems()) {
-                    handleValue(item);
-                }
+            if (value.hasExactClass(variadic_1.VariadicValue.ClassName)) {
+                handleVariadicValue(value);
+                return;
             }
-            else if (value.hasExactClass(composite_1.CompositeValue.ClassName)) {
-                let valueAsComposite = value;
+            if (value.hasExactClass(composite_1.CompositeValue.ClassName)) {
+                const valueAsComposite = value;
                 for (const item of valueAsComposite.getItems()) {
                     handleValue(item);
                 }
+                return;
             }
-            else {
-                // Non-composite (singular), non-variadic (fixed) type.
-                // The only branching without a recursive call.
-                let buffer = self.codec.encodeTopLevel(value);
-                buffers.push(buffer);
+            // Non-composite (singular), non-variadic (fixed) type.
+            // The only branching without a recursive call.
+            const buffer = self.codec.encodeTopLevel(value);
+            buffers.push(buffer);
+        }
+        function handleVariadicValue(value) {
+            const variadicType = value.getType();
+            if (variadicType.isCounted) {
+                const countValue = new typesystem_1.U32Value(value.getItems().length);
+                buffers.push(self.codec.encodeTopLevel(countValue));
+            }
+            for (const item of value.getItems()) {
+                handleValue(item);
             }
         }
         return buffers;
@@ -5090,12 +7996,14 @@ exports.ArgumentErrorContext = ArgumentErrorContext;
 /***/ }),
 
 /***/ 242:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Code = void 0;
+const createHasher = __nccwpck_require__(11962);
+const CODE_HASH_LENGTH = 32;
 /**
  * Bytecode of a Smart Contract, as an abstraction.
  */
@@ -5110,6 +8018,12 @@ class Code {
         return new Code(code.toString("hex"));
     }
     /**
+     * Creates a Code object from a hex-encoded string.
+     */
+    static fromHex(hex) {
+        return new Code(hex);
+    }
+    /**
      * Returns the bytecode as a hex-encoded string.
      */
     toString() {
@@ -5117,6 +8031,10 @@ class Code {
     }
     valueOf() {
         return Buffer.from(this.hex, "hex");
+    }
+    computeHash() {
+        const hash = createHasher(CODE_HASH_LENGTH).update(this.valueOf()).digest();
+        return Buffer.from(hash);
     }
 }
 exports.Code = Code;
@@ -5130,7 +8048,8 @@ exports.Code = Code;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.CodeMetadata = void 0;
+exports.CodeMetadata = exports.CodeMetadataLength = void 0;
+exports.CodeMetadataLength = 2;
 /**
  * The metadata of a Smart Contract, as an abstraction.
  */
@@ -5148,6 +8067,24 @@ class CodeMetadata {
         this.readable = readable;
         this.payable = payable;
         this.payableBySc = payableBySc;
+    }
+    static fromBytes(bytes) {
+        return CodeMetadata.fromBuffer(Buffer.from(bytes));
+    }
+    /**
+     * Creates a metadata object from a buffer.
+     */
+    static fromBuffer(buffer) {
+        if (buffer.length != exports.CodeMetadataLength) {
+            throw new Error(`code metadata buffer has length ${buffer.length}, expected ${exports.CodeMetadataLength}`);
+        }
+        const byteZero = buffer[0];
+        const byteOne = buffer[1];
+        const upgradeable = (byteZero & CodeMetadata.ByteZero.Upgradeable) !== 0;
+        const readable = (byteZero & CodeMetadata.ByteZero.Readable) !== 0;
+        const payable = (byteOne & CodeMetadata.ByteOne.Payable) !== 0;
+        const payableBySc = (byteOne & CodeMetadata.ByteOne.PayableBySc) !== 0;
+        return new CodeMetadata(upgradeable, readable, payable, payableBySc);
     }
     /**
      * Adjust the metadata (the `upgradeable` attribute), when preparing the deployment transaction.
@@ -5180,16 +8117,16 @@ class CodeMetadata {
         let byteZero = 0;
         let byteOne = 0;
         if (this.upgradeable) {
-            byteZero |= ByteZero.Upgradeable;
+            byteZero |= CodeMetadata.ByteZero.Upgradeable;
         }
         if (this.readable) {
-            byteZero |= ByteZero.Readable;
+            byteZero |= CodeMetadata.ByteZero.Readable;
         }
         if (this.payable) {
-            byteOne |= ByteOne.Payable;
+            byteOne |= CodeMetadata.ByteOne.Payable;
         }
         if (this.payableBySc) {
-            byteOne |= ByteOne.PayableBySc;
+            byteOne |= CodeMetadata.ByteOne.PayableBySc;
         }
         return Buffer.from([byteZero, byteOne]);
     }
@@ -5207,29 +8144,27 @@ class CodeMetadata {
             upgradeable: this.upgradeable,
             readable: this.readable,
             payable: this.payable,
-            payableBySc: this.payableBySc
+            payableBySc: this.payableBySc,
         };
     }
     equals(other) {
-        return this.upgradeable == other.upgradeable &&
+        return (this.upgradeable == other.upgradeable &&
             this.readable == other.readable &&
             this.payable == other.payable &&
-            this.payableBySc == other.payableBySc;
+            this.payableBySc == other.payableBySc);
     }
 }
 exports.CodeMetadata = CodeMetadata;
-var ByteZero;
-(function (ByteZero) {
-    ByteZero[ByteZero["Upgradeable"] = 1] = "Upgradeable";
-    ByteZero[ByteZero["Reserved2"] = 2] = "Reserved2";
-    ByteZero[ByteZero["Readable"] = 4] = "Readable";
-})(ByteZero || (ByteZero = {}));
-var ByteOne;
-(function (ByteOne) {
-    ByteOne[ByteOne["Reserved1"] = 1] = "Reserved1";
-    ByteOne[ByteOne["Payable"] = 2] = "Payable";
-    ByteOne[ByteOne["PayableBySc"] = 4] = "PayableBySc";
-})(ByteOne || (ByteOne = {}));
+CodeMetadata.ByteZero = {
+    Upgradeable: 1,
+    Reserved2: 2,
+    Readable: 4,
+};
+CodeMetadata.ByteOne = {
+    Reserved1: 1,
+    Payable: 2,
+    PayableBySc: 4,
+};
 //# sourceMappingURL=codeMetadata.js.map
 
 /***/ }),
@@ -5261,7 +8196,7 @@ class AddressBinaryCodec {
      * @param buffer the input buffer
      */
     decodeTopLevel(buffer) {
-        let [decoded, length] = this.decodeNested(buffer);
+        let [decoded, _length] = this.decodeNested(buffer);
         return decoded;
     }
     /**
@@ -5355,15 +8290,18 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.BinaryCodecConstraints = exports.BinaryCodec = void 0;
 const errors = __importStar(__nccwpck_require__(38506));
-const typesystem_1 = __nccwpck_require__(16125);
 const utils_1 = __nccwpck_require__(14719);
+const typesystem_1 = __nccwpck_require__(16125);
+const arrayVec_1 = __nccwpck_require__(31699);
+const enum_1 = __nccwpck_require__(30085);
+const explicit_enum_1 = __nccwpck_require__(92866);
+const list_1 = __nccwpck_require__(99761);
+const managedDecimal_1 = __nccwpck_require__(76327);
+const managedDecimalSigned_1 = __nccwpck_require__(74815);
 const option_1 = __nccwpck_require__(30957);
 const primitive_1 = __nccwpck_require__(99265);
-const list_1 = __nccwpck_require__(99761);
 const struct_1 = __nccwpck_require__(83579);
-const enum_1 = __nccwpck_require__(30085);
 const tuple_1 = __nccwpck_require__(53148);
-const arrayVec_1 = __nccwpck_require__(31699);
 class BinaryCodec {
     constructor(constraints = null) {
         this.constraints = constraints || new BinaryCodecConstraints();
@@ -5374,6 +8312,9 @@ class BinaryCodec {
         this.structCodec = new struct_1.StructBinaryCodec(this);
         this.tupleCodec = new tuple_1.TupleBinaryCodec(this);
         this.enumCodec = new enum_1.EnumBinaryCodec(this);
+        this.explicitEnumCodec = new explicit_enum_1.ExplicitEnumBinaryCodec();
+        this.managedDecimalCodec = new managedDecimal_1.ManagedDecimalCodec(this);
+        this.managedDecimalSignedCodec = new managedDecimalSigned_1.ManagedDecimalSignedCodec(this);
     }
     decodeTopLevel(buffer, type) {
         this.constraints.checkBufferLength(buffer);
@@ -5385,6 +8326,9 @@ class BinaryCodec {
             onStruct: () => this.structCodec.decodeTopLevel(buffer, type),
             onTuple: () => this.tupleCodec.decodeTopLevel(buffer, type),
             onEnum: () => this.enumCodec.decodeTopLevel(buffer, type),
+            onExplicitEnum: () => this.explicitEnumCodec.decodeTopLevel(buffer, type),
+            onManagedDecimal: () => this.managedDecimalCodec.decodeTopLevel(buffer, type),
+            onManagedDecimalSigned: () => this.managedDecimalSignedCodec.decodeTopLevel(buffer, type),
         });
         return typedValue;
     }
@@ -5398,14 +8342,14 @@ class BinaryCodec {
             onStruct: () => this.structCodec.decodeNested(buffer, type),
             onTuple: () => this.tupleCodec.decodeNested(buffer, type),
             onEnum: () => this.enumCodec.decodeNested(buffer, type),
+            onExplicitEnum: () => this.explicitEnumCodec.decodeNested(buffer, type),
+            onManagedDecimal: () => this.managedDecimalCodec.decodeNested(buffer, type),
+            onManagedDecimalSigned: () => this.managedDecimalSignedCodec.decodeNested(buffer, type),
         });
         return [typedResult, decodedLength];
     }
     encodeNested(typedValue) {
-        utils_1.guardTrue(typedValue
-            .getType()
-            .getCardinality()
-            .isSingular(), "singular cardinality, thus encodable type");
+        utils_1.guardTrue(typedValue.getType().getCardinality().isSingular(), "singular cardinality, thus encodable type");
         return typesystem_1.onTypedValueSelect(typedValue, {
             onPrimitive: () => this.primitiveCodec.encodeNested(typedValue),
             onOption: () => this.optionCodec.encodeNested(typedValue),
@@ -5414,13 +8358,13 @@ class BinaryCodec {
             onStruct: () => this.structCodec.encodeNested(typedValue),
             onTuple: () => this.tupleCodec.encodeNested(typedValue),
             onEnum: () => this.enumCodec.encodeNested(typedValue),
+            onExplicitEnum: () => this.explicitEnumCodec.encodeNested(typedValue),
+            onManagedDecimal: () => this.managedDecimalCodec.encodeNested(typedValue),
+            onManagedDecimalSigned: () => this.managedDecimalSignedCodec.encodeNested(typedValue),
         });
     }
     encodeTopLevel(typedValue) {
-        utils_1.guardTrue(typedValue
-            .getType()
-            .getCardinality()
-            .isSingular(), "singular cardinality, thus encodable type");
+        utils_1.guardTrue(typedValue.getType().getCardinality().isSingular(), "singular cardinality, thus encodable type");
         return typesystem_1.onTypedValueSelect(typedValue, {
             onPrimitive: () => this.primitiveCodec.encodeTopLevel(typedValue),
             onOption: () => this.optionCodec.encodeTopLevel(typedValue),
@@ -5429,14 +8373,17 @@ class BinaryCodec {
             onStruct: () => this.structCodec.encodeTopLevel(typedValue),
             onTuple: () => this.tupleCodec.encodeTopLevel(typedValue),
             onEnum: () => this.enumCodec.encodeTopLevel(typedValue),
+            onExplicitEnum: () => this.explicitEnumCodec.encodeTopLevel(typedValue),
+            onManagedDecimal: () => this.managedDecimalCodec.encodeTopLevel(typedValue),
+            onManagedDecimalSigned: () => this.managedDecimalSignedCodec.encodeTopLevel(typedValue),
         });
     }
 }
 exports.BinaryCodec = BinaryCodec;
 class BinaryCodecConstraints {
     constructor(init) {
-        this.maxBufferLength = (init === null || init === void 0 ? void 0 : init.maxBufferLength) || 256000;
-        this.maxListLength = (init === null || init === void 0 ? void 0 : init.maxListLength) || 128000;
+        this.maxBufferLength = init?.maxBufferLength || 256000;
+        this.maxListLength = init?.maxListLength || 128000;
     }
     checkBufferLength(buffer) {
         if (buffer.length > this.maxBufferLength) {
@@ -5600,6 +8547,36 @@ exports.BytesBinaryCodec = BytesBinaryCodec;
 
 /***/ }),
 
+/***/ 1951:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CodeMetadataCodec = void 0;
+const codeMetadata_1 = __nccwpck_require__(43797);
+const codeMetadata_2 = __nccwpck_require__(99006);
+class CodeMetadataCodec {
+    decodeNested(buffer) {
+        const codeMetadata = codeMetadata_1.CodeMetadata.fromBuffer(buffer.slice(0, codeMetadata_1.CodeMetadataLength));
+        return [new codeMetadata_2.CodeMetadataValue(codeMetadata), codeMetadata_1.CodeMetadataLength];
+    }
+    decodeTopLevel(buffer) {
+        const codeMetadata = codeMetadata_1.CodeMetadata.fromBuffer(buffer);
+        return new codeMetadata_2.CodeMetadataValue(codeMetadata);
+    }
+    encodeNested(codeMetadata) {
+        return codeMetadata.valueOf().toBuffer();
+    }
+    encodeTopLevel(codeMetadata) {
+        return codeMetadata.valueOf().toBuffer();
+    }
+}
+exports.CodeMetadataCodec = CodeMetadataCodec;
+//# sourceMappingURL=codemetadata.js.map
+
+/***/ }),
+
 /***/ 3758:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -5657,12 +8634,51 @@ class EnumBinaryCodec {
         let hasFields = fields.length > 0;
         let fieldsBuffer = this.fieldsCodec.encodeNested(fields);
         let discriminant = new typesystem_1.U8Value(enumValue.discriminant);
-        let discriminantBuffer = hasFields ? this.binaryCodec.encodeNested(discriminant) : this.binaryCodec.encodeTopLevel(discriminant);
+        let discriminantBuffer = hasFields
+            ? this.binaryCodec.encodeNested(discriminant)
+            : this.binaryCodec.encodeTopLevel(discriminant);
         return Buffer.concat([discriminantBuffer, fieldsBuffer]);
     }
 }
 exports.EnumBinaryCodec = EnumBinaryCodec;
 //# sourceMappingURL=enum.js.map
+
+/***/ }),
+
+/***/ 92866:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ExplicitEnumBinaryCodec = void 0;
+const typesystem_1 = __nccwpck_require__(16125);
+const explicit_enum_1 = __nccwpck_require__(82794);
+const string_1 = __nccwpck_require__(16955);
+class ExplicitEnumBinaryCodec {
+    constructor() {
+        this.stringCodec = new string_1.StringBinaryCodec();
+    }
+    decodeTopLevel(buffer, type) {
+        const stringValue = this.stringCodec.decodeTopLevel(buffer);
+        return new explicit_enum_1.ExplicitEnumValue(type, new explicit_enum_1.ExplicitEnumVariantDefinition(stringValue.valueOf()));
+    }
+    decodeNested(buffer, type) {
+        const [value, length] = this.stringCodec.decodeNested(buffer);
+        const enumValue = new explicit_enum_1.ExplicitEnumValue(type, new explicit_enum_1.ExplicitEnumVariantDefinition(value.valueOf()));
+        return [enumValue, length];
+    }
+    encodeNested(enumValue) {
+        const buffer = this.stringCodec.encodeNested(new typesystem_1.StringValue(enumValue.valueOf().name));
+        return buffer;
+    }
+    encodeTopLevel(enumValue) {
+        const buffer = this.stringCodec.encodeTopLevel(new typesystem_1.StringValue(enumValue.valueOf().name));
+        return buffer;
+    }
+}
+exports.ExplicitEnumBinaryCodec = ExplicitEnumBinaryCodec;
+//# sourceMappingURL=explicit-enum.js.map
 
 /***/ }),
 
@@ -5729,7 +8745,7 @@ class H256BinaryCodec {
      * @param buffer the input buffer
      */
     decodeTopLevel(buffer) {
-        let [decoded, length] = this.decodeNested(buffer);
+        let [decoded, _length] = this.decodeNested(buffer);
         return decoded;
     }
     /**
@@ -5850,6 +8866,126 @@ exports.ListBinaryCodec = ListBinaryCodec;
 
 /***/ }),
 
+/***/ 76327:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ManagedDecimalCodec = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const typesystem_1 = __nccwpck_require__(16125);
+const utils_1 = __nccwpck_require__(58877);
+const constants_1 = __nccwpck_require__(3758);
+class ManagedDecimalCodec {
+    constructor(binaryCodec) {
+        this.binaryCodec = binaryCodec;
+    }
+    decodeNested(buffer, type) {
+        const length = buffer.readUInt32BE(0);
+        const payload = buffer.slice(0, length);
+        const result = this.decodeTopLevel(payload, type);
+        return [result, length];
+    }
+    decodeTopLevel(buffer, type) {
+        if (buffer.length === 0) {
+            return new typesystem_1.ManagedDecimalValue(new bignumber_js_1.default(0), 0);
+        }
+        if (type.isVariable()) {
+            const bigUintSize = buffer.length - constants_1.SizeOfU32;
+            const [value] = this.binaryCodec.decodeNested(buffer.slice(0, bigUintSize), new typesystem_1.BigUIntType());
+            const scale = buffer.readUInt32BE(bigUintSize);
+            return new typesystem_1.ManagedDecimalValue(value.valueOf().shiftedBy(-scale), scale);
+        }
+        const value = utils_1.bufferToBigInt(buffer);
+        const metadata = type.getMetadata();
+        const scale = metadata !== "usize" ? parseInt(metadata.toString()) : 0;
+        return new typesystem_1.ManagedDecimalValue(value.shiftedBy(-scale), scale);
+    }
+    encodeNested(value) {
+        let buffers = [];
+        const rawValue = new typesystem_1.BigUIntValue(value.valueOf().shiftedBy(value.getScale()));
+        if (value.isVariable()) {
+            buffers.push(Buffer.from(this.binaryCodec.encodeNested(rawValue)));
+            buffers.push(Buffer.from(this.binaryCodec.encodeNested(new typesystem_1.U32Value(value.getScale()))));
+        }
+        else {
+            buffers.push(this.binaryCodec.encodeTopLevel(rawValue));
+        }
+        return Buffer.concat(buffers);
+    }
+    encodeTopLevel(value) {
+        return this.encodeNested(value);
+    }
+}
+exports.ManagedDecimalCodec = ManagedDecimalCodec;
+//# sourceMappingURL=managedDecimal.js.map
+
+/***/ }),
+
+/***/ 74815:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ManagedDecimalSignedCodec = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const typesystem_1 = __nccwpck_require__(16125);
+const utils_1 = __nccwpck_require__(58877);
+const constants_1 = __nccwpck_require__(3758);
+class ManagedDecimalSignedCodec {
+    constructor(binaryCodec) {
+        this.binaryCodec = binaryCodec;
+    }
+    decodeNested(buffer, type) {
+        const length = buffer.readUInt32BE(0);
+        const payload = buffer.slice(0, length);
+        const result = this.decodeTopLevel(payload, type);
+        return [result, length];
+    }
+    decodeTopLevel(buffer, type) {
+        if (buffer.length === 0) {
+            return new typesystem_1.ManagedDecimalSignedValue(new bignumber_js_1.default(0), 0);
+        }
+        if (type.isVariable()) {
+            const bigintSize = buffer.length - constants_1.SizeOfU32;
+            const [value] = this.binaryCodec.decodeNested(buffer.slice(0, bigintSize), new typesystem_1.BigIntType());
+            const scale = buffer.readUInt32BE(bigintSize);
+            return new typesystem_1.ManagedDecimalSignedValue(value.valueOf().shiftedBy(-scale), scale);
+        }
+        const value = utils_1.bufferToBigInt(buffer);
+        const metadata = type.getMetadata();
+        const scale = metadata !== "usize" ? parseInt(metadata.toString()) : 0;
+        return new typesystem_1.ManagedDecimalSignedValue(value.shiftedBy(-scale), scale);
+    }
+    encodeNested(value) {
+        let buffers = [];
+        const rawValue = new typesystem_1.BigIntValue(value.valueOf().shiftedBy(value.getScale()));
+        if (value.isVariable()) {
+            buffers.push(Buffer.from(this.binaryCodec.encodeNested(rawValue)));
+            buffers.push(Buffer.from(this.binaryCodec.encodeNested(new typesystem_1.U32Value(value.getScale()))));
+        }
+        else {
+            buffers.push(Buffer.from(this.binaryCodec.encodeTopLevel(rawValue)));
+        }
+        return Buffer.concat(buffers);
+    }
+    encodeTopLevel(value) {
+        return this.encodeNested(value);
+    }
+}
+exports.ManagedDecimalSignedCodec = ManagedDecimalSignedCodec;
+//# sourceMappingURL=managedDecimalSigned.js.map
+
+/***/ }),
+
 /***/ 11279:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -5962,7 +9098,7 @@ class NumericalBinaryCodec {
         utils_1.flipBufferBitsInPlace(buffer);
         // Fix ambiguity if any
         if (utils_1.isMsbZero(buffer)) {
-            buffer = utils_1.prependByteToBuffer(buffer, 0xFF);
+            buffer = utils_1.prependByteToBuffer(buffer, 0xff);
         }
         const paddingBytes = Buffer.alloc(size - buffer.length, 0xff);
         return Buffer.concat([paddingBytes, buffer]);
@@ -5996,7 +9132,7 @@ class NumericalBinaryCodec {
         utils_1.flipBufferBitsInPlace(buffer);
         // Fix ambiguity if any
         if (utils_1.isMsbZero(buffer)) {
-            buffer = utils_1.prependByteToBuffer(buffer, 0xFF);
+            buffer = utils_1.prependByteToBuffer(buffer, 0xff);
         }
         return buffer;
     }
@@ -6058,7 +9194,7 @@ class OptionValueBinaryCodec {
         if (buffer[0] != 0x01) {
             throw new errors.ErrCodec("invalid buffer for optional value");
         }
-        let [decoded, decodedLength] = this.binaryCodec.decodeNested(buffer.slice(1), type);
+        let [decoded, _decodedLength] = this.binaryCodec.decodeNested(buffer.slice(1), type);
         return new typesystem_1.OptionValue(type, decoded);
     }
     encodeNested(optionValue) {
@@ -6093,6 +9229,7 @@ const numerical_1 = __nccwpck_require__(54874);
 const h256_1 = __nccwpck_require__(154);
 const bytes_1 = __nccwpck_require__(4161);
 const tokenIdentifier_1 = __nccwpck_require__(78987);
+const codemetadata_1 = __nccwpck_require__(1951);
 const nothing_1 = __nccwpck_require__(11279);
 const string_1 = __nccwpck_require__(16955);
 class PrimitiveBinaryCodec {
@@ -6105,6 +9242,7 @@ class PrimitiveBinaryCodec {
         this.bytesCodec = new bytes_1.BytesBinaryCodec();
         this.stringCodec = new string_1.StringBinaryCodec();
         this.tokenIdentifierCodec = new tokenIdentifier_1.TokenIdentifierCodec();
+        this.codeMetadataCodec = new codemetadata_1.CodeMetadataCodec();
         this.nothingCodec = new nothing_1.NothingCodec();
     }
     decodeNested(buffer, type) {
@@ -6116,7 +9254,8 @@ class PrimitiveBinaryCodec {
             onString: () => this.stringCodec.decodeNested(buffer),
             onH256: () => this.h256Codec.decodeNested(buffer),
             onTokenIndetifier: () => this.tokenIdentifierCodec.decodeNested(buffer),
-            onNothing: () => this.nothingCodec.decodeNested()
+            onCodeMetadata: () => this.codeMetadataCodec.decodeNested(buffer),
+            onNothing: () => this.nothingCodec.decodeNested(),
         });
     }
     decodeTopLevel(buffer, type) {
@@ -6128,7 +9267,8 @@ class PrimitiveBinaryCodec {
             onString: () => this.stringCodec.decodeTopLevel(buffer),
             onH256: () => this.h256Codec.decodeTopLevel(buffer),
             onTokenIndetifier: () => this.tokenIdentifierCodec.decodeTopLevel(buffer),
-            onNothing: () => this.nothingCodec.decodeTopLevel()
+            onCodeMetadata: () => this.codeMetadataCodec.decodeTopLevel(buffer),
+            onNothing: () => this.nothingCodec.decodeTopLevel(),
         });
     }
     encodeNested(value) {
@@ -6140,7 +9280,8 @@ class PrimitiveBinaryCodec {
             onString: () => this.stringCodec.encodeNested(value),
             onH256: () => this.h256Codec.encodeNested(value),
             onTypeIdentifier: () => this.tokenIdentifierCodec.encodeNested(value),
-            onNothing: () => this.nothingCodec.encodeNested()
+            onCodeMetadata: () => this.codeMetadataCodec.encodeNested(value),
+            onNothing: () => this.nothingCodec.encodeNested(),
         });
     }
     encodeTopLevel(value) {
@@ -6152,7 +9293,8 @@ class PrimitiveBinaryCodec {
             onString: () => this.stringCodec.encodeTopLevel(value),
             onH256: () => this.h256Codec.encodeTopLevel(value),
             onTypeIdentifier: () => this.tokenIdentifierCodec.encodeTopLevel(value),
-            onNothing: () => this.nothingCodec.encodeTopLevel()
+            onCodeMetadata: () => this.codeMetadataCodec.encodeTopLevel(value),
+            onNothing: () => this.nothingCodec.encodeTopLevel(),
         });
     }
 }
@@ -6482,11 +9624,13 @@ exports.Interaction = void 0;
 const address_1 = __nccwpck_require__(39166);
 const compatibility_1 = __nccwpck_require__(44016);
 const constants_1 = __nccwpck_require__(38069);
-const function_1 = __nccwpck_require__(10919);
+const tokens_1 = __nccwpck_require__(49272);
+const transactionsFactories_1 = __nccwpck_require__(51404);
 const interactionChecker_1 = __nccwpck_require__(82792);
 const query_1 = __nccwpck_require__(11528);
-const typesystem_1 = __nccwpck_require__(16125);
 /**
+ * Legacy component. Use "SmartContractTransactionsFactory" (for transactions) or "SmartContractQueriesController" (for queries), instead.
+ *
  * Interactions can be seen as mutable transaction & query builders.
  *
  * Aside from building transactions and queries, the interactors are also responsible for interpreting
@@ -6499,15 +9643,13 @@ class Interaction {
         this.gasLimit = 0;
         this.gasPrice = undefined;
         this.chainID = "";
-        this.querent = new address_1.Address();
-        this.sender = new address_1.Address();
-        this.isWithSingleESDTTransfer = false;
-        this.isWithSingleESDTNFTTransfer = false;
-        this.isWithMultiESDTNFTTransfer = false;
+        this.querent = address_1.Address.empty();
+        this.sender = address_1.Address.empty();
+        this.version = constants_1.TRANSACTION_VERSION_DEFAULT;
         this.contract = contract;
         this.function = func;
         this.args = args;
-        this.tokenTransfers = new TokenTransfersWithinInteraction([], this);
+        this.tokenTransfers = [];
     }
     getContractAddress() {
         return this.contract.getAddress();
@@ -6525,7 +9667,7 @@ class Interaction {
         return this.value;
     }
     getTokenTransfers() {
-        return this.tokenTransfers.getTransfers();
+        return this.tokenTransfers;
     }
     getGasLimit() {
         return this.gasLimit;
@@ -6535,38 +9677,25 @@ class Interaction {
     }
     buildTransaction() {
         compatibility_1.Compatibility.guardAddressIsSetAndNonZero(this.sender, "'sender' of interaction", "use interaction.withSender()");
-        let receiver = this.explicitReceiver || this.contract.getAddress();
-        let func = this.function;
-        let args = this.args;
-        if (this.isWithSingleESDTTransfer) {
-            func = new function_1.ContractFunction(constants_1.ESDT_TRANSFER_FUNCTION_NAME);
-            args = this.tokenTransfers.buildArgsForSingleESDTTransfer();
-        }
-        else if (this.isWithSingleESDTNFTTransfer) {
-            // For NFT, SFT and MetaESDT, transaction.sender == transaction.receiver.
-            receiver = this.sender;
-            func = new function_1.ContractFunction(constants_1.ESDTNFT_TRANSFER_FUNCTION_NAME);
-            args = this.tokenTransfers.buildArgsForSingleESDTNFTTransfer();
-        }
-        else if (this.isWithMultiESDTNFTTransfer) {
-            // For NFT, SFT and MetaESDT, transaction.sender == transaction.receiver.
-            receiver = this.sender;
-            func = new function_1.ContractFunction(constants_1.MULTI_ESDTNFT_TRANSFER_FUNCTION_NAME);
-            args = this.tokenTransfers.buildArgsForMultiESDTNFTTransfer();
-        }
-        let transaction = this.contract.call({
-            func: func,
-            // GasLimit will be set using "withGasLimit()".
-            gasLimit: this.gasLimit,
-            gasPrice: this.gasPrice,
-            args: args,
-            // Value will be set using "withValue()".
-            value: this.value,
-            receiver: receiver,
-            chainID: this.chainID,
-            caller: this.sender
+        const factoryConfig = new transactionsFactories_1.TransactionsFactoryConfig({ chainID: this.chainID.valueOf() });
+        const factory = new transactionsFactories_1.SmartContractTransactionsFactory({
+            config: factoryConfig,
         });
-        transaction.setNonce(this.nonce);
+        const transaction = factory.createTransactionForExecute({
+            sender: this.sender,
+            contract: this.contract.getAddress(),
+            function: this.function.valueOf(),
+            gasLimit: BigInt(this.gasLimit.valueOf()),
+            arguments: this.args,
+            nativeTransferAmount: BigInt(this.value.toString()),
+            tokenTransfers: this.tokenTransfers,
+        });
+        transaction.chainID = this.chainID.valueOf();
+        transaction.nonce = BigInt(this.nonce.valueOf());
+        transaction.version = this.version;
+        if (this.gasPrice) {
+            transaction.gasPrice = BigInt(this.gasPrice.valueOf());
+        }
         return transaction;
     }
     buildQuery() {
@@ -6576,7 +9705,7 @@ class Interaction {
             args: this.args,
             // Value will be set using "withValue()".
             value: this.value,
-            caller: this.querent
+            caller: this.querent,
         });
     }
     withValue(value) {
@@ -6584,24 +9713,15 @@ class Interaction {
         return this;
     }
     withSingleESDTTransfer(transfer) {
-        this.isWithSingleESDTTransfer = true;
-        this.tokenTransfers = new TokenTransfersWithinInteraction([transfer], this);
+        this.tokenTransfers = [transfer].map((transfer) => new tokens_1.TokenTransfer(transfer));
         return this;
     }
-    withSingleESDTNFTTransfer(transfer, sender) {
-        this.isWithSingleESDTNFTTransfer = true;
-        this.tokenTransfers = new TokenTransfersWithinInteraction([transfer], this);
-        if (sender) {
-            this.sender = sender;
-        }
+    withSingleESDTNFTTransfer(transfer) {
+        this.tokenTransfers = [transfer].map((transfer) => new tokens_1.TokenTransfer(transfer));
         return this;
     }
-    withMultiESDTNFTTransfer(transfers, sender) {
-        this.isWithMultiESDTNFTTransfer = true;
-        this.tokenTransfers = new TokenTransfersWithinInteraction(transfers, this);
-        if (sender) {
-            this.sender = sender;
-        }
+    withMultiESDTNFTTransfer(transfers) {
+        this.tokenTransfers = transfers.map((transfer) => new tokens_1.TokenTransfer(transfer));
         return this;
     }
     withGasLimit(gasLimit) {
@@ -6627,6 +9747,10 @@ class Interaction {
         this.sender = sender;
         return this;
     }
+    withVersion(version) {
+        this.version = version;
+        return this;
+    }
     /**
      * Sets the "caller" field on contract queries.
      */
@@ -6647,74 +9771,6 @@ class Interaction {
     }
 }
 exports.Interaction = Interaction;
-class TokenTransfersWithinInteraction {
-    constructor(transfers, interaction) {
-        this.transfers = transfers;
-        this.interaction = interaction;
-    }
-    getTransfers() {
-        return this.transfers;
-    }
-    buildArgsForSingleESDTTransfer() {
-        let singleTransfer = this.transfers[0];
-        return [
-            this.getTypedTokenIdentifier(singleTransfer),
-            this.getTypedTokenQuantity(singleTransfer),
-            this.getTypedInteractionFunction(),
-            ...this.getInteractionArguments()
-        ];
-    }
-    buildArgsForSingleESDTNFTTransfer() {
-        let singleTransfer = this.transfers[0];
-        return [
-            this.getTypedTokenIdentifier(singleTransfer),
-            this.getTypedTokenNonce(singleTransfer),
-            this.getTypedTokenQuantity(singleTransfer),
-            this.getTypedTokensReceiver(),
-            this.getTypedInteractionFunction(),
-            ...this.getInteractionArguments()
-        ];
-    }
-    buildArgsForMultiESDTNFTTransfer() {
-        let result = [];
-        result.push(this.getTypedTokensReceiver());
-        result.push(this.getTypedNumberOfTransfers());
-        for (const transfer of this.transfers) {
-            result.push(this.getTypedTokenIdentifier(transfer));
-            result.push(this.getTypedTokenNonce(transfer));
-            result.push(this.getTypedTokenQuantity(transfer));
-        }
-        result.push(this.getTypedInteractionFunction());
-        result.push(...this.getInteractionArguments());
-        return result;
-    }
-    getTypedNumberOfTransfers() {
-        return new typesystem_1.U8Value(this.transfers.length);
-    }
-    getTypedTokenIdentifier(transfer) {
-        // Important: for NFTs, this has to be the "collection" name, actually.
-        // We will reconsider adding the field "collection" on "Token" upon merging "ApiProvider" and "ProxyProvider".
-        return typesystem_1.BytesValue.fromUTF8(transfer.tokenIdentifier);
-    }
-    getTypedTokenNonce(transfer) {
-        // The token nonce (creation nonce)
-        return new typesystem_1.U64Value(transfer.nonce);
-    }
-    getTypedTokenQuantity(transfer) {
-        // For NFTs, this will be 1.
-        return new typesystem_1.BigUIntValue(transfer.amountAsBigInteger);
-    }
-    getTypedTokensReceiver() {
-        // The actual receiver of the token(s): the contract
-        return new typesystem_1.AddressValue(this.interaction.getContractAddress());
-    }
-    getTypedInteractionFunction() {
-        return typesystem_1.BytesValue.fromUTF8(this.interaction.getFunction().valueOf());
-    }
-    getInteractionArguments() {
-        return this.interaction.getArguments();
-    }
-}
 //# sourceMappingURL=interaction.js.map
 
 /***/ }),
@@ -6756,6 +9812,9 @@ const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
  *  - incorrect types of contract call arguments
  *  - errors related to calling "non-payable" functions with some value provided
  *  - gas estimation errors (not yet implemented)
+ */
+/**
+ * @deprecated The Interaction checker is deprecated due to lack of use.
  */
 class InteractionChecker {
     checkInteraction(interaction, definition) {
@@ -6815,13 +9874,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.NativeSerializer = void 0;
+/* eslint-disable @typescript-eslint/no-namespace */
 const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
-const typesystem_1 = __nccwpck_require__(16125);
-const argumentErrorContext_1 = __nccwpck_require__(52817);
-const typesystem_2 = __nccwpck_require__(16125);
 const address_1 = __nccwpck_require__(39166);
 const errors_1 = __nccwpck_require__(38506);
 const utils_codec_1 = __nccwpck_require__(44534);
+const argumentErrorContext_1 = __nccwpck_require__(52817);
+const typesystem_1 = __nccwpck_require__(16125);
 var NativeSerializer;
 (function (NativeSerializer) {
     /**
@@ -6829,8 +9888,13 @@ var NativeSerializer;
      */
     function nativeToTypedValues(args, endpoint) {
         args = args || [];
-        assertNotTypedValues(args);
-        args = handleVariadicArgsAndRePack(args, endpoint);
+        checkArgumentsCardinality(args, endpoint);
+        if (hasNonCountedVariadicParameter(endpoint)) {
+            args = repackNonCountedVariadicParameters(args, endpoint);
+        }
+        else {
+            // Repacking makes sense (it's possible) only for regular, non-counted variadic parameters.
+        }
         let parameters = endpoint.input;
         let values = [];
         for (let i = 0; i < parameters.length; i++) {
@@ -6842,24 +9906,35 @@ var NativeSerializer;
         return values;
     }
     NativeSerializer.nativeToTypedValues = nativeToTypedValues;
-    function assertNotTypedValues(args) {
-        for (let i = 0; i < args.length; i++) {
-            let arg = args[i];
-            if (arg && arg.belongsToTypesystem) {
-                throw new errors_1.ErrTypeInferenceSystemRequiresRegularJavascriptObjects(i);
-            }
-        }
-    }
-    function handleVariadicArgsAndRePack(args, endpoint) {
-        let parameters = endpoint.input;
-        let { min, max, variadic } = getArgumentsCardinality(parameters);
+    function checkArgumentsCardinality(args, endpoint) {
+        // With respect to the notes of "repackNonCountedVariadicParameters", "getArgumentsCardinality" will not be needed anymore.
+        // Currently, it is used only for a arguments count check, which will become redundant.
+        const { min, max } = getArgumentsCardinality(endpoint.input);
         if (!(min <= args.length && args.length <= max)) {
             throw new errors_1.ErrInvalidArgument(`Wrong number of arguments for endpoint ${endpoint.name}: expected between ${min} and ${max} arguments, have ${args.length}`);
         }
-        if (variadic) {
-            let lastArgIndex = parameters.length - 1;
-            let lastArg = args.slice(lastArgIndex);
-            args[lastArgIndex] = lastArg;
+    }
+    function hasNonCountedVariadicParameter(endpoint) {
+        const lastParameter = endpoint.input[endpoint.input.length - 1];
+        return lastParameter?.type instanceof typesystem_1.VariadicType && !lastParameter.type.isCounted;
+    }
+    // In a future version of the type inference system, re-packing logic will be removed.
+    // The client code will be responsible for passing the correctly packed arguments (variadic arguments explicitly packed as arrays).
+    // For developers, calling `foo(["erd1", 42, [1, 2, 3]])` will be less ambiguous than `foo(["erd1", 42, 1, 2, 3])`.
+    // Furthermore, multiple counted-variadic arguments cannot be expressed in the current variant.
+    // E.g. now, it's unreasonable to decide that `foo([1, 2, 3, "a", "b", "c"])` calls `foo(counted-variadic<int>, counted-variadic<string>)`.
+    function repackNonCountedVariadicParameters(args, endpoint) {
+        const lastEndpointParamIndex = endpoint.input.length - 1;
+        const argAtIndex = args[lastEndpointParamIndex];
+        if (argAtIndex?.belongsToTypesystem) {
+            const isVariadicValue = argAtIndex.hasClassOrSuperclass(typesystem_1.VariadicValue.ClassName);
+            if (!isVariadicValue) {
+                throw new errors_1.ErrInvalidArgument(`Wrong argument type for endpoint ${endpoint.name}: typed value provided; expected variadic type, have ${argAtIndex.getClassName()}`);
+            }
+            // Do not repack.
+        }
+        else {
+            args[lastEndpointParamIndex] = args.slice(lastEndpointParamIndex);
         }
         return args;
     }
@@ -6877,37 +9952,53 @@ var NativeSerializer;
             variadic = true;
         }
         for (let parameter of reversed) {
+            // It's a single-value, not a multi-value parameter. Thus, cardinality isn't affected.
             if (parameter.type.getCardinality().isSingular()) {
                 break;
             }
+            // It's a multi-value parameter: optional, variadic etc.
             min -= 1;
         }
         return { min, max, variadic };
     }
-    function convertToTypedValue(native, type, errorContext) {
+    NativeSerializer.getArgumentsCardinality = getArgumentsCardinality;
+    function convertToTypedValue(value, type, errorContext) {
+        if (value && typesystem_1.isTyped(value)) {
+            // Value is already typed, no need to convert it.
+            return value;
+        }
         if (type instanceof typesystem_1.OptionType) {
-            return toOptionValue(native, type, errorContext);
+            return toOptionValue(value, type, errorContext);
         }
         if (type instanceof typesystem_1.OptionalType) {
-            return toOptionalValue(native, type, errorContext);
+            return toOptionalValue(value, type, errorContext);
         }
         if (type instanceof typesystem_1.VariadicType) {
-            return toVariadicValue(native, type, errorContext);
+            return toVariadicValue(value, type, errorContext);
         }
         if (type instanceof typesystem_1.CompositeType) {
-            return toCompositeValue(native, type, errorContext);
+            return toCompositeValue(value, type, errorContext);
         }
         if (type instanceof typesystem_1.TupleType) {
-            return toTupleValue(native, type, errorContext);
+            return toTupleValue(value, type, errorContext);
         }
-        if (type instanceof typesystem_2.StructType) {
-            return toStructValue(native, type, errorContext);
+        if (type instanceof typesystem_1.StructType) {
+            return toStructValue(value, type, errorContext);
         }
         if (type instanceof typesystem_1.ListType) {
-            return toListValue(native, type, errorContext);
+            return toListValue(value, type, errorContext);
         }
         if (type instanceof typesystem_1.PrimitiveType) {
-            return toPrimitive(native, type, errorContext);
+            return toPrimitive(value, type, errorContext);
+        }
+        if (type instanceof typesystem_1.EnumType) {
+            return toEnumValue(value, type, errorContext);
+        }
+        if (type instanceof typesystem_1.ExplicitEnumType) {
+            return toExplicitEnumValue(value, type, errorContext);
+        }
+        if (type instanceof typesystem_1.ManagedDecimalType) {
+            return toManagedDecimal(value, type, errorContext);
         }
         errorContext.throwError(`convertToTypedValue: unhandled type ${type}`);
     }
@@ -6926,6 +10017,9 @@ var NativeSerializer;
         return new typesystem_1.OptionalValue(type, converted);
     }
     function toVariadicValue(native, type, errorContext) {
+        if (type.isCounted) {
+            throw new errors_1.ErrInvalidArgument(`Counted variadic arguments must be explicitly typed. E.g. use "VariadicValue.fromItemsCounted()" or "new VariadicValue()"`);
+        }
         if (native == null) {
             native = [];
         }
@@ -6962,7 +10056,7 @@ var NativeSerializer;
         for (let i = 0; i < fields.length; i++) {
             typedValues.push(convertToTypedValue(native[i], fields[i].type, errorContext));
         }
-        return typesystem_2.Tuple.fromItems(typedValues);
+        return typesystem_1.Tuple.fromItems(typedValues);
     }
     function toStructValue(native, type, errorContext) {
         let structFieldValues = [];
@@ -6972,13 +10066,13 @@ var NativeSerializer;
             errorContext.guardHasField(native, fieldName);
             const fieldNativeValue = native[fieldName];
             const fieldTypedValue = convertToTypedValue(fieldNativeValue, fields[i].type, errorContext);
-            structFieldValues.push(new typesystem_2.Field(fieldTypedValue, fieldName));
+            structFieldValues.push(new typesystem_1.Field(fieldTypedValue, fieldName));
         }
-        return new typesystem_2.Struct(type, structFieldValues);
+        return new typesystem_1.Struct(type, structFieldValues);
     }
     function toPrimitive(native, type, errorContext) {
         if (type instanceof typesystem_1.NumericalType) {
-            let number = new bignumber_js_1.default(native);
+            const number = new bignumber_js_1.default(native);
             return convertNumericalType(number, type, errorContext);
         }
         if (type instanceof typesystem_1.BytesType) {
@@ -6988,13 +10082,57 @@ var NativeSerializer;
             return new typesystem_1.AddressValue(convertNativeToAddress(native, errorContext));
         }
         if (type instanceof typesystem_1.BooleanType) {
-            return new typesystem_1.BooleanValue(native);
+            const boolValue = native.toString().toLowerCase() === "true" || native.toString() === "1";
+            return new typesystem_1.BooleanValue(boolValue);
         }
         if (type instanceof typesystem_1.TokenIdentifierType) {
             return new typesystem_1.TokenIdentifierValue(convertNativeToString(native, errorContext));
         }
         errorContext.throwError(`(function: toPrimitive) unsupported type ${type}`);
     }
+    function toEnumValue(native, type, errorContext) {
+        if (typeof native === "number") {
+            return typesystem_1.EnumValue.fromDiscriminant(type, native);
+        }
+        if (typeof native === "string") {
+            return typesystem_1.EnumValue.fromName(type, native);
+        }
+        if (typeof native === "object") {
+            errorContext.guardHasField(native, "name");
+            const variant = type.getVariantByName(native.name);
+            errorContext.guardHasField(native, "fields");
+            const nativeFields = native.fields;
+            const fieldValues = [];
+            const fields = variant.getFieldsDefinitions();
+            for (let i = 0; i < fields.length; i++) {
+                const fieldName = fields[i].name;
+                errorContext.guardHasField(nativeFields, fieldName);
+                const fieldNativeValue = nativeFields[fieldName];
+                const fieldTypedValue = convertToTypedValue(fieldNativeValue, fields[i].type, errorContext);
+                fieldValues.push(new typesystem_1.Field(fieldTypedValue, fieldName));
+            }
+            return new typesystem_1.EnumValue(type, variant, fieldValues);
+        }
+        errorContext.throwError(`(function: toEnumValue) unsupported native type ${typeof native}`);
+    }
+    function toExplicitEnumValue(native, type, errorContext) {
+        if (typeof native === "string") {
+            return typesystem_1.ExplicitEnumValue.fromName(type, native);
+        }
+        if (typeof native === "object") {
+            errorContext.guardHasField(native, "name");
+            const variant = type.getVariantByName(native.name);
+            return new typesystem_1.ExplicitEnumValue(type, variant);
+        }
+        errorContext.throwError(`(function: toExplicitEnumValue) unsupported native type ${typeof native}`);
+    }
+    function toManagedDecimal(native, type, errorContext) {
+        if (typeof native === "object") {
+            return new typesystem_1.ManagedDecimalValue(native[0], native[1], type.isVariable());
+        }
+        errorContext.throwError(`(function: toManagedDecimal) unsupported native type ${typeof native}`);
+    }
+    // TODO: move logic to typesystem/bytes.ts
     function convertNativeToBytesValue(native, errorContext) {
         const innerValue = native.valueOf();
         if (native === undefined) {
@@ -7014,6 +10152,7 @@ var NativeSerializer;
         }
         errorContext.convertError(native, "BytesValue");
     }
+    // TODO: move logic to typesystem/string.ts
     function convertNativeToString(native, errorContext) {
         if (native === undefined) {
             errorContext.convertError(native, "Buffer");
@@ -7026,6 +10165,7 @@ var NativeSerializer;
         }
         errorContext.convertError(native, "Buffer");
     }
+    // TODO: move logic to typesystem/address.ts
     function convertNativeToAddress(native, errorContext) {
         if (native.bech32) {
             return native;
@@ -7042,6 +10182,7 @@ var NativeSerializer;
         }
     }
     NativeSerializer.convertNativeToAddress = convertNativeToAddress;
+    // TODO: move logic to typesystem/numerical.ts
     function convertNumericalType(number, type, errorContext) {
         switch (type.constructor) {
             case typesystem_1.U8Type:
@@ -7084,7 +10225,7 @@ const address_1 = __nccwpck_require__(39166);
 const argSerializer_1 = __nccwpck_require__(87225);
 class Query {
     constructor(obj) {
-        this.caller = obj.caller || new address_1.Address();
+        this.caller = obj.caller || address_1.Address.empty();
         this.address = obj.address;
         this.func = obj.func;
         this.args = obj.args || [];
@@ -7125,17 +10266,25 @@ var WellKnownTopics;
 // TODO: perhaps move default construction options to a factory (ResultsParserFactory), instead of referencing them in the constructor
 // (postpone as much as possible, breaking change)
 const defaultResultsParserOptions = {
-    argsSerializer: new argSerializer_1.ArgSerializer()
+    argsSerializer: new argSerializer_1.ArgSerializer(),
 };
 /**
+ * Legacy component.
+ * For parsing contract query responses, use the "SmartContractQueriesController" instead.
+ * For parsing smart contract outcome (return data), use the "SmartContractTransactionsOutcomeParser" instead.
+ * For parding smart contract events, use the "TransactionEventsParser" instead.
+ *
  * Parses contract query responses and smart contract results.
  * The parsing involves some heuristics, in order to handle slight inconsistencies (e.g. some SCRs are present on API, but missing on Gateway).
  */
 class ResultsParser {
     constructor(options) {
-        options = Object.assign(Object.assign({}, defaultResultsParserOptions), options);
+        options = { ...defaultResultsParserOptions, ...options };
         this.argsSerializer = options.argsSerializer;
     }
+    /**
+     * Legacy method, use "SmartContractQueriesController.parseQueryResponse()" instead.
+     */
     parseQueryResponse(queryResponse, endpoint) {
         let parts = queryResponse.getReturnDataParts();
         let values = this.argsSerializer.buffersToValues(parts, endpoint.output);
@@ -7147,30 +10296,47 @@ class ResultsParser {
             firstValue: values[0],
             secondValue: values[1],
             thirdValue: values[2],
-            lastValue: values[values.length - 1]
+            lastValue: values[values.length - 1],
         };
     }
+    /**
+     * Legacy method, use "SmartContractQueriesController.parseQueryResponse()" instead.
+     */
     parseUntypedQueryResponse(queryResponse) {
         let returnCode = new returnCode_1.ReturnCode(queryResponse.returnCode.toString());
         return {
             returnCode: returnCode,
             returnMessage: queryResponse.returnMessage,
-            values: queryResponse.getReturnDataParts()
+            values: queryResponse.getReturnDataParts(),
         };
     }
+    /**
+     * Legacy method, use "SmartContractTransactionsOutcomeParser.parseExecute()" instead.
+     */
     parseOutcome(transaction, endpoint) {
-        let untypedBundle = this.parseUntypedOutcome(transaction);
-        let values = this.argsSerializer.buffersToValues(untypedBundle.values, endpoint.output);
+        const untypedBundle = this.parseUntypedOutcome(transaction);
+        const typedBundle = this.parseOutcomeFromUntypedBundle(untypedBundle, endpoint);
+        return typedBundle;
+    }
+    /**
+     * @internal
+     * For internal use only.
+     */
+    parseOutcomeFromUntypedBundle(bundle, endpoint) {
+        const values = this.argsSerializer.buffersToValues(bundle.values, endpoint.output);
         return {
-            returnCode: untypedBundle.returnCode,
-            returnMessage: untypedBundle.returnMessage,
+            returnCode: bundle.returnCode,
+            returnMessage: bundle.returnMessage,
             values: values,
             firstValue: values[0],
             secondValue: values[1],
             thirdValue: values[2],
-            lastValue: values[values.length - 1]
+            lastValue: values[values.length - 1],
         };
     }
+    /**
+     * Legacy method, use "SmartContractTransactionsOutcomeParser.parseExecute()" instead.
+     */
     parseUntypedOutcome(transaction) {
         let bundle;
         let transactionMetadata = this.parseTransactionMetadata(transaction);
@@ -7221,7 +10387,7 @@ class ResultsParser {
             sender: transaction.sender.bech32(),
             receiver: transaction.receiver.bech32(),
             data: transaction.data.toString("base64"),
-            value: transaction.value.toString()
+            value: transaction.value.toString(),
         });
     }
     createBundleOnSimpleMoveBalance(transaction) {
@@ -7231,7 +10397,7 @@ class ResultsParser {
             return {
                 returnCode: returnCode_1.ReturnCode.None,
                 returnMessage: returnCode_1.ReturnCode.None.toString(),
-                values: []
+                values: [],
             };
         }
         return null;
@@ -7242,7 +10408,7 @@ class ResultsParser {
                 return {
                     returnCode: returnCode_1.ReturnCode.OutOfFunds,
                     returnMessage: transaction.receipt.data,
-                    values: []
+                    values: [],
                 };
             }
             // If there's no receipt message, let other heuristics to handle the outcome (most probably, a log with "signalError" is emitted).
@@ -7250,7 +10416,7 @@ class ResultsParser {
         return null;
     }
     createBundleOnEasilyFoundResultWithReturnData(results) {
-        let resultItemWithReturnData = results.items.find(item => item.nonce.valueOf() != 0 && item.data.startsWith("@"));
+        let resultItemWithReturnData = results.items.find((item) => item.nonce.valueOf() != 0 && item.data.startsWith("@"));
         if (!resultItemWithReturnData) {
             return null;
         }
@@ -7259,7 +10425,7 @@ class ResultsParser {
         return {
             returnCode: returnCode,
             returnMessage: returnMessage,
-            values: returnDataParts
+            values: returnDataParts,
         };
     }
     createBundleOnSignalError(logs) {
@@ -7269,30 +10435,29 @@ class ResultsParser {
         }
         let { returnCode, returnDataParts } = this.sliceDataFieldInParts(eventSignalError.data);
         let lastTopic = eventSignalError.getLastTopic();
-        let returnMessage = (lastTopic === null || lastTopic === void 0 ? void 0 : lastTopic.toString()) || returnCode.toString();
+        let returnMessage = lastTopic?.toString() || returnCode.toString();
         return {
             returnCode: returnCode,
             returnMessage: returnMessage,
-            values: returnDataParts
+            values: returnDataParts,
         };
     }
     createBundleOnTooMuchGasWarning(logs) {
-        let eventTooMuchGas = logs.findSingleOrNoneEvent(WellKnownEvents.OnWriteLog, event => event.findFirstOrNoneTopic(topic => topic.toString().startsWith(WellKnownTopics.TooMuchGas)) != undefined);
+        let eventTooMuchGas = logs.findSingleOrNoneEvent(WellKnownEvents.OnWriteLog, (event) => event.findFirstOrNoneTopic((topic) => topic.toString().startsWith(WellKnownTopics.TooMuchGas)) !=
+            undefined);
         if (!eventTooMuchGas) {
             return null;
         }
         let { returnCode, returnDataParts } = this.sliceDataFieldInParts(eventTooMuchGas.data);
-        let lastTopic = eventTooMuchGas.getLastTopic();
-        let returnMessage = (lastTopic === null || lastTopic === void 0 ? void 0 : lastTopic.toString()) || returnCode.toString();
         return {
             returnCode: returnCode,
-            returnMessage: returnMessage,
-            values: returnDataParts
+            returnMessage: returnCode.toString(),
+            values: returnDataParts,
         };
     }
     createBundleOnWriteLogWhereFirstTopicEqualsAddress(logs, address) {
         let hexAddress = new address_1.Address(address.bech32()).hex();
-        let eventWriteLogWhereTopicIsSender = logs.findSingleOrNoneEvent(WellKnownEvents.OnWriteLog, event => event.findFirstOrNoneTopic(topic => topic.hex() == hexAddress) != undefined);
+        let eventWriteLogWhereTopicIsSender = logs.findSingleOrNoneEvent(WellKnownEvents.OnWriteLog, (event) => event.findFirstOrNoneTopic((topic) => topic.hex() == hexAddress) != undefined);
         if (!eventWriteLogWhereTopicIsSender) {
             return null;
         }
@@ -7301,7 +10466,7 @@ class ResultsParser {
         return {
             returnCode: returnCode,
             returnMessage: returnMessage,
-            values: returnDataParts
+            values: returnDataParts,
         };
     }
     /**
@@ -7314,10 +10479,9 @@ class ResultsParser {
         let contractAddress = new address_1.Address(transactionMetadata.receiver);
         // Search the nested logs for matching events (writeLog):
         for (const resultItem of transaction.contractResults.items) {
-            let writeLogWithReturnData = resultItem.logs.findSingleOrNoneEvent(WellKnownEvents.OnWriteLog, event => {
-                var _a;
+            let writeLogWithReturnData = resultItem.logs.findSingleOrNoneEvent(WellKnownEvents.OnWriteLog, (event) => {
                 let addressIsSender = event.address.bech32() == transaction.sender.bech32();
-                let firstTopicIsContract = ((_a = event.topics[0]) === null || _a === void 0 ? void 0 : _a.hex()) == contractAddress.hex();
+                let firstTopicIsContract = event.topics[0]?.hex() == contractAddress.hex();
                 return addressIsSender && firstTopicIsContract;
             });
             if (writeLogWithReturnData) {
@@ -7326,7 +10490,23 @@ class ResultsParser {
                 return {
                     returnCode: returnCode,
                     returnMessage: returnMessage,
-                    values: returnDataParts
+                    values: returnDataParts,
+                };
+            }
+        }
+        // Additional fallback heuristics (alter search constraints):
+        for (const resultItem of transaction.contractResults.items) {
+            let writeLogWithReturnData = resultItem.logs.findSingleOrNoneEvent(WellKnownEvents.OnWriteLog, (event) => {
+                const addressIsContract = event.address.bech32() == contractAddress.toBech32();
+                return addressIsContract;
+            });
+            if (writeLogWithReturnData) {
+                const { returnCode, returnDataParts } = this.sliceDataFieldInParts(writeLogWithReturnData.data);
+                const returnMessage = returnCode.toString();
+                return {
+                    returnCode: returnCode,
+                    returnMessage: returnMessage,
+                    values: returnDataParts,
                 };
             }
         }
@@ -7351,6 +10531,48 @@ class ResultsParser {
         }
         let returnCode = returnCode_1.ReturnCode.fromBuffer(returnCodePart);
         return { returnCode, returnDataParts };
+    }
+    /**
+     * Legacy method, use "TransactionEventsParser.parseEvent()" instead.
+     */
+    parseEvent(transactionEvent, eventDefinition) {
+        // We skip the first topic, because, for log entries emitted by smart contracts, that's the same as the event identifier. See:
+        // https://github.com/multiversx/mx-chain-vm-go/blob/v1.5.27/vmhost/contexts/output.go#L283
+        const topics = transactionEvent.topics.map((topic) => Buffer.from(topic.valueOf())).slice(1);
+        // Before Sirius, there was no "additionalData" field on transaction logs.
+        // After Sirius, the "additionalData" field includes the "data" field, as well (as the first element):
+        // https://github.com/multiversx/mx-chain-go/blob/v1.6.18/process/transactionLog/process.go#L159
+        // Right now, the logic below is duplicated (see "TransactionsConverter"). However, "ResultsParser" will be deprecated & removed at a later time.
+        const legacyData = transactionEvent.dataPayload?.valueOf() || Buffer.from([]);
+        const dataItems = transactionEvent.additionalData?.map((data) => Buffer.from(data.valueOf())) || [];
+        if (dataItems.length === 0) {
+            if (legacyData.length) {
+                dataItems.push(Buffer.from(legacyData));
+            }
+        }
+        return this.doParseEvent({ topics, dataItems, eventDefinition });
+    }
+    /**
+     * @internal
+     * For internal use only.
+     *
+     * Once the legacy "ResultParser" is deprecated & removed, this logic will be absorbed into "TransactionEventsParser".
+     */
+    doParseEvent(options) {
+        const result = {};
+        // "Indexed" ABI "event.inputs" correspond to "event.topics[1:]":
+        const indexedInputs = options.eventDefinition.inputs.filter((input) => input.indexed);
+        const decodedTopics = this.argsSerializer.buffersToValues(options.topics, indexedInputs);
+        for (let i = 0; i < indexedInputs.length; i++) {
+            result[indexedInputs[i].name] = decodedTopics[i].valueOf();
+        }
+        // "Non-indexed" ABI "event.inputs" correspond to "event.data":
+        const nonIndexedInputs = options.eventDefinition.inputs.filter((input) => !input.indexed);
+        const decodedDataParts = this.argsSerializer.buffersToValues(options.dataItems, nonIndexedInputs);
+        for (let i = 0; i < nonIndexedInputs.length; i++) {
+            result[nonIndexedInputs[i].name] = decodedDataParts[i].valueOf();
+        }
+        return result;
     }
 }
 exports.ResultsParser = ResultsParser;
@@ -7411,29 +10633,24 @@ ReturnCode.Unknown = new ReturnCode("unknown");
 /***/ }),
 
 /***/ 17347:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SmartContract = void 0;
-const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
 const address_1 = __nccwpck_require__(39166);
 const compatibility_1 = __nccwpck_require__(44016);
+const constants_1 = __nccwpck_require__(38069);
 const errors_1 = __nccwpck_require__(38506);
-const transaction_1 = __nccwpck_require__(52756);
+const smartContractTransactionsFactory_1 = __nccwpck_require__(48916);
+const transactionsFactoryConfig_1 = __nccwpck_require__(67367);
 const utils_1 = __nccwpck_require__(14719);
-const utils_2 = __nccwpck_require__(58877);
 const codeMetadata_1 = __nccwpck_require__(43797);
 const function_1 = __nccwpck_require__(10919);
 const interaction_1 = __nccwpck_require__(76093);
 const nativeSerializer_1 = __nccwpck_require__(6602);
 const query_1 = __nccwpck_require__(11528);
-const transactionPayloadBuilders_1 = __nccwpck_require__(65081);
-const createKeccakHash = __nccwpck_require__(57188);
 /**
  * An abstraction for deploying and interacting with Smart Contracts.
  */
@@ -7442,7 +10659,7 @@ class SmartContract {
      * Create a SmartContract object by providing its address on the Network.
      */
     constructor(options = {}) {
-        this.address = new address_1.Address();
+        this.address = address_1.Address.empty();
         /**
          * This object contains a function for each endpoint defined by the contract.
          * (a bit similar to web3js's "contract.methods").
@@ -7456,13 +10673,14 @@ class SmartContract {
          * Unlike {@link methodsExplicit}, automatic type inference (wrt. ABI) is applied when using {@link methods}.
          */
         this.methods = {};
-        this.address = options.address || new address_1.Address();
+        this.address = options.address || address_1.Address.empty();
         this.abi = options.abi;
         if (this.abi) {
             this.setupMethods();
         }
     }
     setupMethods() {
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
         let contract = this;
         let abi = this.getAbi();
         for (const definition of abi.getEndpoints()) {
@@ -7506,50 +10724,68 @@ class SmartContract {
     /**
      * Creates a {@link Transaction} for deploying the Smart Contract to the Network.
      */
-    deploy({ deployer, code, codeMetadata, initArguments, value, gasLimit, gasPrice, chainID }) {
+    deploy({ deployer, code, codeMetadata, initArguments, value, gasLimit, gasPrice, chainID, }) {
         compatibility_1.Compatibility.guardAddressIsSetAndNonZero(deployer, "'deployer' of SmartContract.deploy()", "pass the actual address to deploy()");
-        codeMetadata = codeMetadata || new codeMetadata_1.CodeMetadata();
-        initArguments = initArguments || [];
-        value = value || 0;
-        let payload = new transactionPayloadBuilders_1.ContractDeployPayloadBuilder()
-            .setCode(code)
-            .setCodeMetadata(codeMetadata)
-            .setInitArgs(initArguments)
-            .build();
-        let transaction = new transaction_1.Transaction({
-            receiver: address_1.Address.Zero(),
-            sender: deployer,
-            value: value,
-            gasLimit: gasLimit,
-            gasPrice: gasPrice,
-            data: payload,
-            chainID: chainID
+        const config = new transactionsFactoryConfig_1.TransactionsFactoryConfig({ chainID: chainID.valueOf() });
+        const factory = new smartContractTransactionsFactory_1.SmartContractTransactionsFactory({
+            config: config,
+            abi: this.abi,
         });
+        const bytecode = Buffer.from(code.toString(), "hex");
+        const metadataAsJson = this.getMetadataPropertiesAsObject(codeMetadata);
+        const transaction = factory.createTransactionForDeploy({
+            sender: deployer,
+            bytecode: bytecode,
+            gasLimit: BigInt(gasLimit.valueOf()),
+            arguments: initArguments,
+            isUpgradeable: metadataAsJson.upgradeable,
+            isReadable: metadataAsJson.readable,
+            isPayable: metadataAsJson.payable,
+            isPayableBySmartContract: metadataAsJson.payableBySc,
+        });
+        transaction.setChainID(chainID);
+        transaction.setValue(value ?? 0);
+        transaction.setGasPrice(gasPrice ?? constants_1.TRANSACTION_MIN_GAS_PRICE);
         return transaction;
+    }
+    getMetadataPropertiesAsObject(codeMetadata) {
+        let metadata;
+        if (codeMetadata) {
+            metadata = codeMetadata_1.CodeMetadata.fromBytes(Buffer.from(codeMetadata.toString(), "hex"));
+        }
+        else {
+            metadata = new codeMetadata_1.CodeMetadata();
+        }
+        const metadataAsJson = metadata.toJSON();
+        return metadataAsJson;
     }
     /**
      * Creates a {@link Transaction} for upgrading the Smart Contract on the Network.
      */
-    upgrade({ caller, code, codeMetadata, initArguments, value, gasLimit, gasPrice, chainID }) {
+    upgrade({ caller, code, codeMetadata, initArguments, value, gasLimit, gasPrice, chainID, }) {
         compatibility_1.Compatibility.guardAddressIsSetAndNonZero(caller, "'caller' of SmartContract.upgrade()", "pass the actual address to upgrade()");
         this.ensureHasAddress();
-        codeMetadata = codeMetadata || new codeMetadata_1.CodeMetadata();
-        initArguments = initArguments || [];
-        value = value || 0;
-        let payload = new transactionPayloadBuilders_1.ContractUpgradePayloadBuilder()
-            .setCode(code)
-            .setCodeMetadata(codeMetadata)
-            .setInitArgs(initArguments)
-            .build();
-        let transaction = new transaction_1.Transaction({
-            sender: caller,
-            receiver: this.getAddress(),
-            value: value,
-            gasLimit: gasLimit,
-            gasPrice: gasPrice,
-            data: payload,
-            chainID: chainID
+        const config = new transactionsFactoryConfig_1.TransactionsFactoryConfig({ chainID: chainID.valueOf() });
+        const factory = new smartContractTransactionsFactory_1.SmartContractTransactionsFactory({
+            config: config,
+            abi: this.abi,
         });
+        const bytecode = Uint8Array.from(Buffer.from(code.toString(), "hex"));
+        const metadataAsJson = this.getMetadataPropertiesAsObject(codeMetadata);
+        const transaction = factory.createTransactionForUpgrade({
+            sender: caller,
+            contract: this.getAddress(),
+            bytecode: bytecode,
+            gasLimit: BigInt(gasLimit.valueOf()),
+            arguments: initArguments,
+            isUpgradeable: metadataAsJson.upgradeable,
+            isReadable: metadataAsJson.readable,
+            isPayable: metadataAsJson.payable,
+            isPayableBySmartContract: metadataAsJson.payableBySc,
+        });
+        transaction.setChainID(chainID);
+        transaction.setValue(value ?? 0);
+        transaction.setGasPrice(gasPrice ?? constants_1.TRANSACTION_MIN_GAS_PRICE);
         return transaction;
     }
     /**
@@ -7558,21 +10794,23 @@ class SmartContract {
     call({ func, args, value, gasLimit, receiver, gasPrice, chainID, caller }) {
         compatibility_1.Compatibility.guardAddressIsSetAndNonZero(caller, "'caller' of SmartContract.call()", "pass the actual address to call()");
         this.ensureHasAddress();
+        const config = new transactionsFactoryConfig_1.TransactionsFactoryConfig({ chainID: chainID.valueOf() });
+        const factory = new smartContractTransactionsFactory_1.SmartContractTransactionsFactory({
+            config: config,
+            abi: this.abi,
+        });
         args = args || [];
         value = value || 0;
-        let payload = new transactionPayloadBuilders_1.ContractCallPayloadBuilder()
-            .setFunction(func)
-            .setArgs(args)
-            .build();
-        let transaction = new transaction_1.Transaction({
+        const transaction = factory.createTransactionForExecute({
             sender: caller,
-            receiver: receiver ? receiver : this.getAddress(),
-            value: value,
-            gasLimit: gasLimit,
-            gasPrice: gasPrice,
-            data: payload,
-            chainID: chainID,
+            contract: receiver ? receiver : this.getAddress(),
+            function: func.toString(),
+            gasLimit: BigInt(gasLimit.valueOf()),
+            arguments: args,
         });
+        transaction.setChainID(chainID);
+        transaction.setValue(value);
+        transaction.setGasPrice(gasPrice ?? constants_1.TRANSACTION_MIN_GAS_PRICE);
         return transaction;
     }
     createQuery({ func, args, value, caller }) {
@@ -7582,7 +10820,7 @@ class SmartContract {
             func: func,
             args: args,
             value: value,
-            caller: caller
+            caller: caller,
         });
     }
     ensureHasAddress() {
@@ -7598,24 +10836,9 @@ class SmartContract {
      * @param nonce The owner nonce used for the deployment transaction
      */
     static computeAddress(owner, nonce) {
-        let initialPadding = Buffer.alloc(8, 0);
-        let ownerPubkey = new address_1.Address(owner.bech32()).pubkey();
-        let shardSelector = ownerPubkey.slice(30);
-        let ownerNonceBytes = Buffer.alloc(8);
-        const bigNonce = new bignumber_js_1.default(nonce.valueOf().toString(10));
-        const bigNonceBuffer = utils_2.bigIntToBuffer(bigNonce);
-        ownerNonceBytes.write(bigNonceBuffer.reverse().toString('hex'), 'hex');
-        let bytesToHash = Buffer.concat([ownerPubkey, ownerNonceBytes]);
-        let hash = createKeccakHash("keccak256").update(bytesToHash).digest();
-        let vmTypeBytes = Buffer.from(transactionPayloadBuilders_1.ArwenVirtualMachine, "hex");
-        let addressBytes = Buffer.concat([
-            initialPadding,
-            vmTypeBytes,
-            hash.slice(10, 30),
-            shardSelector
-        ]);
-        let address = new address_1.Address(addressBytes);
-        return address;
+        const deployer = address_1.Address.fromBech32(owner.bech32());
+        const addressComputer = new address_1.AddressComputer();
+        return addressComputer.computeContractAddress(deployer, BigInt(nonce.valueOf()));
     }
 }
 exports.SmartContract = SmartContract;
@@ -7629,12 +10852,14 @@ exports.SmartContract = SmartContract;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ContractCallPayloadBuilder = exports.ContractUpgradePayloadBuilder = exports.ContractDeployPayloadBuilder = exports.ArwenVirtualMachine = void 0;
+exports.ContractCallPayloadBuilder = exports.ContractUpgradePayloadBuilder = exports.ContractDeployPayloadBuilder = void 0;
+const constants_1 = __nccwpck_require__(38069);
 const transactionPayload_1 = __nccwpck_require__(14224);
 const utils_1 = __nccwpck_require__(14719);
 const argSerializer_1 = __nccwpck_require__(87225);
-exports.ArwenVirtualMachine = "0500";
 /**
+ * @deprecated Use {@link SmartContractTransactionsFactory} instead.
+ *
  * A builder for {@link TransactionPayload} objects, to be used for Smart Contract deployment transactions.
  */
 class ContractDeployPayloadBuilder {
@@ -7678,13 +10903,15 @@ class ContractDeployPayloadBuilder {
         utils_1.guardValueIsSet("code", this.code);
         let code = this.code.toString();
         let codeMetadata = this.codeMetadata.toString();
-        let data = `${code}@${exports.ArwenVirtualMachine}@${codeMetadata}`;
+        let data = `${code}@${constants_1.WasmVirtualMachine}@${codeMetadata}`;
         data = appendArgumentsToString(data, this.arguments);
         return new transactionPayload_1.TransactionPayload(data);
     }
 }
 exports.ContractDeployPayloadBuilder = ContractDeployPayloadBuilder;
 /**
+ * @deprecated Use {@link SmartContractTransactionsFactory} instead.
+ *
  * A builder for {@link TransactionPayload} objects, to be used for Smart Contract upgrade transactions.
  */
 class ContractUpgradePayloadBuilder {
@@ -7735,6 +10962,8 @@ class ContractUpgradePayloadBuilder {
 }
 exports.ContractUpgradePayloadBuilder = ContractUpgradePayloadBuilder;
 /**
+ * @deprecated Use {@link SmartContractTransactionsFactory} instead.
+ *
  * A builder for {@link TransactionPayload} objects, to be used for Smart Contract execution transactions.
  */
 class ContractCallPayloadBuilder {
@@ -7768,7 +10997,7 @@ class ContractCallPayloadBuilder {
      */
     build() {
         utils_1.guardValueIsSet("calledFunction", this.contractFunction);
-        let data = this.contractFunction.name;
+        let data = this.contractFunction.toString();
         data = appendArgumentsToString(data, this.arguments);
         return new transactionPayload_1.TransactionPayload(data);
     }
@@ -7815,6 +11044,8 @@ const errors = __importStar(__nccwpck_require__(38506));
 const utils_1 = __nccwpck_require__(14719);
 const endpoint_1 = __nccwpck_require__(69097);
 const enum_1 = __nccwpck_require__(92377);
+const event_1 = __nccwpck_require__(3569);
+const explicit_enum_1 = __nccwpck_require__(82794);
 const struct_1 = __nccwpck_require__(69724);
 const typeMapper_1 = __nccwpck_require__(42967);
 const interfaceNamePlaceholder = "?";
@@ -7822,19 +11053,28 @@ class AbiRegistry {
     constructor(options) {
         this.endpoints = [];
         this.customTypes = [];
+        this.events = [];
         this.name = options.name;
         this.constructorDefinition = options.constructorDefinition;
+        this.upgradeConstructorDefinition = options.upgradeConstructorDefinition;
         this.endpoints = options.endpoints;
         this.customTypes = options.customTypes;
+        this.events = options.events || [];
     }
     static create(options) {
         const name = options.name || interfaceNamePlaceholder;
         const constructor = options.constructor || {};
+        const upgradeConstructor = options.upgradeConstructor || {};
         const endpoints = options.endpoints || [];
         const types = options.types || {};
+        const events = options.events || [];
         // Load arbitrary input parameters into properly-defined objects (e.g. EndpointDefinition and CustomType).
-        const constructorDefinition = endpoint_1.EndpointDefinition.fromJSON(Object.assign({ name: "constructor" }, constructor));
-        const endpointDefinitions = endpoints.map(item => endpoint_1.EndpointDefinition.fromJSON(item));
+        const constructorDefinition = endpoint_1.EndpointDefinition.fromJSON({ name: "constructor", ...constructor });
+        const upgradeConstructorDefinition = endpoint_1.EndpointDefinition.fromJSON({
+            name: "upgradeConstructor",
+            ...upgradeConstructor,
+        });
+        const endpointDefinitions = endpoints.map((item) => endpoint_1.EndpointDefinition.fromJSON(item));
         const customTypes = [];
         for (const customTypeName in types) {
             const typeDefinition = types[customTypeName];
@@ -7844,18 +11084,29 @@ class AbiRegistry {
             else if (typeDefinition.type == "enum") {
                 customTypes.push(enum_1.EnumType.fromJSON({ name: customTypeName, variants: typeDefinition.variants }));
             }
+            else if (typeDefinition.type == "explicit-enum") {
+                customTypes.push(explicit_enum_1.ExplicitEnumType.fromJSON({ name: customTypeName, variants: typeDefinition.variants }));
+            }
             else {
                 throw new errors.ErrTypingSystem(`Cannot handle custom type: ${customTypeName}`);
             }
         }
+        const eventDefinitions = events.map((item) => event_1.EventDefinition.fromJSON(item));
         const registry = new AbiRegistry({
             name: name,
             constructorDefinition: constructorDefinition,
+            upgradeConstructorDefinition: upgradeConstructorDefinition,
             endpoints: endpointDefinitions,
             customTypes: customTypes,
+            events: eventDefinitions,
         });
         const remappedRegistry = registry.remapToKnownTypes();
         return remappedRegistry;
+    }
+    getCustomType(name) {
+        const result = this.customTypes.find((e) => e.getName() == name);
+        utils_1.guardValueIsSetWithMessage(`custom type [${name}] not found`, result);
+        return result;
     }
     getStruct(name) {
         const result = this.customTypes.find((e) => e.getName() == name && e.hasExactClass(struct_1.StructType.ClassName));
@@ -7870,6 +11121,11 @@ class AbiRegistry {
         utils_1.guardValueIsSetWithMessage(`enum [${name}] not found`, result);
         return result;
     }
+    getExplicitEnum(name) {
+        const result = this.customTypes.find((e) => e.getName() == name && e.hasExactClass(explicit_enum_1.ExplicitEnumType.ClassName));
+        utils_1.guardValueIsSetWithMessage(`enum [${name}] not found`, result);
+        return result;
+    }
     getEnums(names) {
         return names.map((name) => this.getEnum(name));
     }
@@ -7879,6 +11135,11 @@ class AbiRegistry {
     getEndpoint(name) {
         const result = this.endpoints.find((e) => e.name == name);
         utils_1.guardValueIsSetWithMessage(`endpoint [${name}] not found`, result);
+        return result;
+    }
+    getEvent(name) {
+        const result = this.events.find((e) => e.identifier == name);
+        utils_1.guardValueIsSetWithMessage(`event [${name}] not found`, result);
         return result;
     }
     /**
@@ -7901,30 +11162,36 @@ class AbiRegistry {
         if (this.customTypes.length != newCustomTypes.length) {
             throw new errors.ErrTypingSystem("Did not re-map all custom types");
         }
-        // Let's remap the constructor:
+        // Let's remap the constructor(s):
         const newConstructor = mapEndpoint(this.constructorDefinition, mapper);
+        const newUpgradeConstructor = this.upgradeConstructorDefinition
+            ? mapEndpoint(this.upgradeConstructorDefinition, mapper)
+            : undefined;
         // Then, remap types of all endpoint parameters.
         // The mapper learned all necessary types in the previous step.
         const newEndpoints = [];
         for (const endpoint of this.endpoints) {
             newEndpoints.push(mapEndpoint(endpoint, mapper));
         }
+        const newEvents = this.events.map((event) => mapEvent(event, mapper));
         // Now return the new registry, with all types remapped to known types
         const newRegistry = new AbiRegistry({
             name: this.name,
             constructorDefinition: newConstructor,
+            upgradeConstructorDefinition: newUpgradeConstructor,
             endpoints: newEndpoints,
             customTypes: newCustomTypes,
+            events: newEvents,
         });
         return newRegistry;
     }
     mapCustomTypeDepthFirst(typeToMap, allTypesToMap, mapper, mappedTypes) {
-        const hasBeenMapped = mappedTypes.findIndex(type => type.getName() == typeToMap.getName()) >= 0;
+        const hasBeenMapped = mappedTypes.findIndex((type) => type.getName() == typeToMap.getName()) >= 0;
         if (hasBeenMapped) {
             return;
         }
         for (const typeName of typeToMap.getNamesOfDependencies()) {
-            const dependencyType = allTypesToMap.find(type => type.getName() == typeName);
+            const dependencyType = allTypesToMap.find((type) => type.getName() == typeName);
             if (!dependencyType) {
                 // It's a type that we don't have to map (e.g. could be a primitive type).
                 continue;
@@ -7939,7 +11206,15 @@ exports.AbiRegistry = AbiRegistry;
 function mapEndpoint(endpoint, mapper) {
     const newInput = endpoint.input.map((e) => new endpoint_1.EndpointParameterDefinition(e.name, e.description, mapper.mapType(e.type)));
     const newOutput = endpoint.output.map((e) => new endpoint_1.EndpointParameterDefinition(e.name, e.description, mapper.mapType(e.type)));
-    return new endpoint_1.EndpointDefinition(endpoint.name, newInput, newOutput, endpoint.modifiers);
+    return new endpoint_1.EndpointDefinition(endpoint.name, newInput, newOutput, endpoint.modifiers, endpoint.title);
+}
+function mapEvent(event, mapper) {
+    const newInputs = event.inputs.map((e) => new event_1.EventTopicDefinition({
+        name: e.name,
+        type: mapper.mapType(e.type),
+        indexed: e.indexed,
+    }));
+    return new event_1.EventDefinition(event.identifier, newInputs);
 }
 //# sourceMappingURL=abiRegistry.js.map
 
@@ -7970,7 +11245,7 @@ AddressType.ClassName = "AddressType";
 class AddressValue extends types_1.PrimitiveValue {
     constructor(value) {
         super(new AddressType());
-        this.value = new address_1.Address(value.bech32());
+        this.value = address_1.Address.newFromBech32(value.bech32());
     }
     getClassName() {
         return AddressValue.ClassName;
@@ -8013,7 +11288,7 @@ class OptionalType extends types_1.Type {
         return OptionalType.ClassName;
     }
     isAssignableFrom(type) {
-        if (!(type.hasExactClass(OptionalType.ClassName))) {
+        if (!type.hasExactClass(OptionalType.ClassName)) {
             return false;
         }
         let invariantTypeParameters = this.getFirstTypeParameter().equals(type.getFirstTypeParameter());
@@ -8050,8 +11325,7 @@ class OptionalValue extends types_1.TypedValue {
         return this.value ? this.value.valueOf() : null;
     }
     equals(other) {
-        var _a;
-        return ((_a = this.value) === null || _a === void 0 ? void 0 : _a.equals(other.value)) || false;
+        return this.value?.equals(other.value) || false;
     }
 }
 exports.OptionalValue = OptionalValue;
@@ -8278,7 +11552,7 @@ class CompositeValue extends types_1.TypedValue {
         return CompositeValue.ClassName;
     }
     static fromItems(...items) {
-        let typeParameters = items.map(value => value.getType());
+        let typeParameters = items.map((value) => value.getType());
         let type = new CompositeType(...typeParameters);
         return new CompositeValue(type, items);
     }
@@ -8286,7 +11560,7 @@ class CompositeValue extends types_1.TypedValue {
         return this.items;
     }
     valueOf() {
-        return this.items.map(item => item === null || item === void 0 ? void 0 : item.valueOf());
+        return this.items.map((item) => item?.valueOf());
     }
     equals(other) {
         if (this.getType().differs(other.getType())) {
@@ -8319,10 +11593,11 @@ const typeExpressionParser_1 = __nccwpck_require__(14838);
 const NamePlaceholder = "?";
 const DescriptionPlaceholder = "N / A";
 class EndpointDefinition {
-    constructor(name, input, output, modifiers) {
+    constructor(name, input, output, modifiers, title) {
         this.input = [];
         this.output = [];
         this.name = name;
+        this.title = title || "";
         this.input = input || [];
         this.output = output || [];
         this.modifiers = modifiers;
@@ -8332,20 +11607,23 @@ class EndpointDefinition {
     }
     static fromJSON(json) {
         json.name = json.name == null ? NamePlaceholder : json.name;
+        json.onlyOwner = json.onlyOwner || false;
+        json.title = json.title || "";
         json.payableInTokens = json.payableInTokens || [];
         json.inputs = json.inputs || [];
         json.outputs = json.outputs || [];
-        let input = json.inputs.map(param => EndpointParameterDefinition.fromJSON(param));
-        let output = json.outputs.map(param => EndpointParameterDefinition.fromJSON(param));
-        let modifiers = new EndpointModifiers(json.mutability, json.payableInTokens);
-        return new EndpointDefinition(json.name, input, output, modifiers);
+        let input = json.inputs.map((param) => EndpointParameterDefinition.fromJSON(param));
+        let output = json.outputs.map((param) => EndpointParameterDefinition.fromJSON(param));
+        let modifiers = new EndpointModifiers(json.mutability, json.payableInTokens, json.onlyOwner);
+        return new EndpointDefinition(json.name, input, output, modifiers, json.title);
     }
 }
 exports.EndpointDefinition = EndpointDefinition;
 class EndpointModifiers {
-    constructor(mutability, payableInTokens) {
+    constructor(mutability, payableInTokens, onlyOwner) {
         this.mutability = mutability || "";
         this.payableInTokens = payableInTokens || [];
+        this.onlyOwner = onlyOwner || false;
     }
     isPayableInEGLD() {
         return this.isPayableInToken("EGLD");
@@ -8367,6 +11645,9 @@ class EndpointModifiers {
     }
     isReadonly() {
         return this.mutability == "readonly";
+    }
+    isOnlyOwner() {
+        return this.onlyOwner;
     }
 }
 exports.EndpointModifiers = EndpointModifiers;
@@ -8408,8 +11689,23 @@ class EnumType extends types_1.CustomType {
         return EnumType.ClassName;
     }
     static fromJSON(json) {
-        let variants = (json.variants || []).map((variant) => EnumVariantDefinition.fromJSON(variant));
+        const rawVariants = EnumType.assignMissingDiscriminants(json.variants || []);
+        const variants = rawVariants.map((variant) => EnumVariantDefinition.fromJSON(variant));
         return new EnumType(json.name, variants);
+    }
+    // For some enums (e.g. some "explicit-enum" types), the discriminants are missing.
+    static assignMissingDiscriminants(variants) {
+        const allDiscriminantsAreMissing = variants.every((variant) => variant.discriminant == undefined);
+        if (!allDiscriminantsAreMissing) {
+            // We only assign discriminants if all of them are missing.
+            return variants;
+        }
+        return variants.map((variant, index) => {
+            return {
+                ...variant,
+                discriminant: index,
+            };
+        });
     }
     getVariantByDiscriminant(discriminant) {
         let result = this.variants.find((e) => e.discriminant == discriminant);
@@ -8447,7 +11743,7 @@ class EnumVariantDefinition {
         return this.fieldsDefinitions;
     }
     getFieldDefinition(name) {
-        return this.fieldsDefinitions.find(item => item.name == name);
+        return this.fieldsDefinitions.find((item) => item.name == name);
     }
     getNamesOfDependencies() {
         return fields_1.Fields.getNamesOfTypeDependencies(this.fieldsDefinitions);
@@ -8461,7 +11757,7 @@ class EnumValue extends types_1.TypedValue {
         this.name = variant.name;
         this.discriminant = variant.discriminant;
         this.fields = fields;
-        this.fieldsByName = new Map(fields.map(field => [field.name, field]));
+        this.fieldsByName = new Map(fields.map((field) => [field.name, field]));
         let definitions = variant.getFieldsDefinitions();
         fields_1.Fields.checkTyping(this.fields, definitions);
     }
@@ -8505,13 +11801,126 @@ class EnumValue extends types_1.TypedValue {
     }
     valueOf() {
         let result = { name: this.name, fields: [] };
-        this.fields.forEach((field) => (result.fields[field.name] = field.value.valueOf()));
+        this.fields.forEach((field, index) => (result.fields[index] = field.value.valueOf()));
         return result;
     }
 }
 exports.EnumValue = EnumValue;
 EnumValue.ClassName = "EnumValue";
 //# sourceMappingURL=enum.js.map
+
+/***/ }),
+
+/***/ 3569:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.EventTopicDefinition = exports.EventDefinition = void 0;
+const typeExpressionParser_1 = __nccwpck_require__(14838);
+const NamePlaceholder = "?";
+class EventDefinition {
+    constructor(identifier, inputs) {
+        this.inputs = [];
+        this.identifier = identifier;
+        this.inputs = inputs || [];
+    }
+    static fromJSON(json) {
+        json.identifier = json.identifier == null ? NamePlaceholder : json.identifier;
+        json.inputs = json.inputs || [];
+        const inputs = json.inputs.map((param) => EventTopicDefinition.fromJSON(param));
+        return new EventDefinition(json.identifier, inputs);
+    }
+}
+exports.EventDefinition = EventDefinition;
+class EventTopicDefinition {
+    constructor(options) {
+        this.name = options.name;
+        this.type = options.type;
+        this.indexed = options.indexed;
+    }
+    static fromJSON(json) {
+        const parsedType = new typeExpressionParser_1.TypeExpressionParser().parse(json.type);
+        return new EventTopicDefinition({
+            name: json.name || NamePlaceholder,
+            type: parsedType,
+            indexed: json.indexed,
+        });
+    }
+}
+exports.EventTopicDefinition = EventTopicDefinition;
+//# sourceMappingURL=event.js.map
+
+/***/ }),
+
+/***/ 82794:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ExplicitEnumValue = exports.ExplicitEnumVariantDefinition = exports.ExplicitEnumType = void 0;
+const utils_1 = __nccwpck_require__(14719);
+const types_1 = __nccwpck_require__(49544);
+class ExplicitEnumType extends types_1.CustomType {
+    constructor(name, variants) {
+        super(name);
+        this.variants = [];
+        this.variants = variants;
+    }
+    getClassName() {
+        return ExplicitEnumType.ClassName;
+    }
+    static fromJSON(json) {
+        const variants = json.variants.map((variant) => ExplicitEnumVariantDefinition.fromJSON(variant));
+        return new ExplicitEnumType(json.name, variants);
+    }
+    getVariantByName(name) {
+        let result = this.variants.find((e) => e.name == name);
+        utils_1.guardValueIsSet(`variant by name (${name})`, result);
+        return result;
+    }
+}
+exports.ExplicitEnumType = ExplicitEnumType;
+ExplicitEnumType.ClassName = "ExplicitEnumType";
+class ExplicitEnumVariantDefinition {
+    constructor(name) {
+        this.name = name;
+    }
+    static fromJSON(json) {
+        return new ExplicitEnumVariantDefinition(json.name);
+    }
+}
+exports.ExplicitEnumVariantDefinition = ExplicitEnumVariantDefinition;
+class ExplicitEnumValue extends types_1.TypedValue {
+    constructor(type, variant) {
+        super(type);
+        this.name = variant.name;
+    }
+    getClassName() {
+        return ExplicitEnumValue.ClassName;
+    }
+    /**
+     * Utility (named constructor) to create a simple (i.e. without fields) enum value.
+     */
+    static fromName(type, name) {
+        let variant = type.getVariantByName(name);
+        return new ExplicitEnumValue(type, variant);
+    }
+    equals(other) {
+        if (!this.getType().equals(other.getType())) {
+            return false;
+        }
+        return this.name == other.name;
+    }
+    valueOf() {
+        return { name: this.name };
+    }
+}
+exports.ExplicitEnumValue = ExplicitEnumValue;
+ExplicitEnumValue.ClassName = "ExplicitEnumValue";
+//# sourceMappingURL=explicit-enum.js.map
 
 /***/ }),
 
@@ -8526,13 +11935,13 @@ const address_1 = __nccwpck_require__(65099);
 const generic_1 = __nccwpck_require__(40678);
 const tokenIdentifier_1 = __nccwpck_require__(92370);
 function createListOfAddresses(addresses) {
-    let addressesTyped = addresses.map(address => new address_1.AddressValue(address));
+    let addressesTyped = addresses.map((address) => new address_1.AddressValue(address));
     let list = generic_1.List.fromItems(addressesTyped);
     return list;
 }
 exports.createListOfAddresses = createListOfAddresses;
 function createListOfTokenIdentifiers(identifiers) {
-    let identifiersTyped = identifiers.map(identifier => new tokenIdentifier_1.TokenIdentifierValue(identifier));
+    let identifiersTyped = identifiers.map((identifier) => new tokenIdentifier_1.TokenIdentifierValue(identifier));
     let list = generic_1.List.fromItems(identifiersTyped);
     return list;
 }
@@ -8657,7 +12066,7 @@ class OptionType extends types_1.Type {
         return OptionType.ClassName;
     }
     isAssignableFrom(type) {
-        if (!(type.hasExactClass(OptionType.ClassName))) {
+        if (!type.hasExactClass(OptionType.ClassName)) {
             return false;
         }
         let invariantTypeParameters = this.getFirstTypeParameter().equals(type.getFirstTypeParameter());
@@ -8716,8 +12125,7 @@ class OptionValue extends types_1.TypedValue {
         return this.value ? this.value.valueOf() : null;
     }
     equals(other) {
-        var _a;
-        return ((_a = this.value) === null || _a === void 0 ? void 0 : _a.equals(other.value)) || false;
+        return this.value?.equals(other.value) || false;
     }
 }
 exports.OptionValue = OptionValue;
@@ -8884,14 +12292,18 @@ __exportStar(__nccwpck_require__(65099), exports);
 __exportStar(__nccwpck_require__(70247), exports);
 __exportStar(__nccwpck_require__(30414), exports);
 __exportStar(__nccwpck_require__(80710), exports);
+__exportStar(__nccwpck_require__(99006), exports);
 __exportStar(__nccwpck_require__(12258), exports);
 __exportStar(__nccwpck_require__(69097), exports);
 __exportStar(__nccwpck_require__(92377), exports);
+__exportStar(__nccwpck_require__(82794), exports);
 __exportStar(__nccwpck_require__(8189), exports);
 __exportStar(__nccwpck_require__(21774), exports);
 __exportStar(__nccwpck_require__(40678), exports);
 __exportStar(__nccwpck_require__(31865), exports);
 __exportStar(__nccwpck_require__(75289), exports);
+__exportStar(__nccwpck_require__(70751), exports);
+__exportStar(__nccwpck_require__(51936), exports);
 __exportStar(__nccwpck_require__(97632), exports);
 __exportStar(__nccwpck_require__(57285), exports);
 __exportStar(__nccwpck_require__(15653), exports);
@@ -8904,6 +12316,144 @@ __exportStar(__nccwpck_require__(42967), exports);
 __exportStar(__nccwpck_require__(49544), exports);
 __exportStar(__nccwpck_require__(3320), exports);
 //# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 70751:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ManagedDecimalValue = exports.ManagedDecimalType = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const types_1 = __nccwpck_require__(49544);
+class ManagedDecimalType extends types_1.Type {
+    constructor(metadata) {
+        super("ManagedDecimal", undefined, undefined, metadata);
+    }
+    getClassName() {
+        return ManagedDecimalType.ClassName;
+    }
+    getMetadata() {
+        return this.metadata;
+    }
+    isVariable() {
+        return this.metadata == "usize";
+    }
+}
+exports.ManagedDecimalType = ManagedDecimalType;
+ManagedDecimalType.ClassName = "ManagedDecimalType";
+class ManagedDecimalValue extends types_1.TypedValue {
+    constructor(value, scale, isVariable = false) {
+        super(new ManagedDecimalType(isVariable ? "usize" : scale));
+        this.value = new bignumber_js_1.default(value);
+        this.scale = scale;
+        this.variable = isVariable;
+    }
+    getClassName() {
+        return ManagedDecimalValue.ClassName;
+    }
+    getScale() {
+        return this.scale;
+    }
+    getPrecision() {
+        return this.value.toFixed(this.scale).replace(".", "").length;
+    }
+    /**
+     * Returns whether two objects have the same value.
+     */
+    equals(other) {
+        if (this.getPrecision() != other.getPrecision()) {
+            return false;
+        }
+        return new bignumber_js_1.default(this.value).eq(other.value);
+    }
+    valueOf() {
+        return this.value;
+    }
+    toString() {
+        return this.value.toFixed(this.scale);
+    }
+    isVariable() {
+        return this.variable;
+    }
+}
+exports.ManagedDecimalValue = ManagedDecimalValue;
+ManagedDecimalValue.ClassName = "ManagedDecimalValue";
+//# sourceMappingURL=managedDecimal.js.map
+
+/***/ }),
+
+/***/ 51936:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ManagedDecimalSignedValue = exports.ManagedDecimalSignedType = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const types_1 = __nccwpck_require__(49544);
+class ManagedDecimalSignedType extends types_1.Type {
+    constructor(metadata) {
+        super("ManagedDecimalSigned", undefined, undefined, metadata);
+    }
+    getClassName() {
+        return ManagedDecimalSignedType.ClassName;
+    }
+    getMetadata() {
+        return this.metadata;
+    }
+    isVariable() {
+        return this.metadata == "usize";
+    }
+}
+exports.ManagedDecimalSignedType = ManagedDecimalSignedType;
+ManagedDecimalSignedType.ClassName = "ManagedDecimalSignedType";
+class ManagedDecimalSignedValue extends types_1.TypedValue {
+    constructor(value, scale, isVariable = false) {
+        super(new ManagedDecimalSignedType(isVariable ? "usize" : scale));
+        this.value = new bignumber_js_1.default(value);
+        this.scale = scale;
+        this.variable = isVariable;
+    }
+    getClassName() {
+        return ManagedDecimalSignedValue.ClassName;
+    }
+    getPrecision() {
+        return this.value.toFixed(this.scale).replace(".", "").length;
+    }
+    getScale() {
+        return this.scale;
+    }
+    /**
+     * Returns whether two objects have the same value.
+     */
+    equals(other) {
+        if (this.getPrecision() != other.getPrecision()) {
+            return false;
+        }
+        return new bignumber_js_1.default(this.value).eq(other.value);
+    }
+    valueOf() {
+        return this.value;
+    }
+    toString() {
+        return this.value.toFixed(this.scale);
+    }
+    isVariable() {
+        return this.variable;
+    }
+}
+exports.ManagedDecimalSignedValue = ManagedDecimalSignedValue;
+ManagedDecimalSignedValue.ClassName = "ManagedDecimalSignedValue";
+//# sourceMappingURL=managedDecimalSigned.js.map
 
 /***/ }),
 
@@ -8937,17 +12487,21 @@ const errors = __importStar(__nccwpck_require__(38506));
 const address_1 = __nccwpck_require__(65099);
 const boolean_1 = __nccwpck_require__(30414);
 const bytes_1 = __nccwpck_require__(80710);
+const codeMetadata_1 = __nccwpck_require__(99006);
 const enum_1 = __nccwpck_require__(92377);
+const explicit_enum_1 = __nccwpck_require__(82794);
 const generic_1 = __nccwpck_require__(40678);
+const genericArray_1 = __nccwpck_require__(31865);
 const h256_1 = __nccwpck_require__(75289);
-const numerical_1 = __nccwpck_require__(15653);
+const managedDecimal_1 = __nccwpck_require__(70751);
+const managedDecimalSigned_1 = __nccwpck_require__(51936);
 const nothing_1 = __nccwpck_require__(57285);
+const numerical_1 = __nccwpck_require__(15653);
+const string_1 = __nccwpck_require__(61232);
 const struct_1 = __nccwpck_require__(69724);
 const tokenIdentifier_1 = __nccwpck_require__(92370);
 const tuple_1 = __nccwpck_require__(59475);
 const types_1 = __nccwpck_require__(49544);
-const genericArray_1 = __nccwpck_require__(31865);
-const string_1 = __nccwpck_require__(61232);
 // TODO: Extend functionality or rename wrt. restricted / reduced functionality (not all types are handled: composite, variadic).
 function onTypeSelect(type, selectors) {
     if (type.hasExactClass(generic_1.OptionType.ClassName)) {
@@ -8970,6 +12524,15 @@ function onTypeSelect(type, selectors) {
     }
     if (type.hasExactClass(enum_1.EnumType.ClassName)) {
         return selectors.onEnum();
+    }
+    if (type.hasExactClass(explicit_enum_1.ExplicitEnumType.ClassName)) {
+        return selectors.onExplicitEnum();
+    }
+    if (type.hasExactClass(managedDecimal_1.ManagedDecimalType.ClassName)) {
+        return selectors.onManagedDecimal();
+    }
+    if (type.hasExactClass(managedDecimalSigned_1.ManagedDecimalSignedType.ClassName)) {
+        return selectors.onManagedDecimalSigned();
     }
     if (selectors.onOther) {
         return selectors.onOther();
@@ -8999,6 +12562,15 @@ function onTypedValueSelect(value, selectors) {
     if (value.hasExactClass(enum_1.EnumValue.ClassName)) {
         return selectors.onEnum();
     }
+    if (value.hasExactClass(explicit_enum_1.ExplicitEnumValue.ClassName)) {
+        return selectors.onExplicitEnum();
+    }
+    if (value.hasExactClass(managedDecimal_1.ManagedDecimalValue.ClassName)) {
+        return selectors.onManagedDecimal();
+    }
+    if (value.hasExactClass(managedDecimalSigned_1.ManagedDecimalSignedValue.ClassName)) {
+        return selectors.onManagedDecimalSigned();
+    }
     if (selectors.onOther) {
         return selectors.onOther();
     }
@@ -9026,6 +12598,9 @@ function onPrimitiveValueSelect(value, selectors) {
     }
     if (value.hasExactClass(tokenIdentifier_1.TokenIdentifierValue.ClassName)) {
         return selectors.onTypeIdentifier();
+    }
+    if (value.hasExactClass(codeMetadata_1.CodeMetadataValue.ClassName)) {
+        return selectors.onCodeMetadata();
     }
     if (value.hasExactClass(nothing_1.NothingValue.ClassName)) {
         return selectors.onNothing();
@@ -9057,6 +12632,9 @@ function onPrimitiveTypeSelect(type, selectors) {
     }
     if (type.hasExactClass(tokenIdentifier_1.TokenIdentifierType.ClassName)) {
         return selectors.onTokenIndetifier();
+    }
+    if (type.hasExactClass(codeMetadata_1.CodeMetadataType.ClassName)) {
+        return selectors.onCodeMetadata();
     }
     if (type.hasExactClass(nothing_1.NothingType.ClassName)) {
         return selectors.onNothing();
@@ -9138,9 +12716,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.BigIntValue = exports.BigUIntValue = exports.I64Value = exports.U64Value = exports.I32Value = exports.U32Value = exports.I16Value = exports.U16Value = exports.I8Value = exports.U8Value = exports.NumericalValue = exports.BigIntType = exports.BigUIntType = exports.I64Type = exports.U64Type = exports.I32Type = exports.U32Type = exports.I16Type = exports.U16Type = exports.I8Type = exports.U8Type = exports.NumericalType = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
 const errors = __importStar(__nccwpck_require__(38506));
 const types_1 = __nccwpck_require__(49544);
-const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
 class NumericalType extends types_1.PrimitiveType {
     constructor(name, sizeInBytes, withSign) {
         super(name);
@@ -9265,6 +12843,9 @@ BigIntType.ClassName = "BigIntType";
 class NumericalValue extends types_1.PrimitiveValue {
     constructor(type, value) {
         super(type);
+        if (typeof value === "bigint") {
+            value = value.toString();
+        }
         this.value = new bignumber_js_1.default(value);
         this.sizeInBytes = type.sizeInBytes;
         this.withSign = type.withSign;
@@ -9297,7 +12878,7 @@ exports.NumericalValue = NumericalValue;
 NumericalValue.ClassName = "NumericalValue";
 class U8Value extends NumericalValue {
     constructor(value) {
-        super(new U8Type(), new bignumber_js_1.default(value));
+        super(new U8Type(), value);
     }
     getClassName() {
         return U8Value.ClassName;
@@ -9307,7 +12888,7 @@ exports.U8Value = U8Value;
 U8Value.ClassName = "U8Value";
 class I8Value extends NumericalValue {
     constructor(value) {
-        super(new I8Type(), new bignumber_js_1.default(value));
+        super(new I8Type(), value);
     }
     getClassName() {
         return I8Value.ClassName;
@@ -9317,7 +12898,7 @@ exports.I8Value = I8Value;
 I8Value.ClassName = "I8Value";
 class U16Value extends NumericalValue {
     constructor(value) {
-        super(new U16Type(), new bignumber_js_1.default(value));
+        super(new U16Type(), value);
     }
     getClassName() {
         return U16Value.ClassName;
@@ -9327,7 +12908,7 @@ exports.U16Value = U16Value;
 U16Value.ClassName = "U16Value";
 class I16Value extends NumericalValue {
     constructor(value) {
-        super(new I16Type(), new bignumber_js_1.default(value));
+        super(new I16Type(), value);
     }
     getClassName() {
         return I16Value.ClassName;
@@ -9337,7 +12918,7 @@ exports.I16Value = I16Value;
 I16Value.ClassName = "I16Value";
 class U32Value extends NumericalValue {
     constructor(value) {
-        super(new U32Type(), new bignumber_js_1.default(value));
+        super(new U32Type(), value);
     }
     getClassName() {
         return U32Value.ClassName;
@@ -9347,7 +12928,7 @@ exports.U32Value = U32Value;
 U32Value.ClassName = "U32Value";
 class I32Value extends NumericalValue {
     constructor(value) {
-        super(new I32Type(), new bignumber_js_1.default(value));
+        super(new I32Type(), value);
     }
     getClassName() {
         return I32Value.ClassName;
@@ -9477,14 +13058,14 @@ class StructType extends types_1.CustomType {
         return StructType.ClassName;
     }
     static fromJSON(json) {
-        let definitions = (json.fields || []).map(definition => fields_1.FieldDefinition.fromJSON(definition));
+        let definitions = (json.fields || []).map((definition) => fields_1.FieldDefinition.fromJSON(definition));
         return new StructType(json.name, definitions);
     }
     getFieldsDefinitions() {
         return this.fieldsDefinitions;
     }
     getFieldDefinition(name) {
-        return this.fieldsDefinitions.find(item => item.name == name);
+        return this.fieldsDefinitions.find((item) => item.name == name);
     }
     getNamesOfDependencies() {
         return fields_1.Fields.getNamesOfTypeDependencies(this.fieldsDefinitions);
@@ -9499,7 +13080,7 @@ class Struct extends types_1.TypedValue {
     constructor(type, fields) {
         super(type);
         this.fields = fields;
-        this.fieldsByName = new Map(fields.map(field => [field.name, field]));
+        this.fieldsByName = new Map(fields.map((field) => [field.name, field]));
         this.checkTyping();
     }
     getClassName() {
@@ -9627,10 +13208,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Tuple = exports.TupleType = void 0;
 const errors = __importStar(__nccwpck_require__(38506));
-const struct_1 = __nccwpck_require__(69724);
 const fields_1 = __nccwpck_require__(21774);
-const struct_2 = __nccwpck_require__(69724);
-class TupleType extends struct_2.StructType {
+const struct_1 = __nccwpck_require__(69724);
+class TupleType extends struct_1.StructType {
     constructor(...typeParameters) {
         super(TupleType.prepareName(typeParameters), TupleType.prepareFieldDefinitions(typeParameters));
     }
@@ -9638,8 +13218,8 @@ class TupleType extends struct_2.StructType {
         return TupleType.ClassName;
     }
     static prepareName(typeParameters) {
-        let fields = typeParameters.map(type => type.toString()).join(", ");
-        let result = `tuple${fields.length}<${fields}>`;
+        let fields = typeParameters.map((type) => type.toString()).join(", ");
+        let result = `tuple<${fields}>`;
         return result;
     }
     static prepareFieldDefinitions(typeParameters) {
@@ -9667,7 +13247,7 @@ class Tuple extends struct_1.Struct {
             // TODO: Define a better error.
             throw new errors.ErrTypingSystem("bad tuple items");
         }
-        let fieldsTypes = items.map(item => item.getType());
+        let fieldsTypes = items.map((item) => item.getType());
         let tupleType = new TupleType(...fieldsTypes);
         let fields = items.map((item, i) => new fields_1.Field(item, prepareFieldName(i)));
         return new Tuple(tupleType, fields);
@@ -9680,120 +13260,35 @@ Tuple.ClassName = "Tuple";
 /***/ }),
 
 /***/ 14838:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TypeExpressionParser = void 0;
-const errors = __importStar(__nccwpck_require__(38506));
+const typeFormulaParser_1 = __nccwpck_require__(87612);
+const errors_1 = __nccwpck_require__(38506);
 const types_1 = __nccwpck_require__(49544);
-var jsonHandler = __nccwpck_require__(58569);
 class TypeExpressionParser {
+    constructor() {
+        this.backingTypeFormulaParser = new typeFormulaParser_1.TypeFormulaParser();
+    }
     parse(expression) {
-        let root = this.doParse(expression);
-        let rootKeys = Object.keys(root);
-        if (rootKeys.length != 1) {
-            throw new errors.ErrTypingSystem(`bad type expression: ${expression}`);
+        try {
+            return this.doParse(expression);
         }
-        let name = rootKeys[0];
-        let type = this.nodeToType(name, root[name]);
-        return type;
+        catch (e) {
+            throw new errors_1.ErrTypingSystem(`Failed to parse type expression: ${expression}. Error: ${e}`);
+        }
     }
     doParse(expression) {
-        let jsoned = this.getJsonedString(expression);
-        try {
-            return jsonHandler.parse(jsoned);
-        }
-        catch (error) {
-            throw new errors.ErrTypingSystem(`cannot parse type expression: ${expression}. internal json: ${jsoned}.`);
-        }
+        const typeFormula = this.backingTypeFormulaParser.parseExpression(expression);
+        const type = this.typeFormulaToType(typeFormula);
+        return type;
     }
-    /**
-     * Converts a raw type expression to a JSON, parsing-friendly format.
-     * This is a workaround, so that the parser implementation is simpler (thus we actually rely on the JSON parser).
-     *
-     * @param expression a string such as:
-     *
-     * ```
-     *  - Option<List<Address>>
-     *  - VarArgs<MultiArg2<bytes, Address>>
-     *  - MultiResultVec<MultiResult2<Address, u64>
-     * ```
-     */
-    getJsonedString(expression) {
-        let jsoned = "";
-        for (var i = 0; i < expression.length; i++) {
-            let char = expression.charAt(i);
-            let previousChar = expression.charAt(i - 1);
-            let nextChar = expression.charAt(i + 1);
-            if (char == "<") {
-                jsoned += ": {";
-            }
-            else if (char == ">") {
-                if (previousChar != ">") {
-                    jsoned += ": {} }";
-                }
-                else {
-                    jsoned += "}";
-                }
-            }
-            else if (char == ",") {
-                if (nextChar == ">") {
-                    // Skip superfluous comma
-                }
-                else if (previousChar == ">") {
-                    jsoned += ",";
-                }
-                else {
-                    jsoned += ": {},";
-                }
-            }
-            else {
-                jsoned += char;
-            }
-        }
-        // Split by the delimiters, but exclude the spaces that are found in the middle of "utf-8 string"
-        let symbolsRegex = /(:|\{|\}|,|\s)/;
-        let tokens = jsoned
-            // Hack for Safari compatibility, where we can't use negative lookbehind
-            .replace(/utf\-8\sstring/ig, "utf-8-string")
-            .split(symbolsRegex)
-            .filter((token) => token);
-        jsoned = tokens.map((token) => (symbolsRegex.test(token) ? token : `"${token}"`))
-            .map((token) => token.replace(/utf\-8\-string/ig, "utf-8 string"))
-            .join("");
-        if (tokens.length == 1) {
-            // Workaround for simple, non-generic types.
-            return `{${jsoned}: {}}`;
-        }
-        return `{${jsoned}}`;
-    }
-    nodeToType(name, node) {
-        if (name.charAt(name.length - 1) === "1") {
-            name = name.slice(0, -1);
-        }
-        let typeParameters = Object.keys(node).map((key) => this.nodeToType(key, node[key]));
-        return new types_1.Type(name, typeParameters);
+    typeFormulaToType(typeFormula) {
+        const typeParameters = typeFormula.typeParameters.map((typeFormula) => this.typeFormulaToType(typeFormula));
+        return new types_1.Type(typeFormula.name, typeParameters, undefined, typeFormula.metadata);
     }
 }
 exports.TypeExpressionParser = TypeExpressionParser;
@@ -9835,10 +13330,13 @@ const bytes_1 = __nccwpck_require__(80710);
 const codeMetadata_1 = __nccwpck_require__(99006);
 const composite_1 = __nccwpck_require__(12258);
 const enum_1 = __nccwpck_require__(92377);
+const explicit_enum_1 = __nccwpck_require__(82794);
 const fields_1 = __nccwpck_require__(21774);
 const generic_1 = __nccwpck_require__(40678);
 const genericArray_1 = __nccwpck_require__(31865);
 const h256_1 = __nccwpck_require__(75289);
+const managedDecimal_1 = __nccwpck_require__(70751);
+const managedDecimalSigned_1 = __nccwpck_require__(51936);
 const nothing_1 = __nccwpck_require__(57285);
 const numerical_1 = __nccwpck_require__(15653);
 const string_1 = __nccwpck_require__(61232);
@@ -9855,6 +13353,7 @@ class TypeMapper {
             ["VarArgs", (...typeParameters) => new variadic_1.VariadicType(typeParameters[0])],
             ["MultiResultVec", (...typeParameters) => new variadic_1.VariadicType(typeParameters[0])],
             ["variadic", (...typeParameters) => new variadic_1.VariadicType(typeParameters[0])],
+            ["counted-variadic", (...typeParameters) => new variadic_1.VariadicType(typeParameters[0], true)],
             ["OptionalArg", (...typeParameters) => new algebraic_1.OptionalType(typeParameters[0])],
             ["optional", (...typeParameters) => new algebraic_1.OptionalType(typeParameters[0])],
             ["OptionalResult", (...typeParameters) => new algebraic_1.OptionalType(typeParameters[0])],
@@ -9873,10 +13372,19 @@ class TypeMapper {
             ["tuple8", (...typeParameters) => new tuple_1.TupleType(...typeParameters)],
             // Known-length arrays.
             // TODO: Handle these in typeExpressionParser!
+            ["array2", (...typeParameters) => new genericArray_1.ArrayVecType(2, typeParameters[0])],
+            ["array6", (...typeParameters) => new genericArray_1.ArrayVecType(6, typeParameters[0])],
+            ["array8", (...typeParameters) => new genericArray_1.ArrayVecType(8, typeParameters[0])],
+            ["array16", (...typeParameters) => new genericArray_1.ArrayVecType(16, typeParameters[0])],
             ["array20", (...typeParameters) => new genericArray_1.ArrayVecType(20, typeParameters[0])],
             ["array32", (...typeParameters) => new genericArray_1.ArrayVecType(32, typeParameters[0])],
             ["array46", (...typeParameters) => new genericArray_1.ArrayVecType(46, typeParameters[0])],
+            ["array48", (...typeParameters) => new genericArray_1.ArrayVecType(48, typeParameters[0])],
             ["array64", (...typeParameters) => new genericArray_1.ArrayVecType(64, typeParameters[0])],
+            ["array128", (...typeParameters) => new genericArray_1.ArrayVecType(128, typeParameters[0])],
+            ["array256", (...typeParameters) => new genericArray_1.ArrayVecType(256, typeParameters[0])],
+            ["ManagedDecimal", (...metadata) => new managedDecimal_1.ManagedDecimalType(metadata)],
+            ["ManagedDecimalSigned", (...metadata) => new managedDecimalSigned_1.ManagedDecimalSignedType(metadata)],
         ]);
         // For closed types, we hold actual type instances instead of type constructors / factories (no type parameters needed).
         this.closedTypesMap = new Map([
@@ -9901,12 +13409,17 @@ class TypeMapper {
             ["EgldOrEsdtTokenIdentifier", new tokenIdentifier_1.TokenIdentifierType()],
             ["CodeMetadata", new codeMetadata_1.CodeMetadataType()],
             ["nothing", new nothing_1.NothingType()],
-            ["AsyncCall", new nothing_1.NothingType()]
+            ["AsyncCall", new nothing_1.NothingType()],
         ]);
         this.learnedTypesMap = new Map();
         // Boostrap from previously learned types, if any.
         for (const type of learnedTypes) {
-            this.learnedTypesMap.set(type.getName(), type);
+            if (type.getName() === "ManagedDecimal" || type.getName() === "ManagedDecimalSigned") {
+                this.learnedTypesMap.set(`${type.getName()}_${type.getMetadata()}`, type);
+            }
+            else {
+                this.learnedTypesMap.set(type.getName(), type);
+            }
         }
     }
     /**
@@ -9930,6 +13443,7 @@ class TypeMapper {
     }
     mapTypeRecursively(type) {
         let isGeneric = type.isGenericType();
+        let hasMetadata = type.hasMetadata();
         let previouslyLearnedType = this.learnedTypesMap.get(type.getName());
         if (previouslyLearnedType) {
             return previouslyLearnedType;
@@ -9942,19 +13456,31 @@ class TypeMapper {
             // This will call mapType() recursively, for all the enum variant fields.
             return this.mapEnumType(type);
         }
+        if (type.hasExactClass(explicit_enum_1.ExplicitEnumType.ClassName)) {
+            // This will call mapType() recursively, for all the explicit enum variant fields.
+            return this.mapExplicitEnumType(type);
+        }
         if (type.hasExactClass(struct_1.StructType.ClassName)) {
             // This will call mapType() recursively, for all the struct's fields.
             return this.mapStructType(type);
         }
-        if (isGeneric) {
+        if (isGeneric || hasMetadata) {
             // This will call mapType() recursively, for all the type parameters.
             return this.mapGenericType(type);
         }
         return null;
     }
     learnType(type) {
-        this.learnedTypesMap.delete(type.getName());
-        this.learnedTypesMap.set(type.getName(), type);
+        if (type.getName() === "ManagedDecimal" || type.getName() === "ManagedDecimalSigned") {
+            const learnedTypeKey = `${type.getName()}_${type.getMetadata()}`;
+            this.learnedTypesMap.delete(learnedTypeKey);
+            this.learnedTypesMap.set(learnedTypeKey, type);
+        }
+        else {
+            const learnedTypeKey = type.getName();
+            this.learnedTypesMap.delete(learnedTypeKey);
+            this.learnedTypesMap.set(learnedTypeKey, type);
+        }
     }
     mapStructType(type) {
         let mappedFields = this.mappedFields(type.getFieldsDefinitions());
@@ -9966,6 +13492,11 @@ class TypeMapper {
         let mappedEnum = new enum_1.EnumType(type.getName(), variants);
         return mappedEnum;
     }
+    mapExplicitEnumType(type) {
+        let variants = type.variants.map((variant) => new explicit_enum_1.ExplicitEnumVariantDefinition(variant.name));
+        let mappedEnum = new explicit_enum_1.ExplicitEnumType(type.getName(), variants);
+        return mappedEnum;
+    }
     mappedFields(definitions) {
         return definitions.map((definition) => new fields_1.FieldDefinition(definition.name, definition.description, this.mapType(definition.type)));
     }
@@ -9975,6 +13506,9 @@ class TypeMapper {
         let factory = this.openTypesFactories.get(type.getName());
         if (!factory) {
             throw new errors.ErrTypingSystem(`Cannot map the generic type "${type.getName()}" to a known type`);
+        }
+        if (type.hasMetadata()) {
+            return factory(type.getMetadata());
         }
         return factory(...mappedTypeParameters);
     }
@@ -9998,11 +13532,12 @@ const utils_1 = __nccwpck_require__(14719);
  * Once instantiated as a Type, a generic type is "closed" (as opposed to "open").
  */
 class Type {
-    constructor(name, typeParameters = [], cardinality = TypeCardinality.fixed(1)) {
+    constructor(name, typeParameters = [], cardinality = TypeCardinality.fixed(1), metadata) {
         utils_1.guardValueIsSet("name", name);
         this.name = name;
         this.typeParameters = typeParameters;
         this.cardinality = cardinality;
+        this.metadata = metadata;
     }
     getName() {
         return this.name;
@@ -10011,18 +13546,33 @@ class Type {
         return Type.ClassName;
     }
     getClassHierarchy() {
-        let prototypes = reflection_1.getJavascriptPrototypesInHierarchy(this, prototype => prototype.belongsToTypesystem);
-        let classNames = prototypes.map(prototype => prototype.getClassName()).reverse();
+        let prototypes = reflection_1.getJavascriptPrototypesInHierarchy(this, (prototype) => prototype.belongsToTypesystem);
+        let classNames = prototypes.map((prototype) => prototype.getClassName()).reverse();
         return classNames;
     }
     /**
      * Gets the fully qualified name of the type, to allow for better (efficient and non-ambiguous) type comparison within the custom typesystem.
      */
     getFullyQualifiedName() {
-        let joinedTypeParameters = this.getTypeParameters().map(type => type.getFullyQualifiedName()).join(", ");
-        return this.isGenericType() ?
-            `multiversx:types:${this.getName()}<${joinedTypeParameters}>` :
-            `multiversx:types:${this.getName()}`;
+        return this.isGenericType() || this.hasMetadata()
+            ? this.getFullNameForGeneric()
+            : `multiversx:types:${this.getName()}`;
+    }
+    getFullNameForGeneric() {
+        const hasTypeParameters = this.getTypeParameters().length > 0;
+        const joinedTypeParameters = hasTypeParameters
+            ? `${this.getTypeParameters()
+                .map((type) => type.getFullyQualifiedName())
+                .join(", ")}`
+            : "";
+        let baseName = `multiversx:types:${this.getName()}`;
+        if (hasTypeParameters) {
+            baseName = `${baseName}<${joinedTypeParameters}>`;
+        }
+        if (this.metadata !== undefined) {
+            baseName = `${baseName}*${this.metadata}*`;
+        }
+        return baseName;
     }
     hasExactClass(className) {
         return this.getClassName() == className;
@@ -10034,8 +13584,14 @@ class Type {
     getTypeParameters() {
         return this.typeParameters;
     }
+    getMetadata() {
+        return this.metadata;
+    }
     isGenericType() {
         return this.typeParameters.length > 0;
+    }
+    hasMetadata() {
+        return !!this.metadata;
     }
     getFirstTypeParameter() {
         utils_1.guardTrue(this.typeParameters.length > 0, "type parameters length > 0");
@@ -10045,7 +13601,9 @@ class Type {
      * Generates type expressions similar to mx-sdk-rs.
      */
     toString() {
-        let typeParameters = this.getTypeParameters().map(type => type.toString()).join(", ");
+        let typeParameters = this.getTypeParameters()
+            .map((type) => type.toString())
+            .join(", ");
         let typeParametersExpression = typeParameters ? `<${typeParameters}>` : "";
         return `${this.name}${typeParametersExpression}`;
     }
@@ -10092,8 +13650,8 @@ class Type {
         return other.hasClassOrSuperclass(this.getClassName());
     }
     static getFullyQualifiedNamesInHierarchy(type) {
-        let prototypes = reflection_1.getJavascriptPrototypesInHierarchy(type, prototype => prototype.belongsToTypesystem);
-        let fullyQualifiedNames = prototypes.map(prototype => prototype.getFullyQualifiedName.call(type));
+        let prototypes = reflection_1.getJavascriptPrototypesInHierarchy(type, (prototype) => prototype.belongsToTypesystem);
+        let fullyQualifiedNames = prototypes.map((prototype) => prototype.getFullyQualifiedName.call(type));
         return fullyQualifiedNames;
     }
     getNamesOfDependencies() {
@@ -10110,7 +13668,7 @@ class Type {
     toJSON() {
         return {
             name: this.name,
-            typeParameters: this.typeParameters.map(item => item.toJSON())
+            typeParameters: this.typeParameters.map((item) => item.toJSON()),
         };
     }
     getCardinality() {
@@ -10193,8 +13751,8 @@ class TypedValue {
         return TypedValue.ClassName;
     }
     getClassHierarchy() {
-        let prototypes = reflection_1.getJavascriptPrototypesInHierarchy(this, prototype => prototype.belongsToTypesystem);
-        let classNames = prototypes.map(prototype => prototype.getClassName()).reverse();
+        let prototypes = reflection_1.getJavascriptPrototypesInHierarchy(this, (prototype) => prototype.belongsToTypesystem);
+        let classNames = prototypes.map((prototype) => prototype.getClassName()).reverse();
         return classNames;
     }
     getType() {
@@ -10258,11 +13816,12 @@ NullType.ClassName = "NullType";
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.VariadicValue = exports.VariadicType = void 0;
+exports.VariadicValue = exports.CountedVariadicType = exports.VariadicType = void 0;
 const types_1 = __nccwpck_require__(49544);
 class VariadicType extends types_1.Type {
-    constructor(typeParameter) {
+    constructor(typeParameter, isCounted = false) {
         super("Variadic", [typeParameter], types_1.TypeCardinality.variable());
+        this.isCounted = isCounted;
     }
     getClassName() {
         return VariadicType.ClassName;
@@ -10270,6 +13829,16 @@ class VariadicType extends types_1.Type {
 }
 exports.VariadicType = VariadicType;
 VariadicType.ClassName = "VariadicType";
+class CountedVariadicType extends types_1.Type {
+    constructor(typeParameter) {
+        super("Variadic", [typeParameter], types_1.TypeCardinality.variable());
+    }
+    getClassName() {
+        return VariadicType.ClassName;
+    }
+}
+exports.CountedVariadicType = CountedVariadicType;
+CountedVariadicType.ClassName = "VariadicType";
 /**
  * An abstraction that represents a sequence of values held under the umbrella of a variadic input / output parameter.
  *
@@ -10291,17 +13860,23 @@ class VariadicValue extends types_1.TypedValue {
         return VariadicValue.ClassName;
     }
     static fromItems(...items) {
+        return this.createFromItems(items, false);
+    }
+    static fromItemsCounted(...items) {
+        return this.createFromItems(items, true);
+    }
+    static createFromItems(items, isCounted) {
         if (items.length == 0) {
-            return new VariadicValue(new VariadicType(new types_1.TypePlaceholder()), []);
+            return new VariadicValue(new VariadicType(new types_1.TypePlaceholder(), isCounted), []);
         }
-        let typeParameter = items[0].getType();
-        return new VariadicValue(new VariadicType(typeParameter), items);
+        const typeParameter = items[0].getType();
+        return new VariadicValue(new VariadicType(typeParameter, isCounted), items);
     }
     getItems() {
         return this.items;
     }
     valueOf() {
-        return this.items.map(item => item.valueOf());
+        return this.items.map((item) => item.valueOf());
     }
     equals(other) {
         if (this.getType().differs(other.getType())) {
@@ -10351,9 +13926,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.addressToHex = exports.bufferToHex = exports.utf8ToHex = exports.bigIntToHex = exports.bigIntToBuffer = exports.bufferToBigInt = exports.stringToBuffer = void 0;
+exports.bufferToHex = exports.addressToHex = exports.bigIntToHex = exports.utf8ToHex = exports.bigIntToBuffer = exports.bufferToBigInt = exports.stringToBuffer = void 0;
 const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
-const address_1 = __nccwpck_require__(39166);
 const contractsCodecUtils = __importStar(__nccwpck_require__(58877));
 const codecUtils = __importStar(__nccwpck_require__(44534));
 function stringToBuffer(value) {
@@ -10374,28 +13948,15 @@ function bigIntToBuffer(value) {
     return contractsCodecUtils.bigIntToBuffer(value);
 }
 exports.bigIntToBuffer = bigIntToBuffer;
-function bigIntToHex(value) {
-    if (value == 0) {
-        return "";
-    }
-    return contractsCodecUtils.getHexMagnitudeOfBigInt(value);
-}
-exports.bigIntToHex = bigIntToHex;
-function utf8ToHex(value) {
-    const hex = Buffer.from(value).toString("hex");
-    return codecUtils.zeroPadStringIfOddLength(hex);
-}
-exports.utf8ToHex = utf8ToHex;
+var utils_codec_1 = __nccwpck_require__(44534);
+Object.defineProperty(exports, "utf8ToHex", ({ enumerable: true, get: function () { return utils_codec_1.utf8ToHex; } }));
+Object.defineProperty(exports, "bigIntToHex", ({ enumerable: true, get: function () { return utils_codec_1.bigIntToHex; } }));
+Object.defineProperty(exports, "addressToHex", ({ enumerable: true, get: function () { return utils_codec_1.addressToHex; } }));
 function bufferToHex(value) {
     const hex = value.toString("hex");
     return codecUtils.zeroPadStringIfOddLength(hex);
 }
 exports.bufferToHex = bufferToHex;
-function addressToHex(address) {
-    const buffer = address_1.Address.fromBech32(address.toString()).pubkey();
-    return buffer.toString("hex");
-}
-exports.addressToHex = addressToHex;
 //# sourceMappingURL=codec.js.map
 
 /***/ }),
@@ -10431,30 +13992,40 @@ __exportStar(__nccwpck_require__(86526), exports);
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TokenOperationsFactory = void 0;
 const constants_1 = __nccwpck_require__(38069);
+const logger_1 = __nccwpck_require__(70055);
 const networkParams_1 = __nccwpck_require__(28995);
 const transaction_1 = __nccwpck_require__(52756);
 const transactionPayload_1 = __nccwpck_require__(14224);
 const codec_1 = __nccwpck_require__(15318);
+/**
+ * @deprecated Use {@link TokenManagementTransactionsFactory} instead.
+ */
 class TokenOperationsFactory {
     constructor(config) {
         this.config = config;
         this.trueAsHex = codec_1.utf8ToHex("true");
+        this.falseAsHex = codec_1.utf8ToHex("false");
     }
     issueFungible(args) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
         const parts = [
             "issue",
             codec_1.utf8ToHex(args.tokenName),
             codec_1.utf8ToHex(args.tokenTicker),
             codec_1.bigIntToHex(args.initialSupply),
             codec_1.bigIntToHex(args.numDecimals),
-            ...(args.canFreeze ? [codec_1.utf8ToHex("canFreeze"), this.trueAsHex] : []),
-            ...(args.canWipe ? [codec_1.utf8ToHex("canWipe"), this.trueAsHex] : []),
-            ...(args.canPause ? [codec_1.utf8ToHex("canPause"), this.trueAsHex] : []),
-            ...(args.canMint ? [codec_1.utf8ToHex("canMint"), this.trueAsHex] : []),
-            ...(args.canBurn ? [codec_1.utf8ToHex("canBurn"), this.trueAsHex] : []),
-            ...(args.canChangeOwner ? [codec_1.utf8ToHex("canChangeOwner"), this.trueAsHex] : []),
-            ...(args.canUpgrade ? [codec_1.utf8ToHex("canUpgrade"), this.trueAsHex] : []),
-            ...(args.canAddSpecialRoles ? [codec_1.utf8ToHex("canAddSpecialRoles"), this.trueAsHex] : []),
+            codec_1.utf8ToHex("canFreeze"),
+            args.canFreeze ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canWipe"),
+            args.canWipe ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canPause"),
+            args.canPause ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canChangeOwner"),
+            args.canChangeOwner ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canUpgrade"),
+            args.canUpgrade ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canAddSpecialRoles"),
+            args.canAddSpecialRoles ? this.trueAsHex : this.falseAsHex,
         ];
         return this.createTransaction({
             sender: args.issuer,
@@ -10464,21 +14035,37 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitIssue,
-            dataParts: parts
+            dataParts: parts,
         });
     }
+    notifyAboutUnsettingBurnRoleGlobally() {
+        logger_1.Logger.info(`
+==========
+IMPORTANT!
+==========
+You are about to issue (register) a new token. This will set the role "ESDTRoleBurnForAll" (globally).
+Once the token is registered, you can unset this role by calling "unsetBurnRoleGlobally" (in a separate transaction).`);
+    }
     issueSemiFungible(args) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
         const parts = [
             "issueSemiFungible",
             codec_1.utf8ToHex(args.tokenName),
             codec_1.utf8ToHex(args.tokenTicker),
-            ...(args.canFreeze ? [codec_1.utf8ToHex("canFreeze"), this.trueAsHex] : []),
-            ...(args.canWipe ? [codec_1.utf8ToHex("canWipe"), this.trueAsHex] : []),
-            ...(args.canPause ? [codec_1.utf8ToHex("canPause"), this.trueAsHex] : []),
-            ...(args.canTransferNFTCreateRole ? [codec_1.utf8ToHex("canTransferNFTCreateRole"), this.trueAsHex] : []),
-            ...(args.canChangeOwner ? [codec_1.utf8ToHex("canChangeOwner"), this.trueAsHex] : []),
-            ...(args.canUpgrade ? [codec_1.utf8ToHex("canUpgrade"), this.trueAsHex] : []),
-            ...(args.canAddSpecialRoles ? [codec_1.utf8ToHex("canAddSpecialRoles"), this.trueAsHex] : []),
+            codec_1.utf8ToHex("canFreeze"),
+            args.canFreeze ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canWipe"),
+            args.canWipe ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canPause"),
+            args.canPause ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canTransferNFTCreateRole"),
+            args.canTransferNFTCreateRole ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canChangeOwner"),
+            args.canChangeOwner ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canUpgrade"),
+            args.canUpgrade ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canAddSpecialRoles"),
+            args.canAddSpecialRoles ? this.trueAsHex : this.falseAsHex,
         ];
         return this.createTransaction({
             sender: args.issuer,
@@ -10488,21 +14075,29 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitIssue,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     issueNonFungible(args) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
         const parts = [
             "issueNonFungible",
             codec_1.utf8ToHex(args.tokenName),
             codec_1.utf8ToHex(args.tokenTicker),
-            ...(args.canFreeze ? [codec_1.utf8ToHex("canFreeze"), this.trueAsHex] : []),
-            ...(args.canWipe ? [codec_1.utf8ToHex("canWipe"), this.trueAsHex] : []),
-            ...(args.canPause ? [codec_1.utf8ToHex("canPause"), this.trueAsHex] : []),
-            ...(args.canTransferNFTCreateRole ? [codec_1.utf8ToHex("canTransferNFTCreateRole"), this.trueAsHex] : []),
-            ...(args.canChangeOwner ? [codec_1.utf8ToHex("canChangeOwner"), this.trueAsHex] : []),
-            ...(args.canUpgrade ? [codec_1.utf8ToHex("canUpgrade"), this.trueAsHex] : []),
-            ...(args.canAddSpecialRoles ? [codec_1.utf8ToHex("canAddSpecialRoles"), this.trueAsHex] : []),
+            codec_1.utf8ToHex("canFreeze"),
+            args.canFreeze ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canWipe"),
+            args.canWipe ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canPause"),
+            args.canPause ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canTransferNFTCreateRole"),
+            args.canTransferNFTCreateRole ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canChangeOwner"),
+            args.canChangeOwner ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canUpgrade"),
+            args.canUpgrade ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canAddSpecialRoles"),
+            args.canAddSpecialRoles ? this.trueAsHex : this.falseAsHex,
         ];
         return this.createTransaction({
             sender: args.issuer,
@@ -10512,22 +14107,30 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitIssue,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     registerMetaESDT(args) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
         const parts = [
             "registerMetaESDT",
             codec_1.utf8ToHex(args.tokenName),
             codec_1.utf8ToHex(args.tokenTicker),
             codec_1.bigIntToHex(args.numDecimals),
-            ...(args.canFreeze ? [codec_1.utf8ToHex("canFreeze"), this.trueAsHex] : []),
-            ...(args.canWipe ? [codec_1.utf8ToHex("canWipe"), this.trueAsHex] : []),
-            ...(args.canPause ? [codec_1.utf8ToHex("canPause"), this.trueAsHex] : []),
-            ...(args.canTransferNFTCreateRole ? [codec_1.utf8ToHex("canTransferNFTCreateRole"), this.trueAsHex] : []),
-            ...(args.canChangeOwner ? [codec_1.utf8ToHex("canChangeOwner"), this.trueAsHex] : []),
-            ...(args.canUpgrade ? [codec_1.utf8ToHex("canUpgrade"), this.trueAsHex] : []),
-            ...(args.canAddSpecialRoles ? [codec_1.utf8ToHex("canAddSpecialRoles"), this.trueAsHex] : []),
+            codec_1.utf8ToHex("canFreeze"),
+            args.canFreeze ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canWipe"),
+            args.canWipe ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canPause"),
+            args.canPause ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canTransferNFTCreateRole"),
+            args.canTransferNFTCreateRole ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canChangeOwner"),
+            args.canChangeOwner ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canUpgrade"),
+            args.canUpgrade ? this.trueAsHex : this.falseAsHex,
+            codec_1.utf8ToHex("canAddSpecialRoles"),
+            args.canAddSpecialRoles ? this.trueAsHex : this.falseAsHex,
         ];
         return this.createTransaction({
             sender: args.issuer,
@@ -10537,7 +14140,51 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitIssue,
-            dataParts: parts
+            dataParts: parts,
+        });
+    }
+    registerAndSetAllRoles(args) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
+        const parts = [
+            "registerAndSetAllRoles",
+            codec_1.utf8ToHex(args.tokenName),
+            codec_1.utf8ToHex(args.tokenTicker),
+            codec_1.utf8ToHex(args.tokenType),
+            codec_1.bigIntToHex(args.numDecimals),
+        ];
+        return this.createTransaction({
+            sender: args.issuer,
+            receiver: this.config.esdtContractAddress,
+            nonce: args.transactionNonce,
+            value: this.config.issueCost,
+            gasPrice: args.gasPrice,
+            gasLimitHint: args.gasLimit,
+            executionGasLimit: this.config.gasLimitIssue,
+            dataParts: parts,
+        });
+    }
+    setBurnRoleGlobally(args) {
+        const parts = ["setBurnRoleGlobally", codec_1.utf8ToHex(args.tokenIdentifier)];
+        return this.createTransaction({
+            sender: args.manager,
+            receiver: this.config.esdtContractAddress,
+            nonce: args.transactionNonce,
+            gasPrice: args.gasPrice,
+            gasLimitHint: args.gasLimit,
+            executionGasLimit: this.config.gasLimitToggleBurnRoleGlobally,
+            dataParts: parts,
+        });
+    }
+    unsetBurnRoleGlobally(args) {
+        const parts = ["unsetBurnRoleGlobally", codec_1.utf8ToHex(args.tokenIdentifier)];
+        return this.createTransaction({
+            sender: args.manager,
+            receiver: this.config.esdtContractAddress,
+            nonce: args.transactionNonce,
+            gasPrice: args.gasPrice,
+            gasLimitHint: args.gasLimit,
+            executionGasLimit: this.config.gasLimitToggleBurnRoleGlobally,
+            dataParts: parts,
         });
     }
     setSpecialRoleOnFungible(args) {
@@ -10555,7 +14202,7 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitSetSpecialRole,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     setSpecialRoleOnSemiFungible(args) {
@@ -10575,7 +14222,7 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitSetSpecialRole,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     setSpecialRoleOnMetaESDT(args) {
@@ -10599,7 +14246,7 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitSetSpecialRole,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     nftCreate(args) {
@@ -10623,14 +14270,11 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitESDTNFTCreate.valueOf() + storageGasLimit.valueOf(),
-            dataParts: parts
+            dataParts: parts,
         });
     }
     pause(args) {
-        const parts = [
-            "pause",
-            codec_1.utf8ToHex(args.tokenIdentifier)
-        ];
+        const parts = ["pause", codec_1.utf8ToHex(args.tokenIdentifier)];
         return this.createTransaction({
             sender: args.manager,
             receiver: this.config.esdtContractAddress,
@@ -10638,14 +14282,11 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitPausing,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     unpause(args) {
-        const parts = [
-            "unPause",
-            codec_1.utf8ToHex(args.tokenIdentifier)
-        ];
+        const parts = ["unPause", codec_1.utf8ToHex(args.tokenIdentifier)];
         return this.createTransaction({
             sender: args.manager,
             receiver: this.config.esdtContractAddress,
@@ -10653,15 +14294,11 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitPausing,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     freeze(args) {
-        const parts = [
-            "freeze",
-            codec_1.utf8ToHex(args.tokenIdentifier),
-            codec_1.addressToHex(args.user)
-        ];
+        const parts = ["freeze", codec_1.utf8ToHex(args.tokenIdentifier), codec_1.addressToHex(args.user)];
         return this.createTransaction({
             sender: args.manager,
             receiver: this.config.esdtContractAddress,
@@ -10669,15 +14306,11 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitFreezing,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     unfreeze(args) {
-        const parts = [
-            "unFreeze",
-            codec_1.utf8ToHex(args.tokenIdentifier),
-            codec_1.addressToHex(args.user)
-        ];
+        const parts = ["unFreeze", codec_1.utf8ToHex(args.tokenIdentifier), codec_1.addressToHex(args.user)];
         return this.createTransaction({
             sender: args.manager,
             receiver: this.config.esdtContractAddress,
@@ -10685,15 +14318,11 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitFreezing,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     wipe(args) {
-        const parts = [
-            "wipe",
-            codec_1.utf8ToHex(args.tokenIdentifier),
-            codec_1.addressToHex(args.user)
-        ];
+        const parts = ["wipe", codec_1.utf8ToHex(args.tokenIdentifier), codec_1.addressToHex(args.user)];
         return this.createTransaction({
             sender: args.manager,
             receiver: this.config.esdtContractAddress,
@@ -10701,15 +14330,11 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitWiping,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     localMint(args) {
-        const parts = [
-            "ESDTLocalMint",
-            codec_1.utf8ToHex(args.tokenIdentifier),
-            codec_1.bigIntToHex(args.supplyToMint),
-        ];
+        const parts = ["ESDTLocalMint", codec_1.utf8ToHex(args.tokenIdentifier), codec_1.bigIntToHex(args.supplyToMint)];
         return this.createTransaction({
             sender: args.manager,
             receiver: args.manager,
@@ -10717,15 +14342,11 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitESDTLocalMint,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     localBurn(args) {
-        const parts = [
-            "ESDTLocalBurn",
-            codec_1.utf8ToHex(args.tokenIdentifier),
-            codec_1.bigIntToHex(args.supplyToBurn),
-        ];
+        const parts = ["ESDTLocalBurn", codec_1.utf8ToHex(args.tokenIdentifier), codec_1.bigIntToHex(args.supplyToBurn)];
         return this.createTransaction({
             sender: args.manager,
             receiver: args.manager,
@@ -10733,7 +14354,7 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitESDTLocalBurn,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     updateAttributes(args) {
@@ -10750,7 +14371,7 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitESDTNFTUpdateAttributes,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     addQuantity(args) {
@@ -10758,7 +14379,7 @@ class TokenOperationsFactory {
             "ESDTNFTAddQuantity",
             codec_1.utf8ToHex(args.tokenIdentifier),
             codec_1.bigIntToHex(args.tokenNonce),
-            codec_1.bigIntToHex(args.quantityToAdd)
+            codec_1.bigIntToHex(args.quantityToAdd),
         ];
         return this.createTransaction({
             sender: args.manager,
@@ -10767,7 +14388,7 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitESDTNFTAddQuantity,
-            dataParts: parts
+            dataParts: parts,
         });
     }
     burnQuantity(args) {
@@ -10775,7 +14396,7 @@ class TokenOperationsFactory {
             "ESDTNFTBurn",
             codec_1.utf8ToHex(args.tokenIdentifier),
             codec_1.bigIntToHex(args.tokenNonce),
-            codec_1.bigIntToHex(args.quantityToBurn)
+            codec_1.bigIntToHex(args.quantityToBurn),
         ];
         return this.createTransaction({
             sender: args.manager,
@@ -10784,10 +14405,10 @@ class TokenOperationsFactory {
             gasPrice: args.gasPrice,
             gasLimitHint: args.gasLimit,
             executionGasLimit: this.config.gasLimitESDTNFTBurn,
-            dataParts: parts
+            dataParts: parts,
         });
     }
-    createTransaction({ sender, receiver, nonce, value, gasPrice, gasLimitHint, executionGasLimit, dataParts }) {
+    createTransaction({ sender, receiver, nonce, value, gasPrice, gasLimitHint, executionGasLimit, dataParts, }) {
         const payload = this.buildTransactionPayload(dataParts);
         const gasLimit = gasLimitHint || this.computeGasLimit(payload, executionGasLimit);
         const version = new networkParams_1.TransactionVersion(constants_1.TRANSACTION_VERSION_DEFAULT);
@@ -10802,7 +14423,7 @@ class TokenOperationsFactory {
             value: value || 0,
             data: payload,
             version: version,
-            options: options
+            options: options,
         });
     }
     buildTransactionPayload(parts) {
@@ -10827,12 +14448,16 @@ exports.TokenOperationsFactory = TokenOperationsFactory;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TokenOperationsFactoryConfig = void 0;
 const address_1 = __nccwpck_require__(39166);
+/**
+ * @deprecated Use {@link TransactionsFactoryConfig} instead.
+ */
 class TokenOperationsFactoryConfig {
     constructor(chainID) {
         this.minGasPrice = 1000000000;
         this.minGasLimit = 50000;
         this.gasLimitPerByte = 1500;
         this.gasLimitIssue = 60000000;
+        this.gasLimitToggleBurnRoleGlobally = 60000000;
         this.gasLimitESDTLocalMint = 300000;
         this.gasLimitESDTLocalBurn = 300000;
         this.gasLimitSetSpecialRole = 60000000;
@@ -10864,6 +14489,9 @@ exports.TokenOperationsOutcomeParser = void 0;
 const address_1 = __nccwpck_require__(39166);
 const errors_1 = __nccwpck_require__(38506);
 const codec_1 = __nccwpck_require__(15318);
+/**
+ * @deprecated Use {@link TokenManagementTransactionsOutcomeParser}
+ */
 class TokenOperationsOutcomeParser {
     parseIssueFungible(transaction) {
         this.ensureNoError(transaction);
@@ -10889,12 +14517,28 @@ class TokenOperationsOutcomeParser {
         const tokenIdentifier = this.extractTokenIdentifier(event);
         return { tokenIdentifier: tokenIdentifier };
     }
+    parseRegisterAndSetAllRoles(transaction) {
+        this.ensureNoError(transaction);
+        const eventRegister = this.findSingleEventByIdentifier(transaction, "registerAndSetAllRoles");
+        const tokenIdentifier = this.extractTokenIdentifier(eventRegister);
+        const eventSetRole = this.findSingleEventByIdentifier(transaction, "ESDTSetRole");
+        const roles = eventSetRole.topics.slice(3).map((topic) => topic.valueOf().toString());
+        return { tokenIdentifier, roles };
+    }
+    parseSetBurnRoleGlobally(transaction) {
+        this.ensureNoError(transaction);
+        return {};
+    }
+    parseUnsetBurnRoleGlobally(transaction) {
+        this.ensureNoError(transaction);
+        return {};
+    }
     parseSetSpecialRole(transaction) {
         this.ensureNoError(transaction);
         const event = this.findSingleEventByIdentifier(transaction, "ESDTSetRole");
         const userAddress = event.address.toString();
         const tokenIdentifier = this.extractTokenIdentifier(event);
-        const roles = event.topics.slice(3).map(topic => topic.valueOf().toString());
+        const roles = event.topics.slice(3).map((topic) => topic.valueOf().toString());
         return { userAddress, tokenIdentifier, roles };
     }
     parseNFTCreate(transaction) {
@@ -10961,12 +14605,11 @@ class TokenOperationsOutcomeParser {
         return { userAddress, tokenIdentifier, nonce, balance };
     }
     parseUpdateAttributes(transaction) {
-        var _a;
         this.ensureNoError(transaction);
         const event = this.findSingleEventByIdentifier(transaction, "ESDTNFTUpdateAttributes");
         const tokenIdentifier = this.extractTokenIdentifier(event);
         const nonce = this.extractNonce(event);
-        const attributes = (_a = event.topics[3]) === null || _a === void 0 ? void 0 : _a.valueOf();
+        const attributes = event.topics[3]?.valueOf();
         return { tokenIdentifier, nonce, attributes };
     }
     parseAddQuantity(transaction) {
@@ -10986,17 +14629,16 @@ class TokenOperationsOutcomeParser {
         return { tokenIdentifier, nonce, burntQuantity };
     }
     ensureNoError(transaction) {
-        var _a;
         for (const event of transaction.logs.events) {
             if (event.identifier == "signalError") {
                 const data = Buffer.from(event.data.substring(1), "hex").toString();
-                const message = (_a = event.topics[1]) === null || _a === void 0 ? void 0 : _a.valueOf().toString();
+                const message = event.topics[1]?.valueOf().toString();
                 throw new errors_1.ErrCannotParseTransactionOutcome(transaction.hash, `encountered signalError: ${message} (${data})`);
             }
         }
     }
     findSingleEventByIdentifier(transaction, identifier) {
-        const events = this.gatherAllEvents(transaction).filter(event => event.identifier == identifier);
+        const events = this.gatherAllEvents(transaction).filter((event) => event.identifier == identifier);
         if (events.length == 0) {
             throw new errors_1.ErrCannotParseTransactionOutcome(transaction.hash, `cannot find event of type ${identifier}`);
         }
@@ -11014,20 +14656,16 @@ class TokenOperationsOutcomeParser {
         return allEvents;
     }
     extractTokenIdentifier(event) {
-        var _a;
-        return (_a = event.topics[0]) === null || _a === void 0 ? void 0 : _a.valueOf().toString();
+        return event.topics[0]?.valueOf().toString();
     }
     extractNonce(event) {
-        var _a;
-        return codec_1.bufferToBigInt((_a = event.topics[1]) === null || _a === void 0 ? void 0 : _a.valueOf()).toFixed(0);
+        return codec_1.bufferToBigInt(event.topics[1]?.valueOf()).toFixed(0);
     }
     extractAmount(event) {
-        var _a;
-        return codec_1.bufferToBigInt((_a = event.topics[2]) === null || _a === void 0 ? void 0 : _a.valueOf()).toFixed(0);
+        return codec_1.bufferToBigInt(event.topics[2]?.valueOf()).toFixed(0);
     }
     extractAddress(event) {
-        var _a;
-        return address_1.Address.fromBuffer((_a = event.topics[3]) === null || _a === void 0 ? void 0 : _a.valueOf()).toString();
+        return address_1.Address.fromBuffer(event.topics[3]?.valueOf()).toString();
     }
 }
 exports.TokenOperationsOutcomeParser = TokenOperationsOutcomeParser;
@@ -11035,7 +14673,7 @@ exports.TokenOperationsOutcomeParser = TokenOperationsOutcomeParser;
 
 /***/ }),
 
-/***/ 60588:
+/***/ 49272:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -11044,28 +14682,70 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.TokenPayment = exports.TokenTransfer = void 0;
+exports.TokenPayment = exports.TokenComputer = exports.TokenTransfer = exports.Token = void 0;
 const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const constants_1 = __nccwpck_require__(38069);
 const errors_1 = __nccwpck_require__(38506);
+// Legacy constants:
 const EGLDTokenIdentifier = "EGLD";
 const EGLDNumDecimals = 18;
+// Legacy configuration.
 // Note: this will actually set the default rounding mode for all BigNumber objects in the environment (in the application / dApp).
 bignumber_js_1.default.set({ ROUNDING_MODE: 1 });
+class Token {
+    constructor(options) {
+        this.identifier = options.identifier;
+        this.nonce = options.nonce || 0n;
+    }
+}
+exports.Token = Token;
 class TokenTransfer {
     constructor(options) {
-        const amount = new bignumber_js_1.default(options.amountAsBigInteger);
-        if (!amount.isInteger() || amount.isNegative()) {
-            throw new errors_1.ErrInvalidArgument(`bad amountAsBigInteger: ${options.amountAsBigInteger}`);
+        if (this.isLegacyTokenTransferOptions(options)) {
+            // Handle legacy fields.
+            const amount = new bignumber_js_1.default(options.amountAsBigInteger);
+            if (!amount.isInteger() || amount.isNegative()) {
+                throw new errors_1.ErrInvalidArgument(`bad amountAsBigInteger: ${options.amountAsBigInteger}`);
+            }
+            this.tokenIdentifier = options.tokenIdentifier;
+            this.nonce = options.nonce;
+            this.amountAsBigInteger = amount;
+            this.numDecimals = options.numDecimals || 0;
+            // Handle new fields.
+            this.token = new Token({
+                identifier: options.tokenIdentifier,
+                nonce: BigInt(options.nonce),
+            });
+            this.amount = BigInt(this.amountAsBigInteger.toFixed(0));
         }
-        this.tokenIdentifier = options.tokenIdentifier;
-        this.nonce = options.nonce;
-        this.amountAsBigInteger = amount;
-        this.numDecimals = options.numDecimals;
+        else {
+            // Handle new fields.
+            this.token = options.token;
+            this.amount = options.amount;
+            // Handle legacy fields.
+            this.tokenIdentifier = options.token.identifier;
+            this.nonce = Number(options.token.nonce);
+            this.amountAsBigInteger = new bignumber_js_1.default(this.amount.toString());
+            this.numDecimals = 0;
+        }
     }
+    static newFromEgldAmount(amount) {
+        const token = new Token({ identifier: constants_1.EGLD_IDENTIFIER_FOR_MULTI_ESDTNFT_TRANSFER });
+        return new TokenTransfer({ token, amount });
+    }
+    isLegacyTokenTransferOptions(options) {
+        return options.tokenIdentifier !== undefined;
+    }
+    /**
+     * Legacy function. Use the constructor instead: new TokenTransfer({ token, amount });
+     */
     static egldFromAmount(amount) {
         const amountAsBigInteger = new bignumber_js_1.default(amount).shiftedBy(EGLDNumDecimals).decimalPlaces(0);
         return this.egldFromBigInteger(amountAsBigInteger);
     }
+    /**
+     * Legacy function. Use the constructor instead: new TokenTransfer({ token, amount });
+     */
     static egldFromBigInteger(amountAsBigInteger) {
         return new TokenTransfer({
             tokenIdentifier: EGLDTokenIdentifier,
@@ -11074,10 +14754,16 @@ class TokenTransfer {
             numDecimals: EGLDNumDecimals,
         });
     }
+    /**
+     * Legacy function. Use the constructor instead: new TokenTransfer({ token, amount });
+     */
     static fungibleFromAmount(tokenIdentifier, amount, numDecimals) {
         const amountAsBigInteger = new bignumber_js_1.default(amount).shiftedBy(numDecimals).decimalPlaces(0);
         return this.fungibleFromBigInteger(tokenIdentifier, amountAsBigInteger, numDecimals);
     }
+    /**
+     * Legacy function. Use the constructor instead: new TokenTransfer({ token, amount });
+     */
     static fungibleFromBigInteger(tokenIdentifier, amountAsBigInteger, numDecimals = 0) {
         return new TokenTransfer({
             tokenIdentifier,
@@ -11086,6 +14772,9 @@ class TokenTransfer {
             numDecimals,
         });
     }
+    /**
+     * Legacy function. Use the constructor instead: new TokenTransfer({ token, amount });
+     */
     static nonFungible(tokenIdentifier, nonce) {
         return new TokenTransfer({
             tokenIdentifier,
@@ -11094,6 +14783,9 @@ class TokenTransfer {
             numDecimals: 0,
         });
     }
+    /**
+     * Legacy function. Use the constructor instead: new TokenTransfer({ token, amount });
+     */
     static semiFungible(tokenIdentifier, nonce, quantity) {
         return new TokenTransfer({
             tokenIdentifier,
@@ -11102,10 +14794,16 @@ class TokenTransfer {
             numDecimals: 0,
         });
     }
+    /**
+     * Legacy function. Use the constructor instead: new TokenTransfer({ token, amount });
+     */
     static metaEsdtFromAmount(tokenIdentifier, nonce, amount, numDecimals) {
         const amountAsBigInteger = new bignumber_js_1.default(amount).shiftedBy(numDecimals).decimalPlaces(0);
         return this.metaEsdtFromBigInteger(tokenIdentifier, nonce, amountAsBigInteger, numDecimals);
     }
+    /**
+     * Legacy function. Use the constructor instead: new TokenTransfer({ token, amount });
+     */
     static metaEsdtFromBigInteger(tokenIdentifier, nonce, amountAsBigInteger, numDecimals = 0) {
         return new TokenTransfer({
             tokenIdentifier,
@@ -11115,25 +14813,118 @@ class TokenTransfer {
         });
     }
     toString() {
-        return this.amountAsBigInteger.toFixed(0);
+        return this.amount.toString();
     }
+    /**
+     * Legacy function. Use the "amount" field instead.
+     */
     valueOf() {
-        return this.amountAsBigInteger;
+        return new bignumber_js_1.default(this.amount.toString());
     }
+    /**
+     * Legacy function. For formatting and parsing amounts, use "sdk-dapp" or "bignumber.js" directly.
+     */
     toPrettyString() {
         return `${this.toAmount()} ${this.tokenIdentifier}`;
     }
     toAmount() {
         return this.amountAsBigInteger.shiftedBy(-this.numDecimals).toFixed(this.numDecimals);
     }
+    /**
+     * Legacy function. Within your code, don't mix native values (EGLD) and custom (ESDT) tokens.
+     * See "TransferTransactionsFactory.createTransactionForNativeTokenTransfer()" vs. "TransferTransactionsFactory.createTransactionForESDTTokenTransfer()".
+     */
     isEgld() {
-        return this.tokenIdentifier == EGLDTokenIdentifier;
+        return this.token.identifier == EGLDTokenIdentifier;
     }
+    /**
+     * Legacy function. Use "TokenComputer.isFungible(token)" instead.
+     */
     isFungible() {
-        return this.nonce == 0;
+        return this.token.nonce == 0n;
     }
 }
 exports.TokenTransfer = TokenTransfer;
+class TokenComputer {
+    constructor() {
+        this.TOKEN_RANDOM_SEQUENCE_LENGTH = 6;
+    }
+    isFungible(token) {
+        return token.nonce === 0n;
+    }
+    extractNonceFromExtendedIdentifier(identifier) {
+        const parts = identifier.split("-");
+        const { prefix, ticker, randomSequence } = this.splitIdentifierIntoComponents(parts);
+        this.validateExtendedIdentifier(prefix, ticker, randomSequence, parts);
+        // If identifier is for a fungible token (2 parts or 3 with prefix), return 0
+        if (parts.length === 2 || (prefix && parts.length === 3)) {
+            return 0;
+        }
+        // Otherwise, decode the last part as an unsigned number
+        const hexNonce = parts[parts.length - 1];
+        return decodeUnsignedNumber(Buffer.from(hexNonce, "hex"));
+    }
+    extractIdentifierFromExtendedIdentifier(identifier) {
+        const parts = identifier.split("-");
+        const { prefix, ticker, randomSequence } = this.splitIdentifierIntoComponents(parts);
+        this.validateExtendedIdentifier(prefix, ticker, randomSequence, parts);
+        if (prefix) {
+            this.checkLengthOfPrefix(prefix);
+            return prefix + "-" + ticker + "-" + randomSequence;
+        }
+        return ticker + "-" + randomSequence;
+    }
+    validateExtendedIdentifier(prefix, ticker, randomSequence, parts) {
+        this.checkIfExtendedIdentifierWasProvided(prefix, parts);
+        this.ensureTokenTickerValidity(ticker);
+        this.checkLengthOfRandomSequence(randomSequence);
+    }
+    splitIdentifierIntoComponents(parts) {
+        if (parts.length >= 3 && parts[2].length === this.TOKEN_RANDOM_SEQUENCE_LENGTH) {
+            return { prefix: parts[0], ticker: parts[1], randomSequence: parts[2] };
+        }
+        return { prefix: null, ticker: parts[0], randomSequence: parts[1] };
+    }
+    checkIfExtendedIdentifierWasProvided(prefix, tokenParts) {
+        //  this is for the identifiers of fungible tokens
+        const MIN_EXTENDED_IDENTIFIER_LENGTH_IF_SPLITTED = 2;
+        //  this is for the identifiers of nft, sft and meta-esdt
+        const MAX_EXTENDED_IDENTIFIER_LENGTH_IF_SPLITTED = prefix ? 4 : 3;
+        if (tokenParts.length < MIN_EXTENDED_IDENTIFIER_LENGTH_IF_SPLITTED ||
+            tokenParts.length > MAX_EXTENDED_IDENTIFIER_LENGTH_IF_SPLITTED) {
+            throw new errors_1.ErrInvalidTokenIdentifier("Invalid extended token identifier provided");
+        }
+    }
+    isLowercaseAlphanumeric(str) {
+        return /^[a-z0-9]+$/.test(str);
+    }
+    checkLengthOfRandomSequence(randomSequence) {
+        if (randomSequence.length !== this.TOKEN_RANDOM_SEQUENCE_LENGTH) {
+            throw new errors_1.ErrInvalidTokenIdentifier("The identifier is not valid. The random sequence does not have the right length");
+        }
+    }
+    checkLengthOfPrefix(prefix) {
+        const MAX_TOKEN_PREFIX_LENGTH = 4;
+        const MIN_TOKEN_PREFIX_LENGTH = 1;
+        if (prefix.length < MIN_TOKEN_PREFIX_LENGTH || prefix.length > MAX_TOKEN_PREFIX_LENGTH) {
+            throw new errors_1.ErrInvalidTokenIdentifier("The identifier is not valid. The prefix does not have the right length");
+        }
+    }
+    ensureTokenTickerValidity(ticker) {
+        const MIN_TICKER_LENGTH = 3;
+        const MAX_TICKER_LENGTH = 10;
+        if (ticker.length < MIN_TICKER_LENGTH || ticker.length > MAX_TICKER_LENGTH) {
+            throw new errors_1.ErrInvalidTokenIdentifier(`The token ticker should be between ${MIN_TICKER_LENGTH} and ${MAX_TICKER_LENGTH} characters`);
+        }
+        if (!ticker.match(/^[a-zA-Z0-9]+$/)) {
+            throw new errors_1.ErrInvalidTokenIdentifier("The token ticker should only contain alphanumeric characters");
+        }
+    }
+}
+exports.TokenComputer = TokenComputer;
+function decodeUnsignedNumber(arg) {
+    return arg.readUIntBE(0, arg.length);
+}
 /**
  * @deprecated use {@link TokenTransfer} instead.
  */
@@ -11148,12 +14939,324 @@ class TokenPayment extends TokenTransfer {
     }
 }
 exports.TokenPayment = TokenPayment;
-;
-//# sourceMappingURL=tokenTransfer.js.map
+//# sourceMappingURL=tokens.js.map
 
 /***/ }),
 
 /***/ 52756:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionHash = exports.Transaction = void 0;
+const bignumber_js_1 = __nccwpck_require__(87558);
+const address_1 = __nccwpck_require__(39166);
+const constants_1 = __nccwpck_require__(38069);
+const transactionsConverter_1 = __nccwpck_require__(47281);
+const hash_1 = __nccwpck_require__(19611);
+const networkParams_1 = __nccwpck_require__(28995);
+const signature_1 = __nccwpck_require__(66443);
+const transactionComputer_1 = __nccwpck_require__(84792);
+const transactionPayload_1 = __nccwpck_require__(14224);
+/**
+ * An abstraction for creating and signing transactions.
+ */
+class Transaction {
+    /**
+     * Creates a new Transaction object.
+     */
+    constructor(options) {
+        this.nonce = BigInt(options.nonce?.valueOf() || 0n);
+        // We still rely on "bigNumber" for value, because client code might be passing a BigNumber object as a legacy "ITransactionValue",
+        // and we want to keep compatibility.
+        this.value = options.value ? BigInt(new bignumber_js_1.BigNumber(options.value.toString()).toFixed(0)) : 0n;
+        this.sender = this.addressAsBech32(options.sender);
+        this.receiver = this.addressAsBech32(options.receiver);
+        this.senderUsername = options.senderUsername || "";
+        this.receiverUsername = options.receiverUsername || "";
+        this.gasPrice = BigInt(options.gasPrice?.valueOf() || constants_1.TRANSACTION_MIN_GAS_PRICE);
+        this.gasLimit = BigInt(options.gasLimit.valueOf());
+        this.data = options.data?.valueOf() || new Uint8Array();
+        this.chainID = options.chainID.valueOf();
+        this.version = Number(options.version?.valueOf() || constants_1.TRANSACTION_VERSION_DEFAULT);
+        this.options = Number(options.options?.valueOf() || constants_1.TRANSACTION_OPTIONS_DEFAULT);
+        this.guardian = options.guardian ? this.addressAsBech32(options.guardian) : "";
+        this.relayer = options.relayer ? options.relayer : address_1.Address.empty();
+        this.signature = options.signature || Buffer.from([]);
+        this.guardianSignature = options.guardianSignature || Buffer.from([]);
+        this.relayerSignature = options.relayerSignature || Buffer.from([]);
+    }
+    addressAsBech32(address) {
+        return typeof address === "string" ? address : address.bech32();
+    }
+    /**
+     * Legacy method, use the "nonce" property instead.
+     */
+    getNonce() {
+        return Number(this.nonce);
+    }
+    /**
+     * Legacy method, use the "nonce" property instead.
+     * Sets the account sequence number of the sender. Must be done prior signing.
+     */
+    setNonce(nonce) {
+        this.nonce = BigInt(nonce.valueOf());
+    }
+    /**
+     * Legacy method, use the "value" property instead.
+     */
+    getValue() {
+        return this.value;
+    }
+    /**
+     * Legacy method, use the "value" property instead.
+     */
+    setValue(value) {
+        this.value = BigInt(value.toString());
+    }
+    /**
+     * Legacy method, use the "sender" property instead.
+     */
+    getSender() {
+        return address_1.Address.fromBech32(this.sender);
+    }
+    /**
+     * Legacy method, use the "sender" property instead.
+     */
+    setSender(sender) {
+        this.sender = typeof sender === "string" ? sender : sender.bech32();
+    }
+    /**
+     * Legacy method, use the "receiver" property instead.
+     */
+    getReceiver() {
+        return address_1.Address.fromBech32(this.receiver);
+    }
+    /**
+     * Legacy method, use the "senderUsername" property instead.
+     */
+    getSenderUsername() {
+        return this.senderUsername;
+    }
+    /**
+     * Legacy method, use the "senderUsername" property instead.
+     */
+    setSenderUsername(senderUsername) {
+        this.senderUsername = senderUsername;
+    }
+    /**
+     * Legacy method, use the "receiverUsername" property instead.
+     */
+    getReceiverUsername() {
+        return this.receiverUsername;
+    }
+    /**
+     * Legacy method, use the "receiverUsername" property instead.
+     */
+    setReceiverUsername(receiverUsername) {
+        this.receiverUsername = receiverUsername;
+    }
+    /**
+     * Legacy method, use the "guardian" property instead.
+     */
+    getGuardian() {
+        return new address_1.Address(this.guardian);
+    }
+    /**
+     * Legacy method, use the "gasPrice" property instead.
+     */
+    getGasPrice() {
+        return Number(this.gasPrice);
+    }
+    /**
+     * Legacy method, use the "gasPrice" property instead.
+     */
+    setGasPrice(gasPrice) {
+        this.gasPrice = BigInt(gasPrice.valueOf());
+    }
+    /**
+     * Legacy method, use the "gasLimit" property instead.
+     */
+    getGasLimit() {
+        return Number(this.gasLimit);
+    }
+    /**
+     * Legacy method, use the "gasLimit" property instead.
+     */
+    setGasLimit(gasLimit) {
+        this.gasLimit = BigInt(gasLimit.valueOf());
+    }
+    /**
+     * Legacy method, use the "data" property instead.
+     */
+    getData() {
+        return new transactionPayload_1.TransactionPayload(Buffer.from(this.data));
+    }
+    /**
+     * Legacy method, use the "chainID" property instead.
+     */
+    getChainID() {
+        return this.chainID;
+    }
+    /**
+     * Legacy method, use the "chainID" property instead.
+     */
+    setChainID(chainID) {
+        this.chainID = chainID.valueOf();
+    }
+    /**
+     * Legacy method, use the "version" property instead.
+     */
+    getVersion() {
+        return new networkParams_1.TransactionVersion(this.version);
+    }
+    /**
+     * Legacy method, use the "version" property instead.
+     */
+    setVersion(version) {
+        this.version = version.valueOf();
+    }
+    /**
+     * Legacy method, use the "options" property instead.
+     */
+    getOptions() {
+        return new networkParams_1.TransactionOptions(this.options.valueOf());
+    }
+    /**
+     * Legacy method, use the "options" property instead.
+     *
+     * Question for review: check how the options are set by sdk-dapp, wallet, ledger, extension.
+     */
+    setOptions(options) {
+        this.options = options.valueOf();
+    }
+    /**
+     * Legacy method, use the "signature" property instead.
+     */
+    getSignature() {
+        return Buffer.from(this.signature);
+    }
+    /**
+     * Legacy method, use the "guardianSignature" property instead.
+     */
+    getGuardianSignature() {
+        return Buffer.from(this.guardianSignature);
+    }
+    /**
+     * Legacy method, use the "guardian" property instead.
+     */
+    setGuardian(guardian) {
+        this.guardian = typeof guardian === "string" ? guardian : guardian.bech32();
+    }
+    /**
+     * Legacy method, use "TransactionComputer.computeTransactionHash()" instead.
+     */
+    getHash() {
+        return TransactionHash.compute(this);
+    }
+    /**
+     * Legacy method, use "TransactionComputer.computeBytesForSigning()" instead.
+     * Serializes a transaction to a sequence of bytes, ready to be signed.
+     * This function is called internally by signers.
+     */
+    serializeForSigning() {
+        const computer = new transactionComputer_1.TransactionComputer();
+        const bytes = computer.computeBytesForSigning(this);
+        return Buffer.from(bytes);
+    }
+    /**
+     * Checks the integrity of the guarded transaction
+     */
+    isGuardedTransaction() {
+        const hasGuardian = this.guardian.length > 0;
+        const hasGuardianSignature = this.guardianSignature.length > 0;
+        return this.getOptions().isWithGuardian() && hasGuardian && hasGuardianSignature;
+    }
+    /**
+     * Legacy method, use "TransactionsConverter.transactionToPlainObject()" instead.
+     *
+     * Converts the transaction object into a ready-to-serialize, plain JavaScript object.
+     * This function is called internally within the signing procedure.
+     */
+    toPlainObject() {
+        // Ideally, "converters" package should be outside of "core", and not referenced here.
+        const converter = new transactionsConverter_1.TransactionsConverter();
+        return converter.transactionToPlainObject(this);
+    }
+    /**
+     * Legacy method, use "TransactionsConverter.plainObjectToTransaction()" instead.
+     * Converts a plain object transaction into a Transaction Object.
+     *
+     * @param plainObjectTransaction Raw data of a transaction, usually obtained by calling toPlainObject()
+     */
+    static fromPlainObject(plainObjectTransaction) {
+        // Ideally, "converters" package should be outside of "core", and not referenced here.
+        const converter = new transactionsConverter_1.TransactionsConverter();
+        return converter.plainObjectToTransaction(plainObjectTransaction);
+    }
+    /**
+     * Legacy method, use the "signature" property instead.
+     * Applies the signature on the transaction.
+     *
+     * @param signature The signature, as computed by a signer.
+     */
+    applySignature(signature) {
+        this.signature = signature_1.interpretSignatureAsBuffer(signature);
+    }
+    /**
+     * Legacy method, use the "guardianSignature" property instead.
+     * Applies the guardian signature on the transaction.
+     *
+     * @param guardianSignature The signature, as computed by a signer.
+     */
+    applyGuardianSignature(guardianSignature) {
+        this.guardianSignature = signature_1.interpretSignatureAsBuffer(guardianSignature);
+    }
+    /**
+     * Converts a transaction to a ready-to-broadcast object.
+     * Called internally by the network provider.
+     */
+    toSendable() {
+        return this.toPlainObject();
+    }
+    /**
+     * Legacy method, use "TransactionComputer.computeTransactionFee()" instead.
+     *
+     * Computes the current transaction fee based on the {@link NetworkConfig} and transaction properties
+     * @param networkConfig {@link NetworkConfig}
+     */
+    computeFee(networkConfig) {
+        const computer = new transactionComputer_1.TransactionComputer();
+        const fee = computer.computeTransactionFee(this, networkConfig);
+        return new bignumber_js_1.BigNumber(fee.toString());
+    }
+}
+exports.Transaction = Transaction;
+/**
+ * Legacy class, use "TransactionComputer.computeTransactionHash()" instead.
+ * An abstraction for handling and computing transaction hashes.
+ */
+class TransactionHash extends hash_1.Hash {
+    constructor(hash) {
+        super(hash);
+    }
+    /**
+     * Legacy method, use "TransactionComputer.computeTransactionHash()" instead.
+     * Computes the hash of a transaction.
+     */
+    static compute(transaction) {
+        const computer = new transactionComputer_1.TransactionComputer();
+        const hash = computer.computeTransactionHash(transaction);
+        return new TransactionHash(Buffer.from(hash).toString("hex"));
+    }
+}
+exports.TransactionHash = TransactionHash;
+//# sourceMappingURL=transaction.js.map
+
+/***/ }),
+
+/***/ 84792:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -11177,277 +15280,126 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.TransactionHash = exports.Transaction = void 0;
-const bignumber_js_1 = __nccwpck_require__(87558);
-const address_1 = __nccwpck_require__(39166);
-const compatibility_1 = __nccwpck_require__(44016);
+exports.TransactionComputer = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
 const constants_1 = __nccwpck_require__(38069);
 const errors = __importStar(__nccwpck_require__(38506));
-const hash_1 = __nccwpck_require__(19611);
-const networkParams_1 = __nccwpck_require__(28995);
 const proto_1 = __nccwpck_require__(72864);
-const signature_1 = __nccwpck_require__(66443);
-const transactionPayload_1 = __nccwpck_require__(14224);
-const utils_1 = __nccwpck_require__(14719);
+const transaction_1 = __nccwpck_require__(52756);
 const createTransactionHasher = __nccwpck_require__(11962);
+const createKeccakHash = __nccwpck_require__(57188);
 const TRANSACTION_HASH_LENGTH = 32;
 /**
- * An abstraction for creating, signing and broadcasting transactions.
+ * An utilitary class meant to work together with the {@link Transaction} class.
  */
-class Transaction {
-    /**
-     * Creates a new Transaction object.
-     */
-    constructor({ nonce, value, receiver, sender, gasPrice, gasLimit, data, chainID, version, options, guardian, }) {
-        this.nonce = nonce || 0;
-        this.value = value ? new bignumber_js_1.BigNumber(value.toString()).toFixed(0) : 0;
-        this.sender = sender;
-        this.receiver = receiver;
-        this.gasPrice = gasPrice || constants_1.TRANSACTION_MIN_GAS_PRICE;
-        this.gasLimit = gasLimit;
-        this.data = data || new transactionPayload_1.TransactionPayload();
-        this.chainID = chainID;
-        this.version = version ? new networkParams_1.TransactionVersion(version.valueOf()) : networkParams_1.TransactionVersion.withDefaultVersion();
-        this.options = options ? new networkParams_1.TransactionOptions(options.valueOf()) : networkParams_1.TransactionOptions.withDefaultOptions();
-        this.guardian = guardian || address_1.Address.empty();
-        this.signature = Buffer.from([]);
-        this.guardianSignature = Buffer.from([]);
-        this.hash = TransactionHash.empty();
-    }
-    getNonce() {
-        return this.nonce;
-    }
-    /**
-     * Sets the account sequence number of the sender. Must be done prior signing.
-     */
-    setNonce(nonce) {
-        this.nonce = nonce;
-    }
-    getValue() {
-        return this.value;
-    }
-    setValue(value) {
-        this.value = value;
-    }
-    getSender() {
-        return this.sender;
-    }
-    setSender(sender) {
-        this.sender = sender;
-    }
-    getReceiver() {
-        return this.receiver;
-    }
-    getGuardian() {
-        return this.guardian;
-    }
-    getGasPrice() {
-        return this.gasPrice;
-    }
-    setGasPrice(gasPrice) {
-        this.gasPrice = gasPrice;
-    }
-    getGasLimit() {
-        return this.gasLimit;
-    }
-    setGasLimit(gasLimit) {
-        this.gasLimit = gasLimit;
-    }
-    getData() {
-        return this.data;
-    }
-    getChainID() {
-        return this.chainID;
-    }
-    setChainID(chainID) {
-        this.chainID = chainID;
-    }
-    getVersion() {
-        return this.version;
-    }
-    setVersion(version) {
-        this.version = new networkParams_1.TransactionVersion(version.valueOf());
-    }
-    getOptions() {
-        // Make sure that "sdk-core v12" is compatible (for a while) with (older) libraries that were previously setting the (soon to be private) "options" field directly,
-        // instead of using the "setOptions()" method.
-        const options = new networkParams_1.TransactionOptions(this.options.valueOf());
-        return options;
-    }
-    setOptions(options) {
-        this.options = new networkParams_1.TransactionOptions(options.valueOf());
-    }
-    getSignature() {
-        return this.signature;
-    }
-    getGuardianSignature() {
-        return this.guardianSignature;
-    }
-    setGuardian(guardian) {
-        this.guardian = guardian;
-    }
-    getHash() {
-        utils_1.guardNotEmpty(this.hash, "hash");
-        return this.hash;
-    }
-    /**
-     * Serializes a transaction to a sequence of bytes, ready to be signed.
-     * This function is called internally by signers.
-     */
-    serializeForSigning() {
-        // TODO: for appropriate tx.version, interpret tx.options accordingly and sign using the content / data hash
-        let plain = this.toPlainObject();
-        // Make sure we never sign the transaction with another signature set up (useful when using the same method for verification)
-        if (plain.signature) {
-            delete plain.signature;
+class TransactionComputer {
+    constructor() { }
+    computeTransactionFee(transaction, networkConfig) {
+        const moveBalanceGas = BigInt(networkConfig.MinGasLimit + transaction.data.length * networkConfig.GasPerDataByte);
+        if (moveBalanceGas > transaction.gasLimit) {
+            throw new errors.ErrNotEnoughGas(parseInt(transaction.gasLimit.toString(), 10));
         }
-        if (plain.guardianSignature) {
-            delete plain.guardianSignature;
-        }
-        if (!plain.guardian) {
-            delete plain.guardian;
-        }
-        let serialized = JSON.stringify(plain);
-        return Buffer.from(serialized);
-    }
-    /**
-     * Checks the integrity of the guarded transaction
-     */
-    isGuardedTransaction() {
-        const hasGuardian = this.guardian.bech32().length > 0;
-        const hasGuardianSignature = this.guardianSignature.length > 0;
-        return this.getOptions().isWithGuardian() && hasGuardian && hasGuardianSignature;
-    }
-    /**
-     * Converts the transaction object into a ready-to-serialize, plain JavaScript object.
-     * This function is called internally within the signing procedure.
-     */
-    toPlainObject() {
-        var _a;
-        const plainObject = {
-            nonce: this.nonce.valueOf(),
-            value: this.value.toString(),
-            receiver: this.receiver.bech32(),
-            sender: this.sender.bech32(),
-            gasPrice: this.gasPrice.valueOf(),
-            gasLimit: this.gasLimit.valueOf(),
-            data: this.data.length() == 0 ? undefined : this.data.encoded(),
-            chainID: this.chainID.valueOf(),
-            version: this.version.valueOf(),
-            options: this.options.valueOf() == 0 ? undefined : this.options.valueOf(),
-            guardian: ((_a = this.guardian) === null || _a === void 0 ? void 0 : _a.bech32()) ? (this.guardian.bech32() == "" ? undefined : this.guardian.bech32()) : undefined,
-            signature: this.signature.toString("hex") ? this.signature.toString("hex") : undefined,
-            guardianSignature: this.guardianSignature.toString("hex") ? this.guardianSignature.toString("hex") : undefined,
-        };
-        compatibility_1.Compatibility.guardAddressIsSetAndNonZero(new address_1.Address(plainObject.sender), "'sender' of transaction", "pass the actual sender to the Transaction constructor");
-        return plainObject;
-    }
-    /**
-     * Converts a plain object transaction into a Transaction Object.
-     *
-     * @param plainObjectTransaction Raw data of a transaction, usually obtained by calling toPlainObject()
-     */
-    static fromPlainObject(plainObjectTransaction) {
-        const tx = new Transaction({
-            nonce: Number(plainObjectTransaction.nonce),
-            value: new bignumber_js_1.BigNumber(plainObjectTransaction.value).toFixed(0),
-            receiver: address_1.Address.fromString(plainObjectTransaction.receiver),
-            sender: address_1.Address.fromString(plainObjectTransaction.sender),
-            guardian: plainObjectTransaction.guardian == undefined ? undefined : address_1.Address.fromString(plainObjectTransaction.guardian || ""),
-            gasPrice: Number(plainObjectTransaction.gasPrice),
-            gasLimit: Number(plainObjectTransaction.gasLimit),
-            data: new transactionPayload_1.TransactionPayload(Buffer.from(plainObjectTransaction.data || "", "base64")),
-            chainID: String(plainObjectTransaction.chainID),
-            version: new networkParams_1.TransactionVersion(plainObjectTransaction.version),
-            options: plainObjectTransaction.options == undefined ? undefined : new networkParams_1.TransactionOptions(plainObjectTransaction.options)
-        });
-        if (plainObjectTransaction.signature) {
-            tx.applySignature(new signature_1.Signature(plainObjectTransaction.signature));
-        }
-        if (plainObjectTransaction.guardianSignature) {
-            tx.applyGuardianSignature(new signature_1.Signature(plainObjectTransaction.guardianSignature));
-        }
-        return tx;
-    }
-    /**
-     * Applies the signature on the transaction.
-     *
-     * @param signature The signature, as computed by a signer.
-     */
-    applySignature(signature) {
-        if (signature instanceof Buffer) {
-            this.signature = signature;
-        }
-        else {
-            this.signature = Buffer.from(signature.hex(), "hex");
-        }
-        this.hash = TransactionHash.compute(this);
-    }
-    /**
-   * Applies the guardian signature on the transaction.
-   *
-   * @param guardianSignature The signature, as computed by a signer.
-   */
-    applyGuardianSignature(guardianSignature) {
-        if (guardianSignature instanceof Buffer) {
-            this.guardianSignature = guardianSignature;
-        }
-        else {
-            this.guardianSignature = Buffer.from(guardianSignature.hex(), "hex");
-        }
-        this.hash = TransactionHash.compute(this);
-    }
-    /**
-     * Converts a transaction to a ready-to-broadcast object.
-     * Called internally by the network provider.
-     */
-    toSendable() {
-        return this.toPlainObject();
-    }
-    /**
-     * Computes the current transaction fee based on the {@link NetworkConfig} and transaction properties
-     * @param networkConfig {@link NetworkConfig}
-     */
-    computeFee(networkConfig) {
-        let moveBalanceGas = networkConfig.MinGasLimit.valueOf() +
-            this.data.length() * networkConfig.GasPerDataByte.valueOf();
-        if (moveBalanceGas > this.gasLimit.valueOf()) {
-            throw new errors.ErrNotEnoughGas(this.gasLimit.valueOf());
-        }
-        let gasPrice = new bignumber_js_1.BigNumber(this.gasPrice.valueOf());
-        let feeForMove = new bignumber_js_1.BigNumber(moveBalanceGas).multipliedBy(gasPrice);
-        if (moveBalanceGas === this.gasLimit.valueOf()) {
+        const gasPrice = transaction.gasPrice;
+        const feeForMove = moveBalanceGas * gasPrice;
+        if (moveBalanceGas === transaction.gasLimit) {
             return feeForMove;
         }
-        let diff = new bignumber_js_1.BigNumber(this.gasLimit.valueOf() - moveBalanceGas);
-        let modifiedGasPrice = gasPrice.multipliedBy(new bignumber_js_1.BigNumber(networkConfig.GasPriceModifier.valueOf()));
-        let processingFee = diff.multipliedBy(modifiedGasPrice);
-        return feeForMove.plus(processingFee);
+        const diff = transaction.gasLimit - moveBalanceGas;
+        const modifiedGasPrice = BigInt(new bignumber_js_1.default(gasPrice.toString()).multipliedBy(new bignumber_js_1.default(networkConfig.GasPriceModifier)).toFixed(0));
+        const processingFee = diff * modifiedGasPrice;
+        return feeForMove + processingFee;
+    }
+    computeBytesForSigning(transaction) {
+        this.ensureValidTransactionFields(transaction);
+        const plainTransaction = this.toPlainObject(transaction);
+        const serialized = JSON.stringify(plainTransaction);
+        return new Uint8Array(Buffer.from(serialized));
+    }
+    computeBytesForVerifying(transaction) {
+        const isTxSignedByHash = this.hasOptionsSetForHashSigning(transaction);
+        if (isTxSignedByHash) {
+            return this.computeHashForSigning(transaction);
+        }
+        return this.computeBytesForSigning(transaction);
+    }
+    computeHashForSigning(transaction) {
+        const plainTransaction = this.toPlainObject(transaction);
+        const signable = Buffer.from(JSON.stringify(plainTransaction));
+        return createKeccakHash("keccak256").update(signable).digest();
+    }
+    computeTransactionHash(transaction) {
+        const serializer = new proto_1.ProtoSerializer();
+        const buffer = serializer.serializeTransaction(new transaction_1.Transaction(transaction));
+        const hash = createTransactionHasher(TRANSACTION_HASH_LENGTH).update(buffer).digest("hex");
+        return Buffer.from(hash, "hex");
+    }
+    hasOptionsSetForGuardedTransaction(transaction) {
+        return (transaction.options & constants_1.TRANSACTION_OPTIONS_TX_GUARDED) == constants_1.TRANSACTION_OPTIONS_TX_GUARDED;
+    }
+    hasOptionsSetForHashSigning(transaction) {
+        return (transaction.options & constants_1.TRANSACTION_OPTIONS_TX_HASH_SIGN) == constants_1.TRANSACTION_OPTIONS_TX_HASH_SIGN;
+    }
+    applyGuardian(transaction, guardian) {
+        if (transaction.version < constants_1.MIN_TRANSACTION_VERSION_THAT_SUPPORTS_OPTIONS) {
+            transaction.version = constants_1.MIN_TRANSACTION_VERSION_THAT_SUPPORTS_OPTIONS;
+        }
+        transaction.options = transaction.options | constants_1.TRANSACTION_OPTIONS_TX_GUARDED;
+        transaction.guardian = guardian;
+    }
+    isRelayedV3Transaction(transaction) {
+        return !transaction.relayer.isEmpty();
+    }
+    applyOptionsForHashSigning(transaction) {
+        if (transaction.version < constants_1.MIN_TRANSACTION_VERSION_THAT_SUPPORTS_OPTIONS) {
+            transaction.version = constants_1.MIN_TRANSACTION_VERSION_THAT_SUPPORTS_OPTIONS;
+        }
+        transaction.options = transaction.options | constants_1.TRANSACTION_OPTIONS_TX_HASH_SIGN;
+    }
+    toPlainObject(transaction, withSignature) {
+        let obj = {
+            nonce: Number(transaction.nonce),
+            value: transaction.value.toString(),
+            receiver: transaction.receiver,
+            sender: transaction.sender,
+            senderUsername: this.toBase64OrUndefined(transaction.senderUsername),
+            receiverUsername: this.toBase64OrUndefined(transaction.receiverUsername),
+            gasPrice: Number(transaction.gasPrice),
+            gasLimit: Number(transaction.gasLimit),
+            data: this.toBase64OrUndefined(transaction.data),
+        };
+        if (withSignature) {
+            obj.signature = this.toHexOrUndefined(transaction.signature);
+        }
+        obj.chainID = transaction.chainID;
+        obj.version = transaction.version;
+        obj.options = transaction.options ? transaction.options : undefined;
+        obj.guardian = transaction.guardian ? transaction.guardian : undefined;
+        obj.relayer = transaction.relayer?.isEmpty() ? undefined : transaction.relayer?.toBech32();
+        return obj;
+    }
+    toHexOrUndefined(value) {
+        return value && value.length ? Buffer.from(value).toString("hex") : undefined;
+    }
+    toBase64OrUndefined(value) {
+        return value && value.length ? Buffer.from(value).toString("base64") : undefined;
+    }
+    ensureValidTransactionFields(transaction) {
+        if (!transaction.chainID.length) {
+            throw new errors.ErrBadUsage("The `chainID` field is not set");
+        }
+        if (transaction.version < constants_1.MIN_TRANSACTION_VERSION_THAT_SUPPORTS_OPTIONS) {
+            if (this.hasOptionsSetForGuardedTransaction(transaction) || this.hasOptionsSetForHashSigning(transaction)) {
+                throw new errors.ErrBadUsage(`Non-empty transaction options requires transaction version >= ${constants_1.MIN_TRANSACTION_VERSION_THAT_SUPPORTS_OPTIONS}`);
+            }
+        }
     }
 }
-exports.Transaction = Transaction;
-/**
- * An abstraction for handling and computing transaction hashes.
- */
-class TransactionHash extends hash_1.Hash {
-    constructor(hash) {
-        super(hash);
-    }
-    /**
-     * Computes the hash of a transaction.
-     */
-    static compute(transaction) {
-        let serializer = new proto_1.ProtoSerializer();
-        let buffer = serializer.serializeTransaction(transaction);
-        let hash = createTransactionHasher(TRANSACTION_HASH_LENGTH)
-            .update(buffer)
-            .digest("hex");
-        return new TransactionHash(hash);
-    }
-}
-exports.TransactionHash = TransactionHash;
-//# sourceMappingURL=transaction.js.map
+exports.TransactionComputer = TransactionComputer;
+//# sourceMappingURL=transactionComputer.js.map
 
 /***/ }),
 
@@ -11503,7 +15455,7 @@ class TransactionPayload {
         return this.toString().split("@");
     }
     getRawArguments() {
-        return this.getEncodedArguments().map(argument => Buffer.from(argument, "hex"));
+        return this.getEncodedArguments().map((argument) => Buffer.from(argument, "hex"));
     }
     /**
      * Returns the length of the data.
@@ -11518,22 +15470,14 @@ exports.TransactionPayload = TransactionPayload;
 /***/ }),
 
 /***/ 20955:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TransactionWatcher = void 0;
 const asyncTimer_1 = __nccwpck_require__(52187);
+const constants_1 = __nccwpck_require__(38069);
 const errors_1 = __nccwpck_require__(38506);
 const logger_1 = __nccwpck_require__(70055);
 /**
@@ -11551,103 +15495,124 @@ class TransactionWatcher {
      */
     constructor(fetcher, options = {}) {
         this.fetcher = new TransactionFetcherWithTracing(fetcher);
-        this.pollingIntervalMilliseconds = options.pollingIntervalMilliseconds || TransactionWatcher.DefaultPollingInterval;
+        this.pollingIntervalMilliseconds =
+            options.pollingIntervalMilliseconds || TransactionWatcher.DefaultPollingInterval;
         this.timeoutMilliseconds = options.timeoutMilliseconds || TransactionWatcher.DefaultTimeout;
         this.patienceMilliseconds = options.patienceMilliseconds || TransactionWatcher.DefaultPatience;
     }
     /**
      * Waits until the transaction reaches the "pending" status.
+     * @param txHash The hex-encoded transaction hash
      */
-    awaitPending(transaction) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const isPending = (transaction) => transaction.status.isPending();
-            const doFetch = () => __awaiter(this, void 0, void 0, function* () { return yield this.fetcher.getTransaction(transaction.getHash().hex()); });
-            const errorProvider = () => new errors_1.ErrExpectedTransactionStatusNotReached();
-            return this.awaitConditionally(isPending, doFetch, errorProvider);
-        });
+    async awaitPending(transactionOrTxHash) {
+        const isPending = (transaction) => transaction.status.isPending();
+        const doFetch = async () => {
+            const hash = this.transactionOrTxHashToTxHash(transactionOrTxHash);
+            return await this.fetcher.getTransaction(hash);
+        };
+        const errorProvider = () => new errors_1.ErrExpectedTransactionStatusNotReached();
+        return this.awaitConditionally(isPending, doFetch, errorProvider);
     }
     /**
-      * Waits until the transaction is completely processed.
-      */
-    awaitCompleted(transaction) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const isCompleted = (transactionOnNetwork) => transactionOnNetwork.isCompleted;
-            const doFetch = () => __awaiter(this, void 0, void 0, function* () { return yield this.fetcher.getTransaction(transaction.getHash().hex()); });
-            const errorProvider = () => new errors_1.ErrExpectedTransactionStatusNotReached();
-            return this.awaitConditionally(isCompleted, doFetch, errorProvider);
-        });
+     * Waits until the transaction is completely processed.
+     * @param txHash The hex-encoded transaction hash
+     */
+    async awaitCompleted(transactionOrTxHash) {
+        const isCompleted = (transactionOnNetwork) => {
+            if (transactionOnNetwork.isCompleted === undefined) {
+                throw new errors_1.ErrIsCompletedFieldIsMissingOnTransaction();
+            }
+            return transactionOnNetwork.isCompleted;
+        };
+        const doFetch = async () => {
+            const hash = this.transactionOrTxHashToTxHash(transactionOrTxHash);
+            return await this.fetcher.getTransaction(hash);
+        };
+        const errorProvider = () => new errors_1.ErrExpectedTransactionStatusNotReached();
+        return this.awaitConditionally(isCompleted, doFetch, errorProvider);
     }
-    awaitAllEvents(transaction, events) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const foundAllEvents = (transactionOnNetwork) => {
-                const allEventIdentifiers = this.getAllTransactionEvents(transactionOnNetwork).map(event => event.identifier);
-                const allAreFound = events.every(event => allEventIdentifiers.includes(event));
-                return allAreFound;
-            };
-            const doFetch = () => __awaiter(this, void 0, void 0, function* () { return yield this.fetcher.getTransaction(transaction.getHash().hex()); });
-            const errorProvider = () => new errors_1.ErrExpectedTransactionEventsNotFound();
-            return this.awaitConditionally(foundAllEvents, doFetch, errorProvider);
-        });
+    async awaitAllEvents(transactionOrTxHash, events) {
+        const foundAllEvents = (transactionOnNetwork) => {
+            const allEventIdentifiers = this.getAllTransactionEvents(transactionOnNetwork).map((event) => event.identifier);
+            const allAreFound = events.every((event) => allEventIdentifiers.includes(event));
+            return allAreFound;
+        };
+        const doFetch = async () => {
+            const hash = this.transactionOrTxHashToTxHash(transactionOrTxHash);
+            return await this.fetcher.getTransaction(hash);
+        };
+        const errorProvider = () => new errors_1.ErrExpectedTransactionEventsNotFound();
+        return this.awaitConditionally(foundAllEvents, doFetch, errorProvider);
     }
-    awaitAnyEvent(transaction, events) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const foundAnyEvent = (transactionOnNetwork) => {
-                const allEventIdentifiers = this.getAllTransactionEvents(transactionOnNetwork).map(event => event.identifier);
-                const anyIsFound = events.find(event => allEventIdentifiers.includes(event)) != undefined;
-                return anyIsFound;
-            };
-            const doFetch = () => __awaiter(this, void 0, void 0, function* () { return yield this.fetcher.getTransaction(transaction.getHash().hex()); });
-            const errorProvider = () => new errors_1.ErrExpectedTransactionEventsNotFound();
-            return this.awaitConditionally(foundAnyEvent, doFetch, errorProvider);
-        });
+    async awaitAnyEvent(transactionOrTxHash, events) {
+        const foundAnyEvent = (transactionOnNetwork) => {
+            const allEventIdentifiers = this.getAllTransactionEvents(transactionOnNetwork).map((event) => event.identifier);
+            const anyIsFound = events.find((event) => allEventIdentifiers.includes(event)) != undefined;
+            return anyIsFound;
+        };
+        const doFetch = async () => {
+            const hash = this.transactionOrTxHashToTxHash(transactionOrTxHash);
+            return await this.fetcher.getTransaction(hash);
+        };
+        const errorProvider = () => new errors_1.ErrExpectedTransactionEventsNotFound();
+        return this.awaitConditionally(foundAnyEvent, doFetch, errorProvider);
     }
-    awaitOnCondition(transaction, condition) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const doFetch = () => __awaiter(this, void 0, void 0, function* () { return yield this.fetcher.getTransaction(transaction.getHash().hex()); });
-            const errorProvider = () => new errors_1.ErrExpectedTransactionStatusNotReached();
-            return this.awaitConditionally(condition, doFetch, errorProvider);
-        });
+    async awaitOnCondition(transactionOrTxHash, condition) {
+        const doFetch = async () => {
+            const hash = this.transactionOrTxHashToTxHash(transactionOrTxHash);
+            return await this.fetcher.getTransaction(hash);
+        };
+        const errorProvider = () => new errors_1.ErrExpectedTransactionStatusNotReached();
+        return this.awaitConditionally(condition, doFetch, errorProvider);
     }
-    awaitConditionally(isSatisfied, doFetch, createError) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const periodicTimer = new asyncTimer_1.AsyncTimer("watcher:periodic");
-            const patienceTimer = new asyncTimer_1.AsyncTimer("watcher:patience");
-            const timeoutTimer = new asyncTimer_1.AsyncTimer("watcher:timeout");
-            let stop = false;
-            let fetchedData = undefined;
-            let satisfied = false;
-            timeoutTimer.start(this.timeoutMilliseconds).finally(() => {
-                timeoutTimer.stop();
-                stop = true;
-            });
-            while (!stop) {
-                yield periodicTimer.start(this.pollingIntervalMilliseconds);
-                try {
-                    fetchedData = yield doFetch();
-                    satisfied = isSatisfied(fetchedData);
-                    if (satisfied || stop) {
-                        break;
-                    }
+    transactionOrTxHashToTxHash(transactionOrTxHash) {
+        const hash = typeof transactionOrTxHash === "string" ? transactionOrTxHash : transactionOrTxHash.getHash().hex();
+        if (hash.length !== constants_1.HEX_TRANSACTION_HASH_LENGTH) {
+            throw new errors_1.Err(`Invalid transaction hash length. The length of a hex encoded hash should be ${constants_1.HEX_TRANSACTION_HASH_LENGTH}.`);
+        }
+        return hash;
+    }
+    async awaitConditionally(isSatisfied, doFetch, createError) {
+        const periodicTimer = new asyncTimer_1.AsyncTimer("watcher:periodic");
+        const patienceTimer = new asyncTimer_1.AsyncTimer("watcher:patience");
+        const timeoutTimer = new asyncTimer_1.AsyncTimer("watcher:timeout");
+        let stop = false;
+        let fetchedData = undefined;
+        let satisfied = false;
+        timeoutTimer.start(this.timeoutMilliseconds).finally(() => {
+            timeoutTimer.stop();
+            stop = true;
+        });
+        while (!stop) {
+            await periodicTimer.start(this.pollingIntervalMilliseconds);
+            try {
+                fetchedData = await doFetch();
+                satisfied = isSatisfied(fetchedData);
+                if (satisfied || stop) {
+                    break;
                 }
-                catch (error) {
-                    logger_1.Logger.debug("TransactionWatcher.awaitConditionally(): cannot (yet) fetch data.");
-                    if (!(error instanceof errors_1.Err)) {
-                        throw error;
-                    }
+            }
+            catch (error) {
+                logger_1.Logger.debug("TransactionWatcher.awaitConditionally(): cannot (yet) fetch data.");
+                if (error instanceof errors_1.ErrIsCompletedFieldIsMissingOnTransaction) {
+                    throw error;
+                }
+                if (!(error instanceof errors_1.Err)) {
+                    throw error;
                 }
             }
-            // The patience timer isn't subject to the timeout constraints.
-            if (satisfied) {
-                yield patienceTimer.start(this.patienceMilliseconds);
-            }
-            if (!timeoutTimer.isStopped()) {
-                timeoutTimer.stop();
-            }
-            if (!fetchedData || !satisfied) {
-                throw createError();
-            }
-            return fetchedData;
-        });
+        }
+        // The patience timer isn't subject to the timeout constraints.
+        if (satisfied) {
+            await patienceTimer.start(this.patienceMilliseconds);
+        }
+        if (!timeoutTimer.isStopped()) {
+            timeoutTimer.stop();
+        }
+        if (!fetchedData || !satisfied) {
+            throw createError();
+        }
+        return fetchedData;
     }
     getAllTransactionEvents(transaction) {
         const result = [...transaction.logs.events];
@@ -11666,35 +15631,1575 @@ class TransactionFetcherWithTracing {
     constructor(fetcher) {
         this.fetcher = fetcher;
     }
-    getTransaction(txHash) {
-        return __awaiter(this, void 0, void 0, function* () {
-            logger_1.Logger.debug(`transactionWatcher, getTransaction(${txHash})`);
-            return yield this.fetcher.getTransaction(txHash);
-        });
+    async getTransaction(txHash) {
+        logger_1.Logger.debug(`transactionWatcher, getTransaction(${txHash})`);
+        return await this.fetcher.getTransaction(txHash);
     }
 }
 //# sourceMappingURL=transactionWatcher.js.map
 
 /***/ }),
 
-/***/ 15270:
+/***/ 23432:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AccountTransactionsFactory = void 0;
+const address_1 = __nccwpck_require__(39166);
+const transactionBuilder_1 = __nccwpck_require__(29474);
+class AccountTransactionsFactory {
+    constructor(options) {
+        this.config = options.config;
+    }
+    createTransactionForSavingKeyValue(options) {
+        const functionName = "SaveKeyValue";
+        const keyValueParts = this.computeDataPartsForSavingKeyValue(options.keyValuePairs);
+        const dataParts = [functionName, ...keyValueParts];
+        const extraGas = this.computeExtraGasForSavingKeyValue(options.keyValuePairs);
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: extraGas,
+            addDataMovementGas: true,
+        }).build();
+    }
+    computeExtraGasForSavingKeyValue(keyValuePairs) {
+        let extraGas = 0n;
+        keyValuePairs.forEach((value, key) => {
+            extraGas +=
+                this.config.gasLimitPersistPerByte * BigInt(key.length + value.length) +
+                    this.config.gasLimitStorePerByte * BigInt(value.length);
+        });
+        return extraGas + this.config.gasLimitSaveKeyValue;
+    }
+    computeDataPartsForSavingKeyValue(keyValuePairs) {
+        const dataParts = [];
+        keyValuePairs.forEach((value, key) => {
+            dataParts.push(...[Buffer.from(key).toString("hex"), Buffer.from(value).toString("hex")]);
+        });
+        return dataParts;
+    }
+    createTransactionForSettingGuardian(options) {
+        const dataParts = [
+            "SetGuardian",
+            address_1.Address.fromBech32(options.guardianAddress.bech32()).toHex(),
+            Buffer.from(options.serviceID).toString("hex"),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitSetGuardian,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForGuardingAccount(options) {
+        const dataParts = ["GuardAccount"];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitGuardAccount,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUnguardingAccount(options) {
+        const dataParts = ["UnGuardAccount"];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitUnguardAccount,
+            addDataMovementGas: true,
+        }).build();
+    }
+}
+exports.AccountTransactionsFactory = AccountTransactionsFactory;
+//# sourceMappingURL=accountTransactionsFactory.js.map
+
+/***/ }),
+
+/***/ 54820:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DelegationTransactionsFactory = void 0;
+const address_1 = __nccwpck_require__(39166);
+const constants_1 = __nccwpck_require__(38069);
+const errors_1 = __nccwpck_require__(38506);
+const smartcontracts_1 = __nccwpck_require__(56238);
+const transactionBuilder_1 = __nccwpck_require__(29474);
+/**
+ * Use this class to create delegation related transactions like creating a new delegation contract or adding nodes.
+ */
+class DelegationTransactionsFactory {
+    constructor(options) {
+        this.config = options.config;
+        this.argSerializer = new smartcontracts_1.ArgSerializer();
+        this.delegationManagerAddress = address_1.Address.fromHex(constants_1.DELEGATION_MANAGER_SC_ADDRESS_HEX, this.config.addressHrp);
+    }
+    createTransactionForNewDelegationContract(options) {
+        const dataParts = [
+            "createNewDelegationContract",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.BigUIntValue(options.totalDelegationCap),
+                new smartcontracts_1.BigUIntValue(options.serviceFee),
+            ]),
+        ];
+        const executionGasLimit = this.config.gasLimitCreateDelegationContract + this.config.additionalGasLimitForDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.delegationManagerAddress,
+            dataParts: dataParts,
+            gasLimit: executionGasLimit,
+            addDataMovementGas: true,
+            amount: options.amount,
+        }).build();
+    }
+    createTransactionForAddingNodes(options) {
+        if (options.publicKeys.length !== options.signedMessages.length) {
+            throw new errors_1.Err("The number of public keys should match the number of signed messages");
+        }
+        const signedMessagesAsTypedValues = options.signedMessages.map((message) => new smartcontracts_1.BytesValue(Buffer.from(message)));
+        const messagesAsStrings = this.argSerializer.valuesToStrings(signedMessagesAsTypedValues);
+        const numNodes = options.publicKeys.length;
+        const dataParts = ["addNodes"];
+        for (let i = 0; i < numNodes; i++) {
+            dataParts.push(...[options.publicKeys[i].hex(), messagesAsStrings[i]]);
+        }
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: this.computeExecutionGasLimitForNodesManagement(numNodes),
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForRemovingNodes(options) {
+        const dataParts = ["removeNodes"];
+        for (const key of options.publicKeys) {
+            dataParts.push(key.hex());
+        }
+        const numNodes = options.publicKeys.length;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: this.computeExecutionGasLimitForNodesManagement(numNodes),
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForStakingNodes(options) {
+        let dataParts = ["stakeNodes"];
+        for (const key of options.publicKeys) {
+            dataParts = dataParts.concat(key.hex());
+        }
+        const numNodes = options.publicKeys.length;
+        const additionalGasForAllNodes = BigInt(numNodes) * this.config.additionalGasLimitPerValidatorNode;
+        const executionGasLimit = additionalGasForAllNodes + this.config.gasLimitStake + this.config.gasLimitDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: executionGasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUnbondingNodes(options) {
+        let dataParts = ["unBondNodes"];
+        for (const key of options.publicKeys) {
+            dataParts = dataParts.concat(key.hex());
+        }
+        const numNodes = options.publicKeys.length;
+        const executionGasLimit = BigInt(numNodes) * this.config.additionalGasLimitPerValidatorNode +
+            this.config.gasLimitUnbond +
+            this.config.gasLimitDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: executionGasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUnstakingNodes(options) {
+        let dataParts = ["unStakeNodes"];
+        for (const key of options.publicKeys) {
+            dataParts = dataParts.concat(key.hex());
+        }
+        const numNodes = options.publicKeys.length;
+        const executionGasLimit = BigInt(numNodes) * this.config.additionalGasLimitPerValidatorNode +
+            this.config.gasLimitUnstake +
+            this.config.gasLimitDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: executionGasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUnjailingNodes(options) {
+        const dataParts = ["unJailNodes"];
+        for (const key of options.publicKeys) {
+            dataParts.push(key.hex());
+        }
+        const numNodes = options.publicKeys.length;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: this.computeExecutionGasLimitForNodesManagement(numNodes),
+            addDataMovementGas: true,
+            amount: options.amount,
+        }).build();
+    }
+    createTransactionForChangingServiceFee(options) {
+        const dataParts = [
+            "changeServiceFee",
+            this.argSerializer.valuesToStrings([new smartcontracts_1.BigUIntValue(options.serviceFee)])[0],
+        ];
+        const gasLimit = this.config.gasLimitDelegationOperations + this.config.additionalGasLimitForDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: gasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForModifyingDelegationCap(options) {
+        const dataParts = [
+            "modifyTotalDelegationCap",
+            this.argSerializer.valuesToStrings([new smartcontracts_1.BigUIntValue(options.delegationCap)])[0],
+        ];
+        const gasLimit = this.config.gasLimitDelegationOperations + this.config.additionalGasLimitForDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: gasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForSettingAutomaticActivation(options) {
+        const dataParts = ["setAutomaticActivation", this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue("true")])[0]];
+        const gasLimit = this.config.gasLimitDelegationOperations + this.config.additionalGasLimitForDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: gasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUnsettingAutomaticActivation(options) {
+        const dataParts = ["setAutomaticActivation", this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue("false")])[0]];
+        const gasLimit = this.config.gasLimitDelegationOperations + this.config.additionalGasLimitForDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: gasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForSettingCapCheckOnRedelegateRewards(options) {
+        const dataParts = [
+            "setCheckCapOnReDelegateRewards",
+            this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue("true")])[0],
+        ];
+        const gasLimit = this.config.gasLimitDelegationOperations + this.config.additionalGasLimitForDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: gasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUnsettingCapCheckOnRedelegateRewards(options) {
+        const dataParts = [
+            "setCheckCapOnReDelegateRewards",
+            this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue("false")])[0],
+        ];
+        const gasLimit = this.config.gasLimitDelegationOperations + this.config.additionalGasLimitForDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: gasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForSettingMetadata(options) {
+        const dataParts = [
+            "setMetaData",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.name),
+                new smartcontracts_1.StringValue(options.website),
+                new smartcontracts_1.StringValue(options.identifier),
+            ]),
+        ];
+        const gasLimit = this.config.gasLimitDelegationOperations + this.config.additionalGasLimitForDelegationOperations;
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.delegationContract,
+            dataParts: dataParts,
+            gasLimit: gasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    computeExecutionGasLimitForNodesManagement(numNodes) {
+        const additionalGasForAllNodes = this.config.additionalGasLimitPerValidatorNode * BigInt(numNodes);
+        return this.config.gasLimitDelegationOperations + additionalGasForAllNodes;
+    }
+}
+exports.DelegationTransactionsFactory = DelegationTransactionsFactory;
+//# sourceMappingURL=delegationTransactionsFactory.js.map
+
+/***/ }),
+
+/***/ 51404:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(54820), exports);
+__exportStar(__nccwpck_require__(11506), exports);
+__exportStar(__nccwpck_require__(48916), exports);
+__exportStar(__nccwpck_require__(26559), exports);
+__exportStar(__nccwpck_require__(67367), exports);
+__exportStar(__nccwpck_require__(34740), exports);
+__exportStar(__nccwpck_require__(23432), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 11506:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.RelayedTransactionsFactory = void 0;
+const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const address_1 = __nccwpck_require__(39166);
+const errors_1 = __nccwpck_require__(38506);
+const smartcontracts_1 = __nccwpck_require__(56238);
+const transaction_1 = __nccwpck_require__(52756);
+const JSONbig = __nccwpck_require__(55031);
+/**
+ * Use this class to create both RelayedV1 and RelayedV2 transactions.
+ */
+class RelayedTransactionsFactory {
+    constructor(options) {
+        this.config = options.config;
+    }
+    createRelayedV1Transaction(options) {
+        if (!options.innerTransaction.gasLimit) {
+            throw new errors_1.ErrInvalidInnerTransaction("The gas limit is not set for the inner transaction");
+        }
+        if (!options.innerTransaction.signature.length) {
+            throw new errors_1.ErrInvalidInnerTransaction("The inner transaction is not signed");
+        }
+        const serializedTransaction = this.prepareInnerTransactionForRelayedV1(options.innerTransaction);
+        const data = `relayedTx@${Buffer.from(serializedTransaction).toString("hex")}`;
+        const additionalGasForDataLength = this.config.gasLimitPerByte * BigInt(data.length);
+        const gasLimit = this.config.minGasLimit + additionalGasForDataLength + options.innerTransaction.gasLimit;
+        return new transaction_1.Transaction({
+            chainID: this.config.chainID,
+            sender: options.relayerAddress.bech32(),
+            receiver: options.innerTransaction.sender,
+            gasLimit: gasLimit,
+            data: Buffer.from(data),
+        });
+    }
+    createRelayedV2Transaction(options) {
+        if (options.innerTransaction.gasLimit) {
+            throw new errors_1.ErrInvalidInnerTransaction("The gas limit should not be set for the inner transaction");
+        }
+        if (!options.innerTransaction.signature.length) {
+            throw new errors_1.ErrInvalidInnerTransaction("The inner transaction is not signed");
+        }
+        const { argumentsString } = new smartcontracts_1.ArgSerializer().valuesToString([
+            new smartcontracts_1.AddressValue(address_1.Address.fromBech32(options.innerTransaction.receiver)),
+            new smartcontracts_1.U64Value(new bignumber_js_1.default(options.innerTransaction.nonce.toString())),
+            new smartcontracts_1.BytesValue(Buffer.from(options.innerTransaction.data)),
+            new smartcontracts_1.BytesValue(Buffer.from(options.innerTransaction.signature)),
+        ]);
+        const data = `relayedTxV2@${argumentsString}`;
+        const additionalGasForDataLength = this.config.gasLimitPerByte * BigInt(data.length);
+        const gasLimit = options.innerTransactionGasLimit + this.config.minGasLimit + additionalGasForDataLength;
+        return new transaction_1.Transaction({
+            sender: options.relayerAddress.bech32(),
+            receiver: options.innerTransaction.sender,
+            value: 0n,
+            gasLimit: gasLimit,
+            chainID: this.config.chainID,
+            data: Buffer.from(data),
+            version: options.innerTransaction.version,
+            options: options.innerTransaction.options,
+        });
+    }
+    prepareInnerTransactionForRelayedV1(innerTransaction) {
+        const txObject = {
+            nonce: innerTransaction.nonce,
+            sender: address_1.Address.newFromBech32(innerTransaction.sender).getPublicKey().toString("base64"),
+            receiver: address_1.Address.newFromBech32(innerTransaction.receiver).getPublicKey().toString("base64"),
+            value: innerTransaction.value,
+            gasPrice: innerTransaction.gasPrice,
+            gasLimit: innerTransaction.gasLimit,
+            data: Buffer.from(innerTransaction.data).toString("base64"),
+            signature: Buffer.from(innerTransaction.signature).toString("base64"),
+            chainID: Buffer.from(innerTransaction.chainID).toString("base64"),
+            version: innerTransaction.version,
+            options: innerTransaction.options.valueOf() == 0 ? undefined : innerTransaction.options,
+            guardian: innerTransaction.guardian
+                ? address_1.Address.newFromBech32(innerTransaction.guardian).getPublicKey().toString("base64")
+                : undefined,
+            guardianSignature: innerTransaction.guardianSignature.length
+                ? Buffer.from(innerTransaction.guardianSignature).toString("base64")
+                : undefined,
+            sndUserName: innerTransaction.senderUsername
+                ? Buffer.from(innerTransaction.senderUsername).toString("base64")
+                : undefined,
+            rcvUserName: innerTransaction.receiverUsername
+                ? Buffer.from(innerTransaction.receiverUsername).toString("base64")
+                : undefined,
+        };
+        return JSONbig.stringify(txObject);
+    }
+}
+exports.RelayedTransactionsFactory = RelayedTransactionsFactory;
+//# sourceMappingURL=relayedTransactionsFactory.js.map
+
+/***/ }),
+
+/***/ 48916:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SmartContractTransactionsFactory = void 0;
+const address_1 = __nccwpck_require__(39166);
+const constants_1 = __nccwpck_require__(38069);
+const errors_1 = __nccwpck_require__(38506);
+const logger_1 = __nccwpck_require__(70055);
+const smartcontracts_1 = __nccwpck_require__(56238);
+const nativeSerializer_1 = __nccwpck_require__(6602);
+const typesystem_1 = __nccwpck_require__(16125);
+const tokens_1 = __nccwpck_require__(49272);
+const utils_codec_1 = __nccwpck_require__(44534);
+const tokenTransfersDataBuilder_1 = __nccwpck_require__(23202);
+const transactionBuilder_1 = __nccwpck_require__(29474);
+/**
+ * Use this class to create transactions to deploy, call or upgrade a smart contract.
+ */
+class SmartContractTransactionsFactory {
+    constructor(options) {
+        this.config = options.config;
+        this.abi = options.abi;
+        this.tokenComputer = new tokens_1.TokenComputer();
+        this.dataArgsBuilder = new tokenTransfersDataBuilder_1.TokenTransfersDataBuilder();
+        this.contractDeployAddress = address_1.Address.fromHex(constants_1.CONTRACT_DEPLOY_ADDRESS_HEX, this.config.addressHrp);
+    }
+    createTransactionForDeploy(options) {
+        const nativeTransferAmount = options.nativeTransferAmount ?? 0n;
+        const isUpgradeable = options.isUpgradeable ?? true;
+        const isReadable = options.isReadable ?? true;
+        const isPayable = options.isPayable ?? false;
+        const isPayableBySmartContract = options.isPayableBySmartContract ?? true;
+        const args = options.arguments || [];
+        const metadata = new smartcontracts_1.CodeMetadata(isUpgradeable, isReadable, isPayable, isPayableBySmartContract);
+        const dataParts = [utils_codec_1.byteArrayToHex(options.bytecode), utils_codec_1.byteArrayToHex(constants_1.VM_TYPE_WASM_VM), metadata.toString()];
+        const endpoint = this.abi?.constructorDefinition;
+        const preparedArgs = this.argsToDataParts(args, endpoint);
+        dataParts.push(...preparedArgs);
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.contractDeployAddress,
+            dataParts: dataParts,
+            gasLimit: options.gasLimit,
+            addDataMovementGas: false,
+            amount: nativeTransferAmount,
+        }).build();
+    }
+    createTransactionForExecute(options) {
+        const args = options.arguments || [];
+        let tokenTransfers = options.tokenTransfers ? [...options.tokenTransfers] : [];
+        let nativeTransferAmount = options.nativeTransferAmount ?? 0n;
+        let numberOfTokens = tokenTransfers.length;
+        if (nativeTransferAmount && numberOfTokens) {
+            tokenTransfers.push(tokens_1.TokenTransfer.newFromEgldAmount(nativeTransferAmount));
+            nativeTransferAmount = 0n;
+            numberOfTokens++;
+        }
+        let receiver = options.contract;
+        let dataParts = [];
+        if (numberOfTokens === 1) {
+            const transfer = tokenTransfers[0];
+            if (this.tokenComputer.isFungible(transfer.token)) {
+                dataParts = this.dataArgsBuilder.buildDataPartsForESDTTransfer(transfer);
+            }
+            else {
+                dataParts = this.dataArgsBuilder.buildDataPartsForSingleESDTNFTTransfer(transfer, receiver);
+                receiver = options.sender;
+            }
+        }
+        else if (numberOfTokens > 1) {
+            dataParts = this.dataArgsBuilder.buildDataPartsForMultiESDTNFTTransfer(receiver, tokenTransfers);
+            receiver = options.sender;
+        }
+        dataParts.push(dataParts.length ? utils_codec_1.utf8ToHex(options.function) : options.function);
+        const endpoint = this.abi?.getEndpoint(options.function);
+        const preparedArgs = this.argsToDataParts(args, endpoint);
+        dataParts.push(...preparedArgs);
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: receiver,
+            dataParts: dataParts,
+            gasLimit: options.gasLimit,
+            addDataMovementGas: false,
+            amount: nativeTransferAmount,
+        }).build();
+    }
+    createTransactionForUpgrade(options) {
+        const nativeTransferAmount = options.nativeTransferAmount ?? 0n;
+        const isUpgradeable = options.isUpgradeable ?? true;
+        const isReadable = options.isReadable ?? true;
+        const isPayable = options.isPayable ?? false;
+        const isPayableBySmartContract = options.isPayableBySmartContract ?? true;
+        const args = options.arguments || [];
+        const metadata = new smartcontracts_1.CodeMetadata(isUpgradeable, isReadable, isPayable, isPayableBySmartContract);
+        const dataParts = ["upgradeContract", utils_codec_1.byteArrayToHex(options.bytecode), metadata.toString()];
+        const endpoint = this.getEndpointForUpgrade();
+        const preparedArgs = this.argsToDataParts(args, endpoint);
+        dataParts.push(...preparedArgs);
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.contract,
+            dataParts: dataParts,
+            gasLimit: options.gasLimit,
+            addDataMovementGas: false,
+            amount: nativeTransferAmount,
+        }).build();
+    }
+    getEndpointForUpgrade() {
+        if (!this.abi) {
+            return undefined;
+        }
+        if (this.abi.upgradeConstructorDefinition) {
+            return this.abi.upgradeConstructorDefinition;
+        }
+        try {
+            return this.abi.getEndpoint("upgrade");
+        }
+        catch (error) {
+            // Contracts written using an old Rust framework and deployed prior Sirius might not describe the 'upgrade' endpoint in the ABI.
+            logger_1.Logger.warn("In the ABI, cannot find the 'upgrade' endpoint definition. Will use the constructor definition (fallback).");
+            return this.abi.constructorDefinition;
+        }
+    }
+    createTransactionForClaimingDeveloperRewards(options) {
+        const dataParts = ["ClaimDeveloperRewards"];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.contract,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitClaimDeveloperRewards,
+            addDataMovementGas: false,
+        }).build();
+    }
+    createTransactionForChangingOwnerAddress(options) {
+        const dataParts = ["ChangeOwnerAddress", address_1.Address.fromBech32(options.newOwner.bech32()).toHex()];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.contract,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitChangeOwnerAddress,
+            addDataMovementGas: false,
+        }).build();
+    }
+    argsToDataParts(args, endpoint) {
+        if (endpoint) {
+            const typedArgs = nativeSerializer_1.NativeSerializer.nativeToTypedValues(args, endpoint);
+            return new smartcontracts_1.ArgSerializer().valuesToStrings(typedArgs);
+        }
+        if (this.areArgsOfTypedValue(args)) {
+            return new smartcontracts_1.ArgSerializer().valuesToStrings(args);
+        }
+        throw new errors_1.Err("Can't convert args to TypedValues");
+    }
+    areArgsOfTypedValue(args) {
+        return args.every((arg) => typesystem_1.isTyped(arg));
+    }
+}
+exports.SmartContractTransactionsFactory = SmartContractTransactionsFactory;
+//# sourceMappingURL=smartContractTransactionsFactory.js.map
+
+/***/ }),
+
+/***/ 26559:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TokenManagementTransactionsFactory = void 0;
+const address_1 = __nccwpck_require__(39166);
+const constants_1 = __nccwpck_require__(38069);
+const errors_1 = __nccwpck_require__(38506);
+const logger_1 = __nccwpck_require__(70055);
+const smartcontracts_1 = __nccwpck_require__(56238);
+const transactionBuilder_1 = __nccwpck_require__(29474);
+/**
+ * Use this class to create token management transactions like issuing ESDTs, creating NFTs, setting roles, etc.
+ */
+class TokenManagementTransactionsFactory {
+    constructor(options) {
+        this.config = options.config;
+        this.argSerializer = new smartcontracts_1.ArgSerializer();
+        this.trueAsString = "true";
+        this.falseAsString = "false";
+        this.esdtContractAddress = address_1.Address.fromHex(constants_1.ESDT_CONTRACT_ADDRESS_HEX, this.config.addressHrp);
+    }
+    createTransactionForIssuingFungible(options) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
+        const args = [
+            new smartcontracts_1.StringValue(options.tokenName),
+            new smartcontracts_1.StringValue(options.tokenTicker),
+            new smartcontracts_1.BigUIntValue(options.initialSupply),
+            new smartcontracts_1.BigUIntValue(options.numDecimals),
+            new smartcontracts_1.StringValue("canFreeze"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canFreeze)),
+            new smartcontracts_1.StringValue("canWipe"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canWipe)),
+            new smartcontracts_1.StringValue("canPause"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canPause)),
+            new smartcontracts_1.StringValue("canChangeOwner"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canChangeOwner)),
+            new smartcontracts_1.StringValue("canUpgrade"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canUpgrade)),
+            new smartcontracts_1.StringValue("canAddSpecialRoles"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canAddSpecialRoles)),
+        ];
+        const dataParts = ["issue", ...this.argSerializer.valuesToStrings(args)];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitIssue,
+            addDataMovementGas: true,
+            amount: this.config.issueCost,
+        }).build();
+    }
+    createTransactionForIssuingSemiFungible(options) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
+        const args = [
+            new smartcontracts_1.StringValue(options.tokenName),
+            new smartcontracts_1.StringValue(options.tokenTicker),
+            new smartcontracts_1.StringValue("canFreeze"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canFreeze)),
+            new smartcontracts_1.StringValue("canWipe"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canWipe)),
+            new smartcontracts_1.StringValue("canPause"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canPause)),
+            new smartcontracts_1.StringValue("canTransferNFTCreateRole"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canTransferNFTCreateRole)),
+            new smartcontracts_1.StringValue("canChangeOwner"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canChangeOwner)),
+            new smartcontracts_1.StringValue("canUpgrade"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canUpgrade)),
+            new smartcontracts_1.StringValue("canAddSpecialRoles"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canAddSpecialRoles)),
+        ];
+        const dataParts = ["issueSemiFungible", ...this.argSerializer.valuesToStrings(args)];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitIssue,
+            addDataMovementGas: true,
+            amount: this.config.issueCost,
+        }).build();
+    }
+    createTransactionForIssuingNonFungible(options) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
+        const args = [
+            new smartcontracts_1.StringValue(options.tokenName),
+            new smartcontracts_1.StringValue(options.tokenTicker),
+            new smartcontracts_1.StringValue("canFreeze"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canFreeze)),
+            new smartcontracts_1.StringValue("canWipe"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canWipe)),
+            new smartcontracts_1.StringValue("canPause"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canPause)),
+            new smartcontracts_1.StringValue("canTransferNFTCreateRole"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canTransferNFTCreateRole)),
+            new smartcontracts_1.StringValue("canChangeOwner"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canChangeOwner)),
+            new smartcontracts_1.StringValue("canUpgrade"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canUpgrade)),
+            new smartcontracts_1.StringValue("canAddSpecialRoles"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canAddSpecialRoles)),
+        ];
+        const dataParts = ["issueNonFungible", ...this.argSerializer.valuesToStrings(args)];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitIssue,
+            addDataMovementGas: true,
+            amount: this.config.issueCost,
+        }).build();
+    }
+    createTransactionForRegisteringMetaESDT(options) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
+        const args = [
+            new smartcontracts_1.StringValue(options.tokenName),
+            new smartcontracts_1.StringValue(options.tokenTicker),
+            new smartcontracts_1.BigUIntValue(options.numDecimals),
+            new smartcontracts_1.StringValue("canFreeze"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canFreeze)),
+            new smartcontracts_1.StringValue("canWipe"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canWipe)),
+            new smartcontracts_1.StringValue("canPause"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canPause)),
+            new smartcontracts_1.StringValue("canTransferNFTCreateRole"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canTransferNFTCreateRole)),
+            new smartcontracts_1.StringValue("canChangeOwner"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canChangeOwner)),
+            new smartcontracts_1.StringValue("canUpgrade"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canUpgrade)),
+            new smartcontracts_1.StringValue("canAddSpecialRoles"),
+            new smartcontracts_1.StringValue(this.boolToString(options.canAddSpecialRoles)),
+        ];
+        const dataParts = ["registerMetaESDT", ...this.argSerializer.valuesToStrings(args)];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitIssue,
+            addDataMovementGas: true,
+            amount: this.config.issueCost,
+        }).build();
+    }
+    createTransactionForRegisteringAndSettingRoles(options) {
+        this.notifyAboutUnsettingBurnRoleGlobally();
+        const dataParts = [
+            "registerAndSetAllRoles",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenName),
+                new smartcontracts_1.StringValue(options.tokenTicker),
+                new smartcontracts_1.StringValue(options.tokenType),
+                new smartcontracts_1.BigUIntValue(options.numDecimals),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitIssue,
+            addDataMovementGas: true,
+            amount: this.config.issueCost,
+        }).build();
+    }
+    createTransactionForSettingBurnRoleGlobally(options) {
+        const dataParts = [
+            "setBurnRoleGlobally",
+            ...this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue(options.tokenIdentifier)]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitToggleBurnRoleGlobally,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUnsettingBurnRoleGlobally(options) {
+        const dataParts = [
+            "unsetBurnRoleGlobally",
+            ...this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue(options.tokenIdentifier)]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitToggleBurnRoleGlobally,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForSettingSpecialRoleOnFungibleToken(options) {
+        const args = [new smartcontracts_1.StringValue(options.tokenIdentifier), new smartcontracts_1.AddressValue(options.user)];
+        options.addRoleLocalMint ? args.push(new smartcontracts_1.StringValue("ESDTRoleLocalMint")) : 0;
+        options.addRoleLocalBurn ? args.push(new smartcontracts_1.StringValue("ESDTRoleLocalBurn")) : 0;
+        options.addRoleESDTTransferRole ? args.push(new smartcontracts_1.StringValue("ESDTTransferRole")) : 0;
+        const dataParts = ["setSpecialRole", ...this.argSerializer.valuesToStrings(args)];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitSetSpecialRole,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForSettingSpecialRoleOnSemiFungibleToken(options) {
+        const args = [new smartcontracts_1.StringValue(options.tokenIdentifier), new smartcontracts_1.AddressValue(options.user)];
+        options.addRoleNFTCreate ? args.push(new smartcontracts_1.StringValue("ESDTRoleNFTCreate")) : 0;
+        options.addRoleNFTBurn ? args.push(new smartcontracts_1.StringValue("ESDTRoleNFTBurn")) : 0;
+        options.addRoleNFTAddQuantity ? args.push(new smartcontracts_1.StringValue("ESDTRoleNFTAddQuantity")) : 0;
+        options.addRoleESDTTransferRole ? args.push(new smartcontracts_1.StringValue("ESDTTransferRole")) : 0;
+        options.addRoleESDTModifyCreator ? args.push(new smartcontracts_1.StringValue("ESDTRoleModifyCreator")) : 0;
+        const dataParts = ["setSpecialRole", ...this.argSerializer.valuesToStrings(args)];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitSetSpecialRole,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForSettingSpecialRoleOnMetaESDT(options) {
+        return this.createTransactionForSettingSpecialRoleOnSemiFungibleToken(options);
+    }
+    createTransactionForSettingSpecialRoleOnNonFungibleToken(options) {
+        const args = [new smartcontracts_1.StringValue(options.tokenIdentifier), new smartcontracts_1.AddressValue(options.user)];
+        options.addRoleNFTCreate ? args.push(new smartcontracts_1.StringValue("ESDTRoleNFTCreate")) : 0;
+        options.addRoleNFTBurn ? args.push(new smartcontracts_1.StringValue("ESDTRoleNFTBurn")) : 0;
+        options.addRoleNFTUpdateAttributes ? args.push(new smartcontracts_1.StringValue("ESDTRoleNFTUpdateAttributes")) : 0;
+        options.addRoleNFTAddURI ? args.push(new smartcontracts_1.StringValue("ESDTRoleNFTAddURI")) : 0;
+        options.addRoleESDTTransferRole ? args.push(new smartcontracts_1.StringValue("ESDTTransferRole")) : 0;
+        options.addRoleESDTModifyCreator ? args.push(new smartcontracts_1.StringValue("ESDTRoleModifyCreator")) : 0;
+        options.addRoleNFTRecreate ? args.push(new smartcontracts_1.StringValue("ESDTRoleNFTRecreate")) : 0;
+        options.addRoleESDTSetNewURI ? args.push(new smartcontracts_1.StringValue("ESDTRoleSetNewURI")) : 0;
+        options.addRoleESDTModifyRoyalties ? args.push(new smartcontracts_1.StringValue("ESDTRoleModifyRoyalties")) : 0;
+        const dataParts = ["setSpecialRole", ...this.argSerializer.valuesToStrings(args)];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitSetSpecialRole,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForCreatingNFT(options) {
+        const dataParts = [
+            "ESDTNFTCreate",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.initialQuantity),
+                new smartcontracts_1.StringValue(options.name),
+                new smartcontracts_1.BigUIntValue(options.royalties),
+                new smartcontracts_1.StringValue(options.hash),
+                new smartcontracts_1.BytesValue(Buffer.from(options.attributes)),
+                ...options.uris.map((uri) => new smartcontracts_1.StringValue(uri)),
+            ]),
+        ];
+        // Note that the following is an approximation (a reasonable one):
+        const nftData = options.name + options.hash + options.attributes + options.uris.join("");
+        const storageGasLimit = this.config.gasLimitStorePerByte + BigInt(nftData.length);
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitEsdtNftCreate + storageGasLimit,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForPausing(options) {
+        const dataParts = ["pause", ...this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue(options.tokenIdentifier)])];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitPausing,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUnpausing(options) {
+        const dataParts = [
+            "unPause",
+            ...this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue(options.tokenIdentifier)]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitPausing,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForFreezing(options) {
+        const dataParts = [
+            "freeze",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.AddressValue(options.user),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitFreezing,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUnfreezing(options) {
+        const dataParts = [
+            "UnFreeze",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.AddressValue(options.user),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitFreezing,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForWiping(options) {
+        const dataParts = [
+            "wipe",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.AddressValue(options.user),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitWiping,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForLocalMint(options) {
+        const dataParts = [
+            "ESDTLocalMint",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.supplyToMint),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitEsdtLocalMint,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForLocalBurning(options) {
+        const dataParts = [
+            "ESDTLocalBurn",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.supplyToBurn),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitEsdtLocalBurn,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUpdatingAttributes(options) {
+        const dataParts = [
+            "ESDTNFTUpdateAttributes",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.tokenNonce),
+                new smartcontracts_1.BytesValue(Buffer.from(options.attributes)),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitEsdtNftUpdateAttributes,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForAddingQuantity(options) {
+        const dataParts = [
+            "ESDTNFTAddQuantity",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.tokenNonce),
+                new smartcontracts_1.BigUIntValue(options.quantityToAdd),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitEsdtNftAddQuantity,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForBurningQuantity(options) {
+        const dataParts = [
+            "ESDTNFTBurn",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.tokenNonce),
+                new smartcontracts_1.BigUIntValue(options.quantityToBurn),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitEsdtNftBurn,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForModifyingRoyalties(options) {
+        const dataParts = [
+            "ESDTModifyRoyalties",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.tokenNonce),
+                new smartcontracts_1.BigUIntValue(options.newRoyalties),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitEsdtModifyRoyalties,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForSettingNewUris(options) {
+        if (!options.newUris.length) {
+            throw new errors_1.ErrBadUsage("No URIs provided");
+        }
+        const dataParts = [
+            "ESDTSetNewURIs",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.tokenNonce),
+                ...options.newUris.map((uri) => new smartcontracts_1.StringValue(uri)),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitSetNewUris,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForModifyingCreator(options) {
+        const dataParts = [
+            "ESDTModifyCreator",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.tokenNonce),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitEsdtModifyCreator,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUpdatingMetadata(options) {
+        const dataParts = [
+            "ESDTMetaDataUpdate",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.tokenNonce),
+                ...(options.newTokenName ? [new smartcontracts_1.StringValue(options.newTokenName)] : []),
+                ...(options.newRoyalties ? [new smartcontracts_1.BigUIntValue(options.newRoyalties)] : []),
+                ...(options.newHash ? [new smartcontracts_1.StringValue(options.newHash)] : []),
+                ...(options.newAttributes ? [new smartcontracts_1.BytesValue(Buffer.from(options.newAttributes))] : []),
+                ...(options.newUris ? options.newUris.map((uri) => new smartcontracts_1.StringValue(uri)) : []),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitEsdtMetadataUpdate,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForMetadataRecreate(options) {
+        const dataParts = [
+            "ESDTMetaDataRecreate",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenIdentifier),
+                new smartcontracts_1.BigUIntValue(options.tokenNonce),
+                ...(options.newTokenName ? [new smartcontracts_1.StringValue(options.newTokenName)] : []),
+                ...(options.newRoyalties ? [new smartcontracts_1.BigUIntValue(options.newRoyalties)] : []),
+                ...(options.newHash ? [new smartcontracts_1.StringValue(options.newHash)] : []),
+                ...(options.newAttributes ? [new smartcontracts_1.BytesValue(Buffer.from(options.newAttributes))] : []),
+                ...(options.newUris ? options.newUris.map((uri) => new smartcontracts_1.StringValue(uri)) : []),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitNftMetadataRecreate,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForChangingTokenToDynamic(options) {
+        const dataParts = [
+            "changeToDynamic",
+            ...this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue(options.tokenIdentifier)]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitNftChangeToDynamic,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForUpdatingTokenId(options) {
+        const dataParts = [
+            "updateTokenID",
+            ...this.argSerializer.valuesToStrings([new smartcontracts_1.StringValue(options.tokenIdentifier)]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitUpdateTokenId,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForRegisteringDynamicToken(options) {
+        const dataParts = [
+            "registerDynamic",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenName),
+                new smartcontracts_1.StringValue(options.tokenTicker),
+                new smartcontracts_1.StringValue(options.tokenType),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitRegisterDynamic,
+            addDataMovementGas: true,
+            amount: this.config.issueCost,
+        }).build();
+    }
+    createTransactionForRegisteringDynamicAndSettingRoles(options) {
+        const dataParts = [
+            "registerAndSetAllRolesDynamic",
+            ...this.argSerializer.valuesToStrings([
+                new smartcontracts_1.StringValue(options.tokenName),
+                new smartcontracts_1.StringValue(options.tokenTicker),
+                new smartcontracts_1.StringValue(options.tokenType),
+            ]),
+        ];
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: this.esdtContractAddress,
+            dataParts: dataParts,
+            gasLimit: this.config.gasLimitRegisterDynamic,
+            addDataMovementGas: true,
+            amount: this.config.issueCost,
+        }).build();
+    }
+    notifyAboutUnsettingBurnRoleGlobally() {
+        logger_1.Logger.info(`
+==========
+IMPORTANT!
+==========
+You are about to issue (register) a new token. This will set the role "ESDTRoleBurnForAll" (globally).
+Once the token is registered, you can unset this role by calling "unsetBurnRoleGlobally" (in a separate transaction).`);
+    }
+    boolToString(value) {
+        if (value) {
+            return this.trueAsString;
+        }
+        return this.falseAsString;
+    }
+}
+exports.TokenManagementTransactionsFactory = TokenManagementTransactionsFactory;
+//# sourceMappingURL=tokenManagementTransactionsFactory.js.map
+
+/***/ }),
+
+/***/ 23202:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TokenTransfersDataBuilder = void 0;
+const argSerializer_1 = __nccwpck_require__(87225);
+const typesystem_1 = __nccwpck_require__(16125);
+const tokens_1 = __nccwpck_require__(49272);
+class TokenTransfersDataBuilder {
+    constructor() {
+        this.tokenComputer = new tokens_1.TokenComputer();
+        this.argsSerializer = new argSerializer_1.ArgSerializer();
+    }
+    buildDataPartsForESDTTransfer(transfer) {
+        const args = this.argsSerializer.valuesToStrings([
+            new typesystem_1.TokenIdentifierValue(transfer.token.identifier),
+            new typesystem_1.BigUIntValue(transfer.amount),
+        ]);
+        return ["ESDTTransfer", ...args];
+    }
+    buildDataPartsForSingleESDTNFTTransfer(transfer, receiver) {
+        const token = transfer.token;
+        const identifier = this.tokenComputer.extractIdentifierFromExtendedIdentifier(token.identifier);
+        const args = this.argsSerializer.valuesToStrings([
+            new typesystem_1.TokenIdentifierValue(identifier),
+            new typesystem_1.BigUIntValue(token.nonce),
+            new typesystem_1.BigUIntValue(transfer.amount),
+            new typesystem_1.AddressValue(receiver),
+        ]);
+        return ["ESDTNFTTransfer", ...args];
+    }
+    buildDataPartsForMultiESDTNFTTransfer(receiver, transfers) {
+        const argsTyped = [new typesystem_1.AddressValue(receiver), new typesystem_1.U32Value(transfers.length)];
+        for (const transfer of transfers) {
+            const identifier = this.tokenComputer.extractIdentifierFromExtendedIdentifier(transfer.token.identifier);
+            argsTyped.push(...[
+                new typesystem_1.TokenIdentifierValue(identifier),
+                new typesystem_1.BigUIntValue(transfer.token.nonce),
+                new typesystem_1.BigUIntValue(transfer.amount),
+            ]);
+        }
+        const args = this.argsSerializer.valuesToStrings(argsTyped);
+        return ["MultiESDTNFTTransfer", ...args];
+    }
+}
+exports.TokenTransfersDataBuilder = TokenTransfersDataBuilder;
+//# sourceMappingURL=tokenTransfersDataBuilder.js.map
+
+/***/ }),
+
+/***/ 29474:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionBuilder = void 0;
+const constants_1 = __nccwpck_require__(38069);
+const transaction_1 = __nccwpck_require__(52756);
+const transactionPayload_1 = __nccwpck_require__(14224);
+/**
+ * @internal
+ */
+class TransactionBuilder {
+    constructor(options) {
+        this.config = options.config;
+        this.sender = options.sender;
+        this.receiver = options.receiver;
+        this.dataParts = options.dataParts;
+        this.providedGasLimit = options.gasLimit;
+        this.addDataMovementGas = options.addDataMovementGas;
+        this.amount = options.amount;
+    }
+    computeGasLimit(payload) {
+        if (!this.addDataMovementGas) {
+            return this.providedGasLimit;
+        }
+        const dataMovementGas = this.config.minGasLimit + this.config.gasLimitPerByte * BigInt(payload.length());
+        const gasLimit = dataMovementGas + this.providedGasLimit;
+        return gasLimit;
+    }
+    buildTransactionPayload() {
+        const data = this.dataParts.join(constants_1.ARGUMENTS_SEPARATOR);
+        return new transactionPayload_1.TransactionPayload(data);
+    }
+    build() {
+        const data = this.buildTransactionPayload();
+        const gasLimit = this.computeGasLimit(data);
+        return new transaction_1.Transaction({
+            sender: this.sender.bech32(),
+            receiver: this.receiver.bech32(),
+            gasLimit: gasLimit,
+            value: this.amount || 0n,
+            data: data.valueOf(),
+            chainID: this.config.chainID,
+        });
+    }
+}
+exports.TransactionBuilder = TransactionBuilder;
+//# sourceMappingURL=transactionBuilder.js.map
+
+/***/ }),
+
+/***/ 67367:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionsFactoryConfig = void 0;
+const config_1 = __nccwpck_require__(9769);
+class TransactionsFactoryConfig {
+    constructor(options) {
+        // General-purpose configuration
+        this.chainID = options.chainID;
+        this.addressHrp = config_1.LibraryConfig.DefaultAddressHrp;
+        this.minGasLimit = 50000n;
+        this.gasLimitPerByte = 1500n;
+        // Configuration for token operations
+        this.gasLimitIssue = 60000000n;
+        this.gasLimitToggleBurnRoleGlobally = 60000000n;
+        this.gasLimitEsdtLocalMint = 300000n;
+        this.gasLimitEsdtLocalBurn = 300000n;
+        this.gasLimitSetSpecialRole = 60000000n;
+        this.gasLimitPausing = 60000000n;
+        this.gasLimitFreezing = 60000000n;
+        this.gasLimitWiping = 60000000n;
+        this.gasLimitEsdtNftCreate = 3000000n;
+        this.gasLimitEsdtNftUpdateAttributes = 1000000n;
+        this.gasLimitEsdtNftAddQuantity = 1000000n;
+        this.gasLimitEsdtNftBurn = 1000000n;
+        this.gasLimitStorePerByte = 10000n;
+        this.issueCost = 50000000000000000n;
+        this.gasLimitEsdtModifyRoyalties = 60000000n;
+        this.gasLimitEsdtModifyCreator = 60000000n;
+        this.gasLimitEsdtMetadataUpdate = 60000000n;
+        this.gasLimitSetNewUris = 60000000n;
+        this.gasLimitNftMetadataRecreate = 60000000n;
+        this.gasLimitNftChangeToDynamic = 60000000n;
+        this.gasLimitUpdateTokenId = 60000000n;
+        this.gasLimitRegisterDynamic = 60000000n;
+        // Configuration for delegation operations
+        this.gasLimitStake = 5000000n;
+        this.gasLimitUnstake = 5000000n;
+        this.gasLimitUnbond = 5000000n;
+        this.gasLimitCreateDelegationContract = 50000000n;
+        this.gasLimitDelegationOperations = 1000000n;
+        this.additionalGasLimitPerValidatorNode = 6000000n;
+        this.additionalGasLimitForDelegationOperations = 10000000n;
+        // Configuration for account operations
+        this.gasLimitSaveKeyValue = 100000n;
+        this.gasLimitPersistPerByte = 1000n;
+        this.gasLimitSetGuardian = 250000n;
+        this.gasLimitGuardAccount = 250000n;
+        this.gasLimitUnguardAccount = 250000n;
+        // Configuration for token transfers
+        this.gasLimitESDTTransfer = 200000n;
+        this.gasLimitESDTNFTTransfer = 200000n;
+        this.gasLimitMultiESDTNFTTransfer = 200000n;
+        // Configuration for smart contract operations
+        this.gasLimitClaimDeveloperRewards = 6000000n;
+        this.gasLimitChangeOwnerAddress = 6000000n;
+    }
+}
+exports.TransactionsFactoryConfig = TransactionsFactoryConfig;
+//# sourceMappingURL=transactionsFactoryConfig.js.map
+
+/***/ }),
+
+/***/ 34740:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TransferTransactionsFactory = void 0;
-const argSerializer_1 = __nccwpck_require__(87225);
-const typesystem_1 = __nccwpck_require__(16125);
+const constants_1 = __nccwpck_require__(38069);
+const errors_1 = __nccwpck_require__(38506);
+const smartcontracts_1 = __nccwpck_require__(56238);
+const tokens_1 = __nccwpck_require__(49272);
 const transaction_1 = __nccwpck_require__(52756);
 const transactionPayload_1 = __nccwpck_require__(14224);
+const tokenTransfersDataBuilder_1 = __nccwpck_require__(23202);
+const transactionBuilder_1 = __nccwpck_require__(29474);
+const ADDITIONAL_GAS_FOR_ESDT_TRANSFER = 100000;
+const ADDITIONAL_GAS_FOR_ESDT_NFT_TRANSFER = 800000;
+/**
+ * Use this class to create transactions for native token transfers (EGLD) or custom tokens transfers (ESDT/NTF/MetaESDT).
+ */
 class TransferTransactionsFactory {
-    constructor(gasEstimator) {
-        this.gasEstimator = gasEstimator;
+    /**
+     * Should be instantiated using `Config`.
+     * Instantiating this class using GasEstimator represents the legacy version of this class.
+     * The legacy version contains methods like `createEGLDTransfer`, `createESDTTransfer`, `createESDTNFTTransfer` and `createMultiESDTNFTTransfer`.
+     * This was done in order to minimize breaking changes in client code.
+     */
+    constructor(options) {
+        if (this.isGasEstimator(options)) {
+            this.gasEstimator = options;
+        }
+        else {
+            this.config = options.config;
+            this.tokenComputer = new tokens_1.TokenComputer();
+            this.tokenTransfersDataBuilder = new tokenTransfersDataBuilder_1.TokenTransfersDataBuilder();
+        }
     }
+    isGasEstimator(options) {
+        return (typeof options === "object" &&
+            typeof options.forEGLDTransfer === "function" &&
+            typeof options.forESDTTransfer === "function" &&
+            typeof options.forESDTNFTTransfer === "function" &&
+            typeof options.forMultiESDTNFTTransfer === "function");
+    }
+    isGasEstimatorDefined() {
+        return this.gasEstimator !== undefined;
+    }
+    ensureConfigIsDefined() {
+        if (this.config === undefined) {
+            throw new errors_1.Err("'config' is not defined");
+        }
+    }
+    createTransactionForNativeTokenTransfer(options) {
+        this.ensureConfigIsDefined();
+        const data = options.data || new Uint8Array();
+        return new transaction_1.Transaction({
+            sender: options.sender.bech32(),
+            receiver: options.receiver.bech32(),
+            chainID: this.config.chainID,
+            gasLimit: this.computeGasForMoveBalance(this.config, data),
+            data: data,
+            value: options.nativeAmount,
+        });
+    }
+    createTransactionForESDTTokenTransfer(options) {
+        this.ensureConfigIsDefined();
+        const numberOfTransfers = options.tokenTransfers.length;
+        if (numberOfTransfers === 0) {
+            throw new errors_1.ErrBadUsage("No token transfer has been provided");
+        }
+        if (numberOfTransfers === 1) {
+            return this.createSingleESDTTransferTransaction(options);
+        }
+        const { dataParts, extraGasForTransfer } = this.buildMultiESDTNFTTransferData(options.tokenTransfers, options.receiver);
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: options.sender,
+            dataParts: dataParts,
+            gasLimit: extraGasForTransfer,
+            addDataMovementGas: true,
+        }).build();
+    }
+    createTransactionForTransfer(options) {
+        const nativeAmount = options.nativeAmount ?? 0n;
+        let tokenTransfers = options.tokenTransfers ? [...options.tokenTransfers] : [];
+        const numberOfTokens = tokenTransfers.length;
+        if (numberOfTokens && options.data?.length) {
+            throw new errors_1.ErrBadUsage("Can't set data field when sending esdt tokens");
+        }
+        if ((nativeAmount && numberOfTokens === 0) || options.data) {
+            return this.createTransactionForNativeTokenTransfer({
+                sender: options.sender,
+                receiver: options.receiver,
+                nativeAmount: nativeAmount,
+                data: options.data,
+            });
+        }
+        const nativeTransfer = nativeAmount ? tokens_1.TokenTransfer.newFromEgldAmount(nativeAmount) : undefined;
+        if (nativeTransfer) {
+            tokenTransfers.push(nativeTransfer);
+        }
+        return this.createTransactionForESDTTokenTransfer({
+            sender: options.sender,
+            receiver: options.receiver,
+            tokenTransfers: tokenTransfers,
+        });
+    }
+    /**
+     * This is a legacy method. Can only be used if the class was instantiated using `GasEstimator`.
+     * Use {@link createTransactionForNativeTokenTransfer} instead.
+     */
     createEGLDTransfer(args) {
-        var _a;
-        const dataLength = ((_a = args.data) === null || _a === void 0 ? void 0 : _a.length()) || 0;
+        if (!this.isGasEstimatorDefined()) {
+            throw new errors_1.Err("You are calling a legacy function to create an EGLD transfer transaction. If this is your intent, then instantiate the class using a `GasEstimator`. Or, instead, use the new, recommended `createTransactionForNativeTokenTransfer` method.");
+        }
+        const dataLength = args.data?.length() || 0;
         const estimatedGasLimit = this.gasEstimator.forEGLDTransfer(dataLength);
         return new transaction_1.Transaction({
             nonce: args.nonce,
@@ -11704,15 +17209,22 @@ class TransferTransactionsFactory {
             gasPrice: args.gasPrice,
             gasLimit: args.gasLimit || estimatedGasLimit,
             data: args.data,
-            chainID: args.chainID
+            chainID: args.chainID,
         });
     }
+    /**
+     * This is a legacy method. Can only be used if the class was instantiated using `GasEstimator`.
+     * Use {@link createTransactionForESDTTokenTransfer} instead.
+     */
     createESDTTransfer(args) {
-        const { argumentsString } = new argSerializer_1.ArgSerializer().valuesToString([
+        if (!this.isGasEstimatorDefined()) {
+            throw new errors_1.Err("You are calling a legacy function to create an ESDT transfer transaction. If this is your intent, then instantiate the class using a `GasEstimator`. Or, instead, use the new, recommended `createTransactionForESDTTokenTransfer` method.");
+        }
+        const { argumentsString } = new smartcontracts_1.ArgSerializer().valuesToString([
             // The token identifier
-            typesystem_1.BytesValue.fromUTF8(args.tokenTransfer.tokenIdentifier),
+            smartcontracts_1.BytesValue.fromUTF8(args.tokenTransfer.tokenIdentifier),
             // The transfered amount
-            new typesystem_1.BigUIntValue(args.tokenTransfer.valueOf()),
+            new smartcontracts_1.BigUIntValue(args.tokenTransfer.valueOf()),
         ]);
         const data = `ESDTTransfer@${argumentsString}`;
         const transactionPayload = new transactionPayload_1.TransactionPayload(data);
@@ -11725,19 +17237,26 @@ class TransferTransactionsFactory {
             gasPrice: args.gasPrice,
             gasLimit: args.gasLimit || estimatedGasLimit,
             data: transactionPayload,
-            chainID: args.chainID
+            chainID: args.chainID,
         });
     }
+    /**
+     * This is a legacy method. Can only be used if the class was instantiated using `GasEstimator`.
+     * Use {@link createTransactionForESDTTokenTransfer} instead.
+     */
     createESDTNFTTransfer(args) {
-        const { argumentsString } = new argSerializer_1.ArgSerializer().valuesToString([
+        if (!this.isGasEstimatorDefined()) {
+            throw new errors_1.Err("You are calling a legacy function to create an ESDTNFT transfer transaction. If this is your intent, then instantiate the class using a `GasEstimator`. Or, instead, use the new, recommended `createTransactionForESDTTokenTransfer` method.");
+        }
+        const { argumentsString } = new smartcontracts_1.ArgSerializer().valuesToString([
             // The token identifier
-            typesystem_1.BytesValue.fromUTF8(args.tokenTransfer.tokenIdentifier),
+            smartcontracts_1.BytesValue.fromUTF8(args.tokenTransfer.tokenIdentifier),
             // The nonce of the token
-            new typesystem_1.U64Value(args.tokenTransfer.nonce),
+            new smartcontracts_1.U64Value(args.tokenTransfer.nonce),
             // The transferred quantity
-            new typesystem_1.BigUIntValue(args.tokenTransfer.valueOf()),
+            new smartcontracts_1.BigUIntValue(args.tokenTransfer.valueOf()),
             // The destination address
-            new typesystem_1.AddressValue(args.destination)
+            new smartcontracts_1.AddressValue(args.destination),
         ]);
         const data = `ESDTNFTTransfer@${argumentsString}`;
         const transactionPayload = new transactionPayload_1.TransactionPayload(data);
@@ -11750,27 +17269,34 @@ class TransferTransactionsFactory {
             gasPrice: args.gasPrice,
             gasLimit: args.gasLimit || estimatedGasLimit,
             data: transactionPayload,
-            chainID: args.chainID
+            chainID: args.chainID,
         });
     }
+    /**
+     * This is a legacy method. Can only be used if the class was instantiated using `GasEstimator`.
+     * Use {@link createTransactionForESDTTokenTransfer} instead.
+     */
     createMultiESDTNFTTransfer(args) {
+        if (!this.isGasEstimatorDefined()) {
+            throw new errors_1.Err("You are calling a legacy function to create a MultiESDTNFT transfer transaction. If this is your intent, then instantiate the class using a `GasEstimator`. Or, instead, use the new, recommended `createTransactionForESDTTokenTransfer` method.");
+        }
         const parts = [
             // The destination address
-            new typesystem_1.AddressValue(args.destination),
+            new smartcontracts_1.AddressValue(args.destination),
             // Number of tokens
-            new typesystem_1.U16Value(args.tokenTransfers.length)
+            new smartcontracts_1.U16Value(args.tokenTransfers.length),
         ];
         for (const payment of args.tokenTransfers) {
             parts.push(...[
                 // The token identifier
-                typesystem_1.BytesValue.fromUTF8(payment.tokenIdentifier),
+                smartcontracts_1.BytesValue.fromUTF8(payment.tokenIdentifier),
                 // The nonce of the token
-                new typesystem_1.U64Value(payment.nonce),
+                new smartcontracts_1.U64Value(payment.nonce),
                 // The transfered quantity
-                new typesystem_1.BigUIntValue(payment.valueOf())
+                new smartcontracts_1.BigUIntValue(payment.valueOf()),
             ]);
         }
-        const { argumentsString } = new argSerializer_1.ArgSerializer().valuesToString(parts);
+        const { argumentsString } = new smartcontracts_1.ArgSerializer().valuesToString(parts);
         const data = `MultiESDTNFTTransfer@${argumentsString}`;
         const transactionPayload = new transactionPayload_1.TransactionPayload(data);
         const dataLength = transactionPayload.length() || 0;
@@ -11782,12 +17308,801 @@ class TransferTransactionsFactory {
             gasPrice: args.gasPrice,
             gasLimit: args.gasLimit || estimatedGasLimit,
             data: transactionPayload,
-            chainID: args.chainID
+            chainID: args.chainID,
         });
+    }
+    createSingleESDTTransferTransaction(options) {
+        this.ensureConfigIsDefined();
+        const transfer = options.tokenTransfers[0];
+        const { dataParts, extraGasForTransfer, receiver } = this.buildTransferData(transfer, options);
+        return new transactionBuilder_1.TransactionBuilder({
+            config: this.config,
+            sender: options.sender,
+            receiver: receiver,
+            dataParts: dataParts,
+            gasLimit: extraGasForTransfer,
+            addDataMovementGas: true,
+        }).build();
+    }
+    buildTransferData(transfer, options) {
+        let dataParts = [];
+        let extraGasForTransfer;
+        let receiver = options.receiver;
+        if (this.tokenComputer.isFungible(transfer.token)) {
+            if (transfer.token.identifier === constants_1.EGLD_IDENTIFIER_FOR_MULTI_ESDTNFT_TRANSFER) {
+                ({ dataParts, extraGasForTransfer } = this.buildMultiESDTNFTTransferData([transfer], receiver));
+                receiver = options.sender;
+            }
+            else {
+                ({ dataParts, extraGasForTransfer } = this.buildESDTTransferData(transfer));
+            }
+        }
+        else {
+            ({ dataParts, extraGasForTransfer } = this.buildSingleESDTNFTTransferData(transfer, receiver));
+            receiver = options.sender; // Override receiver for non-fungible tokens
+        }
+        return { dataParts, extraGasForTransfer, receiver };
+    }
+    buildMultiESDTNFTTransferData(transfer, receiver) {
+        return {
+            dataParts: this.tokenTransfersDataBuilder.buildDataPartsForMultiESDTNFTTransfer(receiver, transfer),
+            extraGasForTransfer: this.config.gasLimitMultiESDTNFTTransfer * BigInt(transfer.length) +
+                BigInt(ADDITIONAL_GAS_FOR_ESDT_NFT_TRANSFER),
+        };
+    }
+    buildESDTTransferData(transfer) {
+        return {
+            dataParts: this.tokenTransfersDataBuilder.buildDataPartsForESDTTransfer(transfer),
+            extraGasForTransfer: this.config.gasLimitESDTTransfer + BigInt(ADDITIONAL_GAS_FOR_ESDT_TRANSFER),
+        };
+    }
+    buildSingleESDTNFTTransferData(transfer, receiver) {
+        return {
+            dataParts: this.tokenTransfersDataBuilder.buildDataPartsForSingleESDTNFTTransfer(transfer, receiver),
+            extraGasForTransfer: this.config.gasLimitESDTNFTTransfer + BigInt(ADDITIONAL_GAS_FOR_ESDT_NFT_TRANSFER),
+        };
+    }
+    computeGasForMoveBalance(config, data) {
+        return config.minGasLimit + config.gasLimitPerByte * BigInt(data.length);
     }
 }
 exports.TransferTransactionsFactory = TransferTransactionsFactory;
 //# sourceMappingURL=transferTransactionsFactory.js.map
+
+/***/ }),
+
+/***/ 68945:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DelegationTransactionsOutcomeParser = void 0;
+const address_1 = __nccwpck_require__(39166);
+const transactionsConverter_1 = __nccwpck_require__(47281);
+const errors_1 = __nccwpck_require__(38506);
+const resources_1 = __nccwpck_require__(51917);
+class DelegationTransactionsOutcomeParser {
+    constructor() { }
+    parseCreateNewDelegationContract(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "SCDeploy");
+        return events.map((event) => ({ contractAddress: this.extractContractAddress(event) }));
+    }
+    /**
+     * Temporary workaround, until "TransactionOnNetwork" completely replaces "TransactionOutcome".
+     */
+    ensureTransactionOutcome(transaction) {
+        if ("hash" in transaction) {
+            return new transactionsConverter_1.TransactionsConverter().transactionOnNetworkToOutcome(transaction);
+        }
+        return transaction;
+    }
+    ensureNoError(transactionEvents) {
+        for (const event of transactionEvents) {
+            if (event.identifier == "signalError") {
+                const data = Buffer.from(event.dataItems[0]?.toString().slice(1)).toString() || "";
+                const message = this.decodeTopicAsString(event.topics[1]);
+                throw new errors_1.ErrParseTransactionOutcome(`encountered signalError: ${message} (${Buffer.from(data, "hex").toString()})`);
+            }
+        }
+    }
+    extractContractAddress(event) {
+        if (!event.topics[0]?.length) {
+            return "";
+        }
+        const address = Buffer.from(event.topics[0]);
+        return address_1.Address.fromBuffer(address).bech32();
+    }
+    decodeTopicAsString(topic) {
+        return Buffer.from(topic).toString();
+    }
+}
+exports.DelegationTransactionsOutcomeParser = DelegationTransactionsOutcomeParser;
+//# sourceMappingURL=delegationTransactionsOutcomeParser.js.map
+
+/***/ }),
+
+/***/ 32755:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(68945), exports);
+__exportStar(__nccwpck_require__(51917), exports);
+__exportStar(__nccwpck_require__(51691), exports);
+__exportStar(__nccwpck_require__(35205), exports);
+__exportStar(__nccwpck_require__(66976), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 51917:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.gatherAllEvents = exports.findEventsByFirstTopic = exports.findEventsByIdentifier = exports.findEventsByPredicate = exports.SmartContractCallOutcome = exports.TransactionOutcome = exports.SmartContractResult = exports.TransactionLogs = exports.TransactionEvent = void 0;
+class TransactionEvent {
+    constructor(init) {
+        this.address = "";
+        this.identifier = "";
+        this.topics = [];
+        this.dataItems = [];
+        Object.assign(this, init);
+    }
+}
+exports.TransactionEvent = TransactionEvent;
+class TransactionLogs {
+    constructor(init) {
+        this.address = "";
+        this.events = [];
+        Object.assign(this, init);
+    }
+}
+exports.TransactionLogs = TransactionLogs;
+class SmartContractResult {
+    constructor(init) {
+        this.sender = "";
+        this.receiver = "";
+        this.data = new Uint8Array();
+        this.logs = new TransactionLogs({});
+        Object.assign(this, init);
+    }
+}
+exports.SmartContractResult = SmartContractResult;
+class TransactionOutcome {
+    constructor(init) {
+        this.directSmartContractCallOutcome = new SmartContractCallOutcome({});
+        this.smartContractResults = [];
+        this.logs = new TransactionLogs({});
+        Object.assign(this, init);
+    }
+}
+exports.TransactionOutcome = TransactionOutcome;
+class SmartContractCallOutcome {
+    constructor(init) {
+        this.function = "";
+        this.returnDataParts = [];
+        this.returnMessage = "";
+        this.returnCode = "";
+        Object.assign(this, init);
+    }
+}
+exports.SmartContractCallOutcome = SmartContractCallOutcome;
+function findEventsByPredicate(transactionOutcome, predicate) {
+    return gatherAllEvents(transactionOutcome).filter(predicate);
+}
+exports.findEventsByPredicate = findEventsByPredicate;
+function findEventsByIdentifier(transactionOutcome, identifier) {
+    return findEventsByPredicate(transactionOutcome, (event) => event.identifier == identifier);
+}
+exports.findEventsByIdentifier = findEventsByIdentifier;
+function findEventsByFirstTopic(transactionOutcome, topic) {
+    return findEventsByPredicate(transactionOutcome, (event) => event.topics[0]?.toString() == topic);
+}
+exports.findEventsByFirstTopic = findEventsByFirstTopic;
+function gatherAllEvents(transactionOutcome) {
+    const allEvents = [];
+    allEvents.push(...transactionOutcome.logs.events);
+    for (const item of transactionOutcome.smartContractResults) {
+        allEvents.push(...item.logs.events);
+    }
+    return allEvents;
+}
+exports.gatherAllEvents = gatherAllEvents;
+//# sourceMappingURL=resources.js.map
+
+/***/ }),
+
+/***/ 51691:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SmartContractTransactionsOutcomeParser = void 0;
+const address_1 = __nccwpck_require__(39166);
+const constants_1 = __nccwpck_require__(38069);
+const errors_1 = __nccwpck_require__(38506);
+const smartcontracts_1 = __nccwpck_require__(56238);
+const resources_1 = __nccwpck_require__(51917);
+var Events;
+(function (Events) {
+    Events["SCDeploy"] = "SCDeploy";
+    Events["SignalError"] = "signalError";
+    Events["WriteLog"] = "writeLog";
+})(Events || (Events = {}));
+class SmartContractTransactionsOutcomeParser {
+    constructor(options) {
+        this.abi = options?.abi;
+        this.legacyResultsParser = options?.legacyResultsParser || new smartcontracts_1.ResultsParser();
+    }
+    parseDeploy(options) {
+        if ("transactionOutcome" in options) {
+            return this.parseDeployGivenTransactionOutcome(options.transactionOutcome);
+        }
+        return this.parseDeployGivenTransactionOnNetwork(options.transactionOnNetwork);
+    }
+    /**
+     * Legacy approach.
+     */
+    parseDeployGivenTransactionOutcome(transactionOutcome) {
+        const directCallOutcome = transactionOutcome.directSmartContractCallOutcome;
+        const events = resources_1.findEventsByIdentifier(transactionOutcome, Events.SCDeploy);
+        const contracts = events.map((event) => this.parseScDeployEvent(event));
+        return {
+            returnCode: directCallOutcome.returnCode,
+            returnMessage: directCallOutcome.returnMessage,
+            contracts: contracts,
+        };
+    }
+    parseDeployGivenTransactionOnNetwork(transactionOnNetwork) {
+        const directCallOutcome = this.findDirectSmartContractCallOutcome(transactionOnNetwork);
+        const events = transactionOnNetwork.logs.events
+            .concat(transactionOnNetwork.contractResults.items.flatMap((result) => result.logs.events))
+            .filter((event) => event.identifier === Events.SCDeploy);
+        const contracts = events.map((event) => this.parseScDeployEvent({
+            topics: event.topics.map((topic) => Buffer.from(topic.hex(), "hex")),
+        }));
+        return {
+            returnCode: directCallOutcome.returnCode,
+            returnMessage: directCallOutcome.returnMessage,
+            contracts: contracts,
+        };
+    }
+    parseScDeployEvent(event) {
+        const topicForAddress = event.topics[0];
+        const topicForOwnerAddress = event.topics[1];
+        const topicForCodeHash = event.topics[2];
+        const address = topicForAddress?.length ? new address_1.Address(topicForAddress).toBech32() : "";
+        const ownerAddress = topicForOwnerAddress?.length ? new address_1.Address(topicForOwnerAddress).toBech32() : "";
+        const codeHash = topicForCodeHash;
+        return {
+            address,
+            ownerAddress,
+            codeHash,
+        };
+    }
+    parseExecute(options) {
+        if ("transactionOutcome" in options) {
+            return this.parseExecuteGivenTransactionOutcome(options.transactionOutcome, options.function);
+        }
+        return this.parseExecuteGivenTransactionOnNetwork(options.transactionOnNetwork, options.function);
+    }
+    /**
+     * Legacy approach.
+     */
+    parseExecuteGivenTransactionOutcome(transactionOutcome, functionName) {
+        const directCallOutcome = transactionOutcome.directSmartContractCallOutcome;
+        if (!this.abi) {
+            return {
+                values: directCallOutcome.returnDataParts,
+                returnCode: directCallOutcome.returnCode,
+                returnMessage: directCallOutcome.returnMessage,
+            };
+        }
+        functionName = functionName || directCallOutcome.function;
+        if (!functionName) {
+            throw new errors_1.Err(`Function name is not available in the transaction outcome, thus endpoint definition (ABI) cannot be picked (for parsing). Maybe provide the "function" parameter explicitly?`);
+        }
+        const endpoint = this.abi.getEndpoint(functionName);
+        const legacyUntypedBundle = {
+            returnCode: new smartcontracts_1.ReturnCode(directCallOutcome.returnCode),
+            returnMessage: directCallOutcome.returnMessage,
+            values: directCallOutcome.returnDataParts.map((part) => Buffer.from(part)),
+        };
+        const legacyTypedBundle = this.legacyResultsParser.parseOutcomeFromUntypedBundle(legacyUntypedBundle, endpoint);
+        return {
+            values: legacyTypedBundle.values.map((value) => value.valueOf()),
+            returnCode: legacyTypedBundle.returnCode.toString(),
+            returnMessage: legacyTypedBundle.returnMessage,
+        };
+    }
+    parseExecuteGivenTransactionOnNetwork(transactionOnNetwork, functionName) {
+        const directCallOutcome = this.findDirectSmartContractCallOutcome(transactionOnNetwork);
+        if (!this.abi) {
+            return {
+                values: directCallOutcome.returnDataParts,
+                returnCode: directCallOutcome.returnCode,
+                returnMessage: directCallOutcome.returnMessage,
+            };
+        }
+        functionName = functionName || directCallOutcome.function;
+        if (!functionName) {
+            throw new errors_1.Err(`Function name is not available in the transaction, thus endpoint definition (ABI) cannot be picked (for parsing). Maybe provide the "function" parameter explicitly?`);
+        }
+        const argsSerializer = new smartcontracts_1.ArgSerializer();
+        const endpoint = this.abi.getEndpoint(functionName);
+        const buffers = directCallOutcome.returnDataParts.map((part) => Buffer.from(part));
+        const values = argsSerializer.buffersToValues(buffers, endpoint.output);
+        return {
+            returnCode: directCallOutcome.returnCode,
+            returnMessage: directCallOutcome.returnMessage,
+            values: values,
+        };
+    }
+    findDirectSmartContractCallOutcome(transactionOnNetwork) {
+        let outcome = this.findDirectSmartContractCallOutcomeWithinSmartContractResults(transactionOnNetwork);
+        if (outcome) {
+            return outcome;
+        }
+        outcome = this.findDirectSmartContractCallOutcomeIfError(transactionOnNetwork);
+        if (outcome) {
+            return outcome;
+        }
+        outcome = this.findDirectSmartContractCallOutcomeWithinWriteLogEvents(transactionOnNetwork);
+        if (outcome) {
+            return outcome;
+        }
+        return new resources_1.SmartContractCallOutcome({
+            function: transactionOnNetwork.function,
+            returnCode: "",
+            returnMessage: "",
+            returnDataParts: [],
+        });
+    }
+    findDirectSmartContractCallOutcomeWithinSmartContractResults(transactionOnNetwork) {
+        const argSerializer = new smartcontracts_1.ArgSerializer();
+        const eligibleResults = [];
+        for (const result of transactionOnNetwork.contractResults.items) {
+            const matchesCriteriaOnData = result.data.startsWith(constants_1.ARGUMENTS_SEPARATOR);
+            const matchesCriteriaOnReceiver = result.receiver.bech32() === transactionOnNetwork.sender.bech32();
+            const matchesCriteriaOnPreviousHash = result.previousHash === transactionOnNetwork.hash;
+            const matchesCriteria = matchesCriteriaOnData && matchesCriteriaOnReceiver && matchesCriteriaOnPreviousHash;
+            if (matchesCriteria) {
+                eligibleResults.push(result);
+            }
+        }
+        if (eligibleResults.length === 0) {
+            return null;
+        }
+        if (eligibleResults.length > 1) {
+            throw new Error(`More than one smart contract result (holding the return data) found for transaction: ${transactionOnNetwork.hash}`);
+        }
+        const [result] = eligibleResults;
+        const [_ignored, returnCode, ...returnDataParts] = argSerializer.stringToBuffers(result.data);
+        return new resources_1.SmartContractCallOutcome({
+            function: transactionOnNetwork.function,
+            returnCode: returnCode?.toString(),
+            returnMessage: result.returnMessage || returnCode?.toString(),
+            returnDataParts: returnDataParts,
+        });
+    }
+    findDirectSmartContractCallOutcomeIfError(transactionOnNetwork) {
+        const argSerializer = new smartcontracts_1.ArgSerializer();
+        const eventIdentifier = Events.SignalError;
+        const eligibleEvents = [];
+        // First, look in "logs":
+        eligibleEvents.push(...transactionOnNetwork.logs.events.filter((event) => event.identifier === eventIdentifier));
+        // Then, look in "logs" of "contractResults":
+        for (const result of transactionOnNetwork.contractResults.items) {
+            if (result.previousHash != transactionOnNetwork.hash) {
+                continue;
+            }
+            eligibleEvents.push(...result.logs.events.filter((event) => event.identifier === eventIdentifier));
+        }
+        if (eligibleEvents.length === 0) {
+            return null;
+        }
+        if (eligibleEvents.length > 1) {
+            throw new Error(`More than one "${eventIdentifier}" event found for transaction: ${transactionOnNetwork.hash}`);
+        }
+        const [event] = eligibleEvents;
+        const data = event.dataPayload?.valueOf().toString() || "";
+        const lastTopic = event.getLastTopic()?.toString();
+        const parts = argSerializer.stringToBuffers(data);
+        // Assumption: the last part is the return code.
+        const returnCode = parts[parts.length - 1];
+        return new resources_1.SmartContractCallOutcome({
+            function: transactionOnNetwork.function,
+            returnCode: returnCode?.toString() || eventIdentifier,
+            returnMessage: lastTopic || returnCode?.toString() || eventIdentifier,
+            returnDataParts: [],
+        });
+    }
+    findDirectSmartContractCallOutcomeWithinWriteLogEvents(transactionOnNetwork) {
+        const argSerializer = new smartcontracts_1.ArgSerializer();
+        const eventIdentifier = Events.WriteLog;
+        const eligibleEvents = [];
+        // First, look in "logs":
+        eligibleEvents.push(...transactionOnNetwork.logs.events.filter((event) => event.identifier === eventIdentifier));
+        // Then, look in "logs" of "contractResults":
+        for (const result of transactionOnNetwork.contractResults.items) {
+            if (result.previousHash != transactionOnNetwork.hash) {
+                continue;
+            }
+            eligibleEvents.push(...result.logs.events.filter((event) => event.identifier === eventIdentifier));
+        }
+        if (eligibleEvents.length === 0) {
+            return null;
+        }
+        if (eligibleEvents.length > 1) {
+            throw new Error(`More than one "${eventIdentifier}" event found for transaction: ${transactionOnNetwork.hash}`);
+        }
+        const [event] = eligibleEvents;
+        const data = event.dataPayload?.valueOf().toString() || "";
+        const [_ignored, returnCode, ...returnDataParts] = argSerializer.stringToBuffers(data);
+        return new resources_1.SmartContractCallOutcome({
+            function: transactionOnNetwork.function,
+            returnCode: returnCode?.toString(),
+            returnMessage: returnCode?.toString(),
+            returnDataParts: returnDataParts,
+        });
+    }
+}
+exports.SmartContractTransactionsOutcomeParser = SmartContractTransactionsOutcomeParser;
+//# sourceMappingURL=smartContractTransactionsOutcomeParser.js.map
+
+/***/ }),
+
+/***/ 35205:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TokenManagementTransactionsOutcomeParser = void 0;
+const address_1 = __nccwpck_require__(39166);
+const transactionsConverter_1 = __nccwpck_require__(47281);
+const errors_1 = __nccwpck_require__(38506);
+const utils_1 = __nccwpck_require__(58877);
+const resources_1 = __nccwpck_require__(51917);
+class TokenManagementTransactionsOutcomeParser {
+    constructor() { }
+    parseIssueFungible(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "issue");
+        return events.map((event) => ({ tokenIdentifier: this.extractTokenIdentifier(event) }));
+    }
+    parseIssueNonFungible(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "issueNonFungible");
+        return events.map((event) => ({ tokenIdentifier: this.extractTokenIdentifier(event) }));
+    }
+    parseIssueSemiFungible(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "issueSemiFungible");
+        return events.map((event) => ({ tokenIdentifier: this.extractTokenIdentifier(event) }));
+    }
+    parseRegisterMetaEsdt(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "registerMetaESDT");
+        return events.map((event) => ({ tokenIdentifier: this.extractTokenIdentifier(event) }));
+    }
+    parseRegisterAndSetAllRoles(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const registerEvents = resources_1.findEventsByIdentifier(transaction, "registerAndSetAllRoles");
+        const setRoleEvents = resources_1.findEventsByIdentifier(transaction, "ESDTSetRole");
+        if (registerEvents.length !== setRoleEvents.length) {
+            throw new errors_1.ErrParseTransactionOutcome("Register Events and Set Role events mismatch. Should have the same number of events.");
+        }
+        return registerEvents.map((registerEvent, index) => {
+            const tokenIdentifier = this.extractTokenIdentifier(registerEvent);
+            const encodedRoles = setRoleEvents[index].topics.slice(3);
+            const roles = encodedRoles.map((role) => this.decodeTopicAsString(role));
+            return { tokenIdentifier, roles };
+        });
+    }
+    parseSetBurnRoleGlobally(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+    }
+    parseUnsetBurnRoleGlobally(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+    }
+    parseSetSpecialRole(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTSetRole");
+        return events.map((event) => this.getOutputForSetSpecialRoleEvent(event));
+    }
+    getOutputForSetSpecialRoleEvent(event) {
+        const userAddress = event.address;
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const encodedRoles = event.topics.slice(3);
+        const roles = encodedRoles.map((role) => this.decodeTopicAsString(role));
+        return { userAddress: userAddress, tokenIdentifier: tokenIdentifier, roles: roles };
+    }
+    parseNftCreate(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTNFTCreate");
+        return events.map((event) => this.getOutputForNftCreateEvent(event));
+    }
+    getOutputForNftCreateEvent(event) {
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const nonce = this.extractNonce(event);
+        const amount = this.extractAmount(event);
+        return { tokenIdentifier: tokenIdentifier, nonce: nonce, initialQuantity: amount };
+    }
+    parseLocalMint(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTLocalMint");
+        return events.map((event) => this.getOutputForLocalMintEvent(event));
+    }
+    getOutputForLocalMintEvent(event) {
+        const userAddress = event.address;
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const nonce = this.extractNonce(event);
+        const mintedSupply = this.extractAmount(event);
+        return {
+            userAddress: userAddress,
+            tokenIdentifier: tokenIdentifier,
+            nonce: nonce,
+            mintedSupply: mintedSupply,
+        };
+    }
+    parseLocalBurn(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTLocalBurn");
+        return events.map((event) => this.getOutputForLocalBurnEvent(event));
+    }
+    getOutputForLocalBurnEvent(event) {
+        const userAddress = event.address;
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const nonce = this.extractNonce(event);
+        const burntSupply = this.extractAmount(event);
+        return {
+            userAddress: userAddress,
+            tokenIdentifier: tokenIdentifier,
+            nonce: nonce,
+            burntSupply: burntSupply,
+        };
+    }
+    parsePause(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTPause");
+        return events.map((event) => ({ tokenIdentifier: this.extractTokenIdentifier(event) }));
+    }
+    parseUnpause(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTUnPause");
+        return events.map((event) => ({ tokenIdentifier: this.extractTokenIdentifier(event) }));
+    }
+    parseFreeze(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTFreeze");
+        return events.map((event) => this.getOutputForFreezeEvent(event));
+    }
+    getOutputForFreezeEvent(event) {
+        const userAddress = this.extractAddress(event);
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const nonce = this.extractNonce(event);
+        const balance = this.extractAmount(event);
+        return {
+            userAddress: userAddress,
+            tokenIdentifier: tokenIdentifier,
+            nonce: nonce,
+            balance: balance,
+        };
+    }
+    parseUnfreeze(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTUnFreeze");
+        return events.map((event) => this.getOutputForUnfreezeEvent(event));
+    }
+    getOutputForUnfreezeEvent(event) {
+        const userAddress = this.extractAddress(event);
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const nonce = this.extractNonce(event);
+        const balance = this.extractAmount(event);
+        return {
+            userAddress: userAddress,
+            tokenIdentifier: tokenIdentifier,
+            nonce: nonce,
+            balance: balance,
+        };
+    }
+    parseWipe(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTWipe");
+        return events.map((event) => this.getOutputForWipeEvent(event));
+    }
+    getOutputForWipeEvent(event) {
+        const userAddress = this.extractAddress(event);
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const nonce = this.extractNonce(event);
+        const balance = this.extractAmount(event);
+        return {
+            userAddress: userAddress,
+            tokenIdentifier: tokenIdentifier,
+            nonce: nonce,
+            balance: balance,
+        };
+    }
+    parseUpdateAttributes(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTNFTUpdateAttributes");
+        return events.map((event) => this.getOutputForUpdateAttributesEvent(event));
+    }
+    getOutputForUpdateAttributesEvent(event) {
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const nonce = this.extractNonce(event);
+        const attributes = event.topics[3] ? event.topics[3] : new Uint8Array();
+        return {
+            tokenIdentifier: tokenIdentifier,
+            nonce: nonce,
+            attributes: attributes,
+        };
+    }
+    parseAddQuantity(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTNFTAddQuantity");
+        return events.map((event) => this.getOutputForAddQuantityEvent(event));
+    }
+    getOutputForAddQuantityEvent(event) {
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const nonce = this.extractNonce(event);
+        const addedQuantity = this.extractAmount(event);
+        return {
+            tokenIdentifier: tokenIdentifier,
+            nonce: nonce,
+            addedQuantity: addedQuantity,
+        };
+    }
+    parseBurnQuantity(transaction) {
+        transaction = this.ensureTransactionOutcome(transaction);
+        this.ensureNoError(transaction.logs.events);
+        const events = resources_1.findEventsByIdentifier(transaction, "ESDTNFTBurn");
+        return events.map((event) => this.getOutputForBurnQuantityEvent(event));
+    }
+    getOutputForBurnQuantityEvent(event) {
+        const tokenIdentifier = this.extractTokenIdentifier(event);
+        const nonce = this.extractNonce(event);
+        const burntQuantity = this.extractAmount(event);
+        return {
+            tokenIdentifier: tokenIdentifier,
+            nonce: nonce,
+            burntQuantity: burntQuantity,
+        };
+    }
+    /**
+     * Temporary workaround, until "TransactionOnNetwork" completely replaces "TransactionOutcome".
+     */
+    ensureTransactionOutcome(transaction) {
+        if ("hash" in transaction) {
+            return new transactionsConverter_1.TransactionsConverter().transactionOnNetworkToOutcome(transaction);
+        }
+        return transaction;
+    }
+    ensureNoError(transactionEvents) {
+        for (const event of transactionEvents) {
+            if (event.identifier == "signalError") {
+                const data = Buffer.from(event.dataItems[0]?.toString().slice(1)).toString() || "";
+                const message = this.decodeTopicAsString(event.topics[1]);
+                throw new errors_1.ErrParseTransactionOutcome(`encountered signalError: ${message} (${Buffer.from(data, "hex").toString()})`);
+            }
+        }
+    }
+    extractTokenIdentifier(event) {
+        if (!event.topics[0]?.length) {
+            return "";
+        }
+        return this.decodeTopicAsString(event.topics[0]);
+    }
+    extractNonce(event) {
+        if (!event.topics[1]?.length) {
+            return BigInt(0);
+        }
+        const nonce = Buffer.from(event.topics[1]);
+        return BigInt(utils_1.bufferToBigInt(nonce).toFixed(0));
+    }
+    extractAmount(event) {
+        if (!event.topics[2]?.length) {
+            return BigInt(0);
+        }
+        const amount = Buffer.from(event.topics[2]);
+        return BigInt(utils_1.bufferToBigInt(amount).toFixed(0));
+    }
+    extractAddress(event) {
+        if (!event.topics[3]?.length) {
+            return "";
+        }
+        const address = Buffer.from(event.topics[3]);
+        return address_1.Address.fromBuffer(address).bech32();
+    }
+    decodeTopicAsString(topic) {
+        return Buffer.from(topic).toString();
+    }
+}
+exports.TokenManagementTransactionsOutcomeParser = TokenManagementTransactionsOutcomeParser;
+//# sourceMappingURL=tokenManagementTransactionsOutcomeParser.js.map
+
+/***/ }),
+
+/***/ 66976:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TransactionEventsParser = void 0;
+const smartcontracts_1 = __nccwpck_require__(56238);
+class TransactionEventsParser {
+    constructor(options) {
+        this.legacyResultsParser = new smartcontracts_1.ResultsParser();
+        this.abi = options.abi;
+        // By default, we consider that the first topic is the event identifier.
+        // This is true for log entries emitted by smart contracts:
+        // https://github.com/multiversx/mx-chain-vm-go/blob/v1.5.27/vmhost/contexts/output.go#L270
+        // https://github.com/multiversx/mx-chain-vm-go/blob/v1.5.27/vmhost/contexts/output.go#L283
+        this.firstTopicIsIdentifier = options.firstTopicIsIdentifier ?? true;
+    }
+    parseEvents(options) {
+        const results = [];
+        for (const event of options.events) {
+            const parsedEvent = this.parseEvent({ event });
+            results.push(parsedEvent);
+        }
+        return results;
+    }
+    parseEvent(options) {
+        const topics = options.event.topics.map((topic) => Buffer.from(topic));
+        const abiIdentifier = this.firstTopicIsIdentifier ? topics[0]?.toString() : options.event.identifier;
+        if (this.firstTopicIsIdentifier) {
+            topics.shift();
+        }
+        const dataItems = options.event.dataItems.map((dataItem) => Buffer.from(dataItem));
+        const eventDefinition = this.abi.getEvent(abiIdentifier);
+        const parsedEvent = this.legacyResultsParser.doParseEvent({
+            topics: topics,
+            dataItems: dataItems,
+            eventDefinition: eventDefinition,
+        });
+        return parsedEvent;
+    }
+}
+exports.TransactionEventsParser = TransactionEventsParser;
+//# sourceMappingURL=transactionEventsParser.js.map
 
 /***/ }),
 
@@ -11796,14 +18111,42 @@ exports.TransferTransactionsFactory = TransferTransactionsFactory;
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.zeroPadStringIfOddLength = exports.isPaddedHex = exports.numberToPaddedHex = void 0;
+exports.addressToHex = exports.bigIntToHex = exports.byteArrayToHex = exports.boolToHex = exports.utf8ToHex = exports.zeroPadStringIfOddLength = exports.isPaddedHex = exports.numberToPaddedHex = void 0;
 const bignumber_js_1 = __importDefault(__nccwpck_require__(87558));
+const address_1 = __nccwpck_require__(39166);
+const contractsCodecUtils = __importStar(__nccwpck_require__(58877));
 function numberToPaddedHex(value) {
-    let hex = new bignumber_js_1.default(value).toString(16);
+    let hexableNumber;
+    if (typeof value === "bigint" || typeof value === "number") {
+        hexableNumber = value;
+    }
+    else {
+        hexableNumber = new bignumber_js_1.default(value);
+    }
+    const hex = hexableNumber.toString(16);
     return zeroPadStringIfOddLength(hex);
 }
 exports.numberToPaddedHex = numberToPaddedHex;
@@ -11821,6 +18164,32 @@ function zeroPadStringIfOddLength(input) {
     return input;
 }
 exports.zeroPadStringIfOddLength = zeroPadStringIfOddLength;
+function utf8ToHex(value) {
+    const hex = Buffer.from(value).toString("hex");
+    return zeroPadStringIfOddLength(hex);
+}
+exports.utf8ToHex = utf8ToHex;
+function boolToHex(value) {
+    return utf8ToHex(value.toString());
+}
+exports.boolToHex = boolToHex;
+function byteArrayToHex(byteArray) {
+    const hexString = Buffer.from(byteArray).toString("hex");
+    return zeroPadStringIfOddLength(hexString);
+}
+exports.byteArrayToHex = byteArrayToHex;
+function bigIntToHex(value) {
+    if (value == 0) {
+        return "";
+    }
+    return contractsCodecUtils.getHexMagnitudeOfBigInt(value);
+}
+exports.bigIntToHex = bigIntToHex;
+function addressToHex(address) {
+    const buffer = address_1.Address.fromBech32(address.toString()).pubkey();
+    return buffer.toString("hex");
+}
+exports.addressToHex = addressToHex;
 //# sourceMappingURL=utils.codec.js.map
 
 /***/ }),
@@ -11850,7 +18219,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.isEmpty = exports.guardEmpty = exports.guardNotEmpty = exports.guardLength = exports.guardSameLength = exports.guardValueIsSetWithMessage = exports.guardValueIsSet = exports.guardTrue = void 0;
+exports.getAxios = exports.isEmpty = exports.guardEmpty = exports.guardNotEmpty = exports.guardLength = exports.guardSameLength = exports.guardValueIsSetWithMessage = exports.guardValueIsSet = exports.guardTrue = void 0;
 const errors = __importStar(__nccwpck_require__(38506));
 // TODO: Create a class called "Guard". Add the following as member functions.
 function guardTrue(value, what) {
@@ -11905,7 +18274,1059 @@ function isEmpty(value) {
     return value.length === 0;
 }
 exports.isEmpty = isEmpty;
+function getAxios() {
+    try {
+        return __nccwpck_require__(88757);
+    }
+    catch (error) {
+        throw new Error("axios is required but not installed. Please install axios to make network requests.");
+    }
+}
+exports.getAxios = getAxios;
 //# sourceMappingURL=utils.js.map
+
+/***/ }),
+
+/***/ 3444:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.guardLength = void 0;
+const errors_1 = __nccwpck_require__(38506);
+function guardLength(withLength, expectedLength) {
+    let actualLength = withLength.length || 0;
+    if (actualLength != expectedLength) {
+        throw new errors_1.ErrInvariantFailed(`wrong length, expected: ${expectedLength}, actual: ${actualLength}`);
+    }
+}
+exports.guardLength = guardLength;
+//# sourceMappingURL=assertions.js.map
+
+/***/ }),
+
+/***/ 18073:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PubKeyEncCipher = exports.PubKeyEncNonceLength = exports.PubKeyEncVersion = exports.KeyDerivationFunction = exports.DigestAlgorithm = exports.CipherAlgorithm = void 0;
+exports.CipherAlgorithm = "aes-128-ctr";
+exports.DigestAlgorithm = "sha256";
+exports.KeyDerivationFunction = "scrypt";
+// X25519 public key encryption
+exports.PubKeyEncVersion = 1;
+exports.PubKeyEncNonceLength = 24;
+exports.PubKeyEncCipher = "x25519-xsalsa20-poly1305";
+//# sourceMappingURL=constants.js.map
+
+/***/ }),
+
+/***/ 30896:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Decryptor = void 0;
+const crypto_1 = __importDefault(__nccwpck_require__(6113));
+const errors_1 = __nccwpck_require__(38506);
+const constants_1 = __nccwpck_require__(18073);
+class Decryptor {
+    static decrypt(data, password) {
+        const kdfparams = data.kdfparams;
+        const salt = Buffer.from(data.salt, "hex");
+        const iv = Buffer.from(data.iv, "hex");
+        const ciphertext = Buffer.from(data.ciphertext, "hex");
+        const derivedKey = kdfparams.generateDerivedKey(Buffer.from(password), salt);
+        const derivedKeyFirstHalf = derivedKey.slice(0, 16);
+        const derivedKeySecondHalf = derivedKey.slice(16, 32);
+        const computedMAC = crypto_1.default.createHmac(constants_1.DigestAlgorithm, derivedKeySecondHalf).update(ciphertext).digest();
+        const actualMAC = data.mac;
+        if (computedMAC.toString("hex") !== actualMAC) {
+            throw new errors_1.Err("MAC mismatch, possibly wrong password");
+        }
+        const decipher = crypto_1.default.createDecipheriv(data.cipher, derivedKeyFirstHalf, iv);
+        return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    }
+}
+exports.Decryptor = Decryptor;
+//# sourceMappingURL=decryptor.js.map
+
+/***/ }),
+
+/***/ 48262:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ScryptKeyDerivationParams = void 0;
+const scryptsy_1 = __importDefault(__nccwpck_require__(72800));
+class ScryptKeyDerivationParams {
+    constructor(n = 4096, r = 8, p = 1, dklen = 32) {
+        /**
+         * numIterations
+         */
+        this.n = 4096;
+        /**
+         * memFactor
+         */
+        this.r = 8;
+        /**
+         * pFactor
+         */
+        this.p = 1;
+        this.dklen = 32;
+        this.n = n;
+        this.r = r;
+        this.p = p;
+        this.dklen = dklen;
+    }
+    /**
+     * Will take about:
+     *  - 80-90 ms in Node.js, on a i3-8100 CPU @ 3.60GHz
+     *  - 350-360 ms in browser (Firefox), on a i3-8100 CPU @ 3.60GHz
+     */
+    generateDerivedKey(password, salt) {
+        return scryptsy_1.default(password, salt, this.n, this.r, this.p, this.dklen);
+    }
+}
+exports.ScryptKeyDerivationParams = ScryptKeyDerivationParams;
+//# sourceMappingURL=derivationParams.js.map
+
+/***/ }),
+
+/***/ 46960:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.EncryptedData = void 0;
+const derivationParams_1 = __nccwpck_require__(48262);
+class EncryptedData {
+    constructor(data) {
+        this.id = data.id;
+        this.version = data.version;
+        this.ciphertext = data.ciphertext;
+        this.iv = data.iv;
+        this.cipher = data.cipher;
+        this.kdf = data.kdf;
+        this.kdfparams = data.kdfparams;
+        this.mac = data.mac;
+        this.salt = data.salt;
+    }
+    toJSON() {
+        return {
+            version: this.version,
+            id: this.id,
+            crypto: {
+                ciphertext: this.ciphertext,
+                cipherparams: { iv: this.iv },
+                cipher: this.cipher,
+                kdf: this.kdf,
+                kdfparams: {
+                    dklen: this.kdfparams.dklen,
+                    salt: this.salt,
+                    n: this.kdfparams.n,
+                    r: this.kdfparams.r,
+                    p: this.kdfparams.p
+                },
+                mac: this.mac,
+            }
+        };
+    }
+    static fromJSON(data) {
+        return new EncryptedData({
+            version: data.version,
+            id: data.id,
+            ciphertext: data.crypto.ciphertext,
+            iv: data.crypto.cipherparams.iv,
+            cipher: data.crypto.cipher,
+            kdf: data.crypto.kdf,
+            kdfparams: new derivationParams_1.ScryptKeyDerivationParams(data.crypto.kdfparams.n, data.crypto.kdfparams.r, data.crypto.kdfparams.p, data.crypto.kdfparams.dklen),
+            salt: data.crypto.kdfparams.salt,
+            mac: data.crypto.mac,
+        });
+    }
+}
+exports.EncryptedData = EncryptedData;
+//# sourceMappingURL=encryptedData.js.map
+
+/***/ }),
+
+/***/ 18038:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Encryptor = exports.EncryptorVersion = void 0;
+const crypto_1 = __importDefault(__nccwpck_require__(6113));
+const constants_1 = __nccwpck_require__(18073);
+const derivationParams_1 = __nccwpck_require__(48262);
+const encryptedData_1 = __nccwpck_require__(46960);
+const randomness_1 = __nccwpck_require__(20274);
+var EncryptorVersion;
+(function (EncryptorVersion) {
+    EncryptorVersion[EncryptorVersion["V4"] = 4] = "V4";
+})(EncryptorVersion = exports.EncryptorVersion || (exports.EncryptorVersion = {}));
+class Encryptor {
+    static encrypt(data, password, randomness = new randomness_1.Randomness()) {
+        const kdParams = new derivationParams_1.ScryptKeyDerivationParams();
+        const derivedKey = kdParams.generateDerivedKey(Buffer.from(password), randomness.salt);
+        const derivedKeyFirstHalf = derivedKey.slice(0, 16);
+        const derivedKeySecondHalf = derivedKey.slice(16, 32);
+        const cipher = crypto_1.default.createCipheriv(constants_1.CipherAlgorithm, derivedKeyFirstHalf, randomness.iv);
+        const ciphertext = Buffer.concat([cipher.update(data), cipher.final()]);
+        const mac = crypto_1.default.createHmac(constants_1.DigestAlgorithm, derivedKeySecondHalf).update(ciphertext).digest();
+        return new encryptedData_1.EncryptedData({
+            version: EncryptorVersion.V4,
+            id: randomness.id,
+            ciphertext: ciphertext.toString('hex'),
+            iv: randomness.iv.toString('hex'),
+            cipher: constants_1.CipherAlgorithm,
+            kdf: constants_1.KeyDerivationFunction,
+            kdfparams: kdParams,
+            mac: mac.toString('hex'),
+            salt: randomness.salt.toString('hex')
+        });
+    }
+}
+exports.Encryptor = Encryptor;
+//# sourceMappingURL=encryptor.js.map
+
+/***/ }),
+
+/***/ 14766:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(18073), exports);
+__exportStar(__nccwpck_require__(18038), exports);
+__exportStar(__nccwpck_require__(30896), exports);
+__exportStar(__nccwpck_require__(92245), exports);
+__exportStar(__nccwpck_require__(99577), exports);
+__exportStar(__nccwpck_require__(46960), exports);
+__exportStar(__nccwpck_require__(20274), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 99577:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PubkeyDecryptor = void 0;
+const crypto_1 = __importDefault(__nccwpck_require__(6113));
+const tweetnacl_1 = __importDefault(__nccwpck_require__(68729));
+const ed2curve_1 = __importDefault(__nccwpck_require__(2557));
+const userKeys_1 = __nccwpck_require__(95429);
+class PubkeyDecryptor {
+    static decrypt(data, decryptorSecretKey) {
+        const ciphertext = Buffer.from(data.ciphertext, 'hex');
+        const edhPubKey = Buffer.from(data.identities.ephemeralPubKey, 'hex');
+        const originatorPubKeyBuffer = Buffer.from(data.identities.originatorPubKey, 'hex');
+        const originatorPubKey = new userKeys_1.UserPublicKey(originatorPubKeyBuffer);
+        const authMessage = crypto_1.default.createHash('sha256').update(Buffer.concat([ciphertext, edhPubKey])).digest();
+        if (!originatorPubKey.verify(authMessage, Buffer.from(data.mac, 'hex'))) {
+            throw new Error("Invalid authentication for encrypted message originator");
+        }
+        const nonce = Buffer.from(data.nonce, 'hex');
+        const x25519Secret = ed2curve_1.default.convertSecretKey(decryptorSecretKey.valueOf());
+        const x25519EdhPubKey = ed2curve_1.default.convertPublicKey(edhPubKey);
+        if (x25519EdhPubKey === null) {
+            throw new Error("Could not convert ed25519 public key to x25519");
+        }
+        const decryptedMessage = tweetnacl_1.default.box.open(ciphertext, nonce, x25519EdhPubKey, x25519Secret);
+        if (decryptedMessage === null) {
+            throw new Error("Failed authentication for given ciphertext");
+        }
+        return Buffer.from(decryptedMessage);
+    }
+}
+exports.PubkeyDecryptor = PubkeyDecryptor;
+//# sourceMappingURL=pubkeyDecryptor.js.map
+
+/***/ }),
+
+/***/ 92245:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PubkeyEncryptor = void 0;
+const crypto_1 = __importDefault(__nccwpck_require__(6113));
+const ed2curve_1 = __importDefault(__nccwpck_require__(2557));
+const tweetnacl_1 = __importDefault(__nccwpck_require__(68729));
+const constants_1 = __nccwpck_require__(18073);
+const x25519EncryptedData_1 = __nccwpck_require__(18249);
+class PubkeyEncryptor {
+    static encrypt(data, recipientPubKey, authSecretKey) {
+        // create a new x25519 keypair that will be used for EDH
+        const edhPair = tweetnacl_1.default.sign.keyPair();
+        const recipientDHPubKey = ed2curve_1.default.convertPublicKey(recipientPubKey.valueOf());
+        if (recipientDHPubKey === null) {
+            throw new Error("Could not convert ed25519 public key to x25519");
+        }
+        const edhConvertedSecretKey = ed2curve_1.default.convertSecretKey(edhPair.secretKey);
+        // For the nonce we use a random component and a deterministic one based on the message
+        //  - this is so we won't completely rely on the random number generator
+        const nonceDeterministic = crypto_1.default.createHash('sha256').update(data).digest().slice(0, constants_1.PubKeyEncNonceLength / 2);
+        const nonceRandom = tweetnacl_1.default.randomBytes(constants_1.PubKeyEncNonceLength / 2);
+        const nonce = Buffer.concat([nonceDeterministic, nonceRandom]);
+        const encryptedMessage = tweetnacl_1.default.box(data, nonce, recipientDHPubKey, edhConvertedSecretKey);
+        // Note that the ciphertext is already authenticated for the ephemeral key - but we want it authenticated by
+        //  the ed25519 key which the user interacts with. A signature over H(ciphertext | edhPubKey)
+        //  would be enough
+        const authMessage = crypto_1.default.createHash('sha256').update(Buffer.concat([encryptedMessage, edhPair.publicKey])).digest();
+        const signature = authSecretKey.sign(authMessage);
+        return new x25519EncryptedData_1.X25519EncryptedData({
+            version: constants_1.PubKeyEncVersion,
+            nonce: Buffer.from(nonce).toString('hex'),
+            cipher: constants_1.PubKeyEncCipher,
+            ciphertext: Buffer.from(encryptedMessage).toString('hex'),
+            mac: signature.toString('hex'),
+            identities: {
+                recipient: recipientPubKey.hex(),
+                ephemeralPubKey: Buffer.from(edhPair.publicKey).toString('hex'),
+                originatorPubKey: authSecretKey.generatePublicKey().hex(),
+            }
+        });
+    }
+}
+exports.PubkeyEncryptor = PubkeyEncryptor;
+//# sourceMappingURL=pubkeyEncryptor.js.map
+
+/***/ }),
+
+/***/ 20274:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Randomness = void 0;
+const ed25519_1 = __nccwpck_require__(18944);
+const uuid_1 = __nccwpck_require__(75840);
+const crypto = __nccwpck_require__(6113);
+class Randomness {
+    constructor(init) {
+        this.salt = init?.salt || Buffer.from(ed25519_1.utils.randomBytes(32));
+        this.iv = init?.iv || Buffer.from(ed25519_1.utils.randomBytes(16));
+        this.id = init?.id || uuid_1.v4({ random: crypto.randomBytes(16) });
+    }
+}
+exports.Randomness = Randomness;
+//# sourceMappingURL=randomness.js.map
+
+/***/ }),
+
+/***/ 18249:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.X25519EncryptedData = void 0;
+class X25519EncryptedData {
+    constructor(data) {
+        this.nonce = data.nonce;
+        this.version = data.version;
+        this.cipher = data.cipher;
+        this.ciphertext = data.ciphertext;
+        this.mac = data.mac;
+        this.identities = data.identities;
+    }
+    toJSON() {
+        return {
+            version: this.version,
+            nonce: this.nonce,
+            identities: this.identities,
+            crypto: {
+                ciphertext: this.ciphertext,
+                cipher: this.cipher,
+                mac: this.mac,
+            }
+        };
+    }
+    static fromJSON(data) {
+        return new X25519EncryptedData({
+            nonce: data.nonce,
+            version: data.version,
+            ciphertext: data.crypto.ciphertext,
+            cipher: data.crypto.cipher,
+            mac: data.crypto.mac,
+            identities: data.identities,
+        });
+    }
+}
+exports.X25519EncryptedData = X25519EncryptedData;
+//# sourceMappingURL=x25519EncryptedData.js.map
+
+/***/ }),
+
+/***/ 18871:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(14766), exports);
+__exportStar(__nccwpck_require__(24774), exports);
+__exportStar(__nccwpck_require__(48680), exports);
+__exportStar(__nccwpck_require__(95429), exports);
+__exportStar(__nccwpck_require__(108), exports);
+__exportStar(__nccwpck_require__(95595), exports);
+__exportStar(__nccwpck_require__(90105), exports);
+__exportStar(__nccwpck_require__(87246), exports);
+__exportStar(__nccwpck_require__(17259), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 24774:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Mnemonic = void 0;
+const ed25519_hd_key_1 = __nccwpck_require__(54716);
+const errors_1 = __nccwpck_require__(38506);
+const userKeys_1 = __nccwpck_require__(95429);
+const MNEMONIC_STRENGTH = 256;
+const BIP44_DERIVATION_PREFIX = "m/44'/508'/0'/0'";
+let bip39;
+// Load bip39 when needed
+function loadBip39() {
+    if (!bip39) {
+        try {
+            bip39 = __nccwpck_require__(27881);
+        }
+        catch (error) {
+            throw new Error("bip39 is required but not installed. Please install 'bip39' to use mnemonic features.");
+        }
+    }
+}
+class Mnemonic {
+    constructor(text) {
+        this.text = text;
+    }
+    static generate() {
+        loadBip39();
+        const text = bip39.generateMnemonic(MNEMONIC_STRENGTH);
+        return new Mnemonic(text);
+    }
+    static fromString(text) {
+        loadBip39();
+        text = text.trim();
+        Mnemonic.assertTextIsValid(text);
+        return new Mnemonic(text);
+    }
+    static fromEntropy(entropy) {
+        loadBip39();
+        try {
+            const text = bip39.entropyToMnemonic(Buffer.from(entropy));
+            return new Mnemonic(text);
+        }
+        catch (err) {
+            throw new errors_1.ErrBadMnemonicEntropy(err);
+        }
+    }
+    static assertTextIsValid(text) {
+        loadBip39();
+        let isValid = bip39.validateMnemonic(text);
+        if (!isValid) {
+            throw new errors_1.ErrWrongMnemonic();
+        }
+    }
+    deriveKey(addressIndex = 0, password = "") {
+        loadBip39();
+        let seed = bip39.mnemonicToSeedSync(this.text, password);
+        let derivationPath = `${BIP44_DERIVATION_PREFIX}/${addressIndex}'`;
+        let derivationResult = ed25519_hd_key_1.derivePath(derivationPath, seed.toString("hex"));
+        let key = derivationResult.key;
+        return new userKeys_1.UserSecretKey(key);
+    }
+    getWords() {
+        return this.text.split(" ");
+    }
+    getEntropy() {
+        loadBip39();
+        const entropy = bip39.mnemonicToEntropy(this.text);
+        return Buffer.from(entropy, "hex");
+    }
+    toString() {
+        return this.text;
+    }
+}
+exports.Mnemonic = Mnemonic;
+//# sourceMappingURL=mnemonic.js.map
+
+/***/ }),
+
+/***/ 48680:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parse = exports.parseValidatorKeys = exports.parseValidatorKey = exports.parseUserKeys = exports.parseUserKey = void 0;
+const errors_1 = __nccwpck_require__(38506);
+const userKeys_1 = __nccwpck_require__(95429);
+const validatorKeys_1 = __nccwpck_require__(87246);
+function parseUserKey(text, index = 0) {
+    const keys = parseUserKeys(text);
+    return keys[index];
+}
+exports.parseUserKey = parseUserKey;
+function parseUserKeys(text) {
+    // The user PEM files encode both the seed and the pubkey in their payloads.
+    const buffers = parse(text, userKeys_1.USER_SEED_LENGTH + userKeys_1.USER_PUBKEY_LENGTH);
+    return buffers.map((buffer) => new userKeys_1.UserSecretKey(buffer.slice(0, userKeys_1.USER_SEED_LENGTH)));
+}
+exports.parseUserKeys = parseUserKeys;
+function parseValidatorKey(text, index = 0) {
+    const keys = parseValidatorKeys(text);
+    return keys[index];
+}
+exports.parseValidatorKey = parseValidatorKey;
+function parseValidatorKeys(text) {
+    const buffers = parse(text, validatorKeys_1.VALIDATOR_SECRETKEY_LENGTH);
+    return buffers.map((buffer) => new validatorKeys_1.ValidatorSecretKey(buffer));
+}
+exports.parseValidatorKeys = parseValidatorKeys;
+function parse(text, expectedLength) {
+    // Split by newlines, trim whitespace, then discard remaining empty lines.
+    const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+    const buffers = [];
+    let linesAccumulator = [];
+    for (const line of lines) {
+        if (line.startsWith("-----BEGIN")) {
+            linesAccumulator = [];
+        }
+        else if (line.startsWith("-----END")) {
+            const asBase64 = linesAccumulator.join("");
+            const asHex = Buffer.from(asBase64, "base64").toString();
+            const asBytes = Buffer.from(asHex, "hex");
+            if (asBytes.length != expectedLength) {
+                throw new errors_1.ErrBadPEM(`incorrect key length: expected ${expectedLength}, found ${asBytes.length}`);
+            }
+            buffers.push(asBytes);
+            linesAccumulator = [];
+        }
+        else {
+            linesAccumulator.push(line);
+        }
+    }
+    if (linesAccumulator.length != 0) {
+        throw new errors_1.ErrBadPEM("incorrect file structure");
+    }
+    return buffers;
+}
+exports.parse = parse;
+//# sourceMappingURL=pem.js.map
+
+/***/ }),
+
+/***/ 95429:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UserPublicKey = exports.UserSecretKey = exports.USER_PUBKEY_LENGTH = exports.USER_SEED_LENGTH = void 0;
+const ed = __importStar(__nccwpck_require__(18944));
+const sha512_1 = __nccwpck_require__(35251);
+const address_1 = __nccwpck_require__(39166);
+const assertions_1 = __nccwpck_require__(3444);
+const pem_1 = __nccwpck_require__(48680);
+exports.USER_SEED_LENGTH = 32;
+exports.USER_PUBKEY_LENGTH = 32;
+// See: https://github.com/paulmillr/noble-ed25519
+// In a future version of sdk-wallet, we'll switch to using the async functions of noble-ed25519.
+ed.utils.sha512Sync = (...m) => sha512_1.sha512(ed.utils.concatBytes(...m));
+class UserSecretKey {
+    constructor(buffer) {
+        assertions_1.guardLength(buffer, exports.USER_SEED_LENGTH);
+        this.buffer = Buffer.from(buffer);
+    }
+    static fromString(value) {
+        assertions_1.guardLength(value, exports.USER_SEED_LENGTH * 2);
+        const buffer = Buffer.from(value, "hex");
+        return new UserSecretKey(buffer);
+    }
+    static fromPem(text, index = 0) {
+        return pem_1.parseUserKey(text, index);
+    }
+    generatePublicKey() {
+        const buffer = ed.sync.getPublicKey(new Uint8Array(this.buffer));
+        return new UserPublicKey(buffer);
+    }
+    sign(message) {
+        const signature = ed.sync.sign(new Uint8Array(message), new Uint8Array(this.buffer));
+        return Buffer.from(signature);
+    }
+    hex() {
+        return this.buffer.toString("hex");
+    }
+    valueOf() {
+        return this.buffer;
+    }
+}
+exports.UserSecretKey = UserSecretKey;
+class UserPublicKey {
+    constructor(buffer) {
+        assertions_1.guardLength(buffer, exports.USER_PUBKEY_LENGTH);
+        this.buffer = Buffer.from(buffer);
+    }
+    verify(data, signature) {
+        try {
+            const ok = ed.sync.verify(new Uint8Array(signature), new Uint8Array(data), new Uint8Array(this.buffer));
+            return ok;
+        }
+        catch (err) {
+            console.error(err);
+            return false;
+        }
+    }
+    hex() {
+        return this.buffer.toString("hex");
+    }
+    toAddress(hrp) {
+        return new address_1.Address(this.buffer, hrp);
+    }
+    valueOf() {
+        return this.buffer;
+    }
+}
+exports.UserPublicKey = UserPublicKey;
+//# sourceMappingURL=userKeys.js.map
+
+/***/ }),
+
+/***/ 108:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UserSigner = void 0;
+const address_1 = __nccwpck_require__(39166);
+const errors_1 = __nccwpck_require__(38506);
+const userKeys_1 = __nccwpck_require__(95429);
+const userWallet_1 = __nccwpck_require__(90105);
+/**
+ * ed25519 signer
+ */
+class UserSigner {
+    constructor(secretKey) {
+        this.secretKey = secretKey;
+    }
+    static fromWallet(keyFileObject, password, addressIndex) {
+        const secretKey = userWallet_1.UserWallet.decrypt(keyFileObject, password, addressIndex);
+        return new UserSigner(secretKey);
+    }
+    static fromPem(text, index = 0) {
+        let secretKey = userKeys_1.UserSecretKey.fromPem(text, index);
+        return new UserSigner(secretKey);
+    }
+    async sign(data) {
+        try {
+            const signature = this.secretKey.sign(data);
+            return signature;
+        }
+        catch (err) {
+            throw new errors_1.ErrSignerCannotSign(err);
+        }
+    }
+    /**
+     * Gets the address of the signer.
+     */
+    getAddress(hrp) {
+        const bech32 = this.secretKey.generatePublicKey().toAddress(hrp).bech32();
+        return address_1.Address.newFromBech32(bech32);
+    }
+}
+exports.UserSigner = UserSigner;
+//# sourceMappingURL=userSigner.js.map
+
+/***/ }),
+
+/***/ 95595:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UserVerifier = void 0;
+const userKeys_1 = __nccwpck_require__(95429);
+/**
+ * ed25519 signature verification
+ */
+class UserVerifier {
+    constructor(publicKey) {
+        this.publicKey = publicKey;
+    }
+    static fromAddress(address) {
+        let publicKey = new userKeys_1.UserPublicKey(address.pubkey());
+        return new UserVerifier(publicKey);
+    }
+    /**
+     *
+     * @param data the raw data to be verified (e.g. an already-serialized enveloped message)
+     * @param signature the signature to be verified
+     * @returns true if the signature is valid, false otherwise
+     */
+    verify(data, signature) {
+        return this.publicKey.verify(data, signature);
+    }
+}
+exports.UserVerifier = UserVerifier;
+//# sourceMappingURL=userVerifier.js.map
+
+/***/ }),
+
+/***/ 90105:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UserWallet = exports.UserWalletKind = void 0;
+const errors_1 = __nccwpck_require__(38506);
+const crypto_1 = __nccwpck_require__(14766);
+const derivationParams_1 = __nccwpck_require__(48262);
+const mnemonic_1 = __nccwpck_require__(24774);
+const userKeys_1 = __nccwpck_require__(95429);
+var UserWalletKind;
+(function (UserWalletKind) {
+    UserWalletKind["SecretKey"] = "secretKey";
+    UserWalletKind["Mnemonic"] = "mnemonic";
+})(UserWalletKind = exports.UserWalletKind || (exports.UserWalletKind = {}));
+class UserWallet {
+    constructor({ kind, encryptedData, publicKeyWhenKindIsSecretKey, }) {
+        this.kind = kind;
+        this.encryptedData = encryptedData;
+        this.publicKeyWhenKindIsSecretKey = publicKeyWhenKindIsSecretKey;
+    }
+    static fromSecretKey({ secretKey, password, randomness, }) {
+        randomness = randomness || new crypto_1.Randomness();
+        const publicKey = secretKey.generatePublicKey();
+        const data = Buffer.concat([secretKey.valueOf(), publicKey.valueOf()]);
+        const encryptedData = crypto_1.Encryptor.encrypt(data, password, randomness);
+        return new UserWallet({
+            kind: UserWalletKind.SecretKey,
+            encryptedData,
+            publicKeyWhenKindIsSecretKey: publicKey,
+        });
+    }
+    static fromMnemonic({ mnemonic, password, randomness, }) {
+        randomness = randomness || new crypto_1.Randomness();
+        mnemonic_1.Mnemonic.assertTextIsValid(mnemonic);
+        const data = Buffer.from(mnemonic);
+        const encryptedData = crypto_1.Encryptor.encrypt(data, password, randomness);
+        return new UserWallet({
+            kind: UserWalletKind.Mnemonic,
+            encryptedData,
+        });
+    }
+    static decrypt(keyFileObject, password, addressIndex) {
+        const kind = keyFileObject.kind || UserWalletKind.SecretKey;
+        if (kind == UserWalletKind.SecretKey) {
+            if (addressIndex !== undefined) {
+                throw new errors_1.Err("addressIndex must not be provided when kind == 'secretKey'");
+            }
+            return UserWallet.decryptSecretKey(keyFileObject, password);
+        }
+        if (kind == UserWalletKind.Mnemonic) {
+            const mnemonic = this.decryptMnemonic(keyFileObject, password);
+            return mnemonic.deriveKey(addressIndex || 0);
+        }
+        throw new errors_1.Err(`Unknown kind: ${kind}`);
+    }
+    /**
+     * Copied from: https://github.com/multiversx/mx-deprecated-core-js/blob/v1.28.0/src/account.js#L42
+     * Notes: adjustements (code refactoring, no change in logic), in terms of:
+     *  - typing (since this is the TypeScript version)
+     *  - error handling (in line with sdk-core's error system)
+     *  - references to crypto functions
+     *  - references to object members
+     *
+     * From an encrypted keyfile, given the password, loads the secret key and the public key.
+     */
+    static decryptSecretKey(keyFileObject, password) {
+        // Here, we check the "kind" field only for files that have it. Older keystore files (holding only secret keys) do not have this field.
+        const kind = keyFileObject.kind;
+        if (kind && kind !== UserWalletKind.SecretKey) {
+            throw new errors_1.Err(`Expected keystore kind to be ${UserWalletKind.SecretKey}, but it was ${kind}.`);
+        }
+        const encryptedData = UserWallet.edFromJSON(keyFileObject);
+        let text = crypto_1.Decryptor.decrypt(encryptedData, password);
+        while (text.length < 32) {
+            let zeroPadding = Buffer.from([0x00]);
+            text = Buffer.concat([zeroPadding, text]);
+        }
+        const seed = text.slice(0, 32);
+        return new userKeys_1.UserSecretKey(seed);
+    }
+    static decryptMnemonic(keyFileObject, password) {
+        if (keyFileObject.kind != UserWalletKind.Mnemonic) {
+            throw new errors_1.Err(`Expected keystore kind to be ${UserWalletKind.Mnemonic}, but it was ${keyFileObject.kind}.`);
+        }
+        const encryptedData = UserWallet.edFromJSON(keyFileObject);
+        const data = crypto_1.Decryptor.decrypt(encryptedData, password);
+        const mnemonic = mnemonic_1.Mnemonic.fromString(data.toString());
+        return mnemonic;
+    }
+    static edFromJSON(keyfileObject) {
+        return new crypto_1.EncryptedData({
+            version: keyfileObject.version,
+            id: keyfileObject.id,
+            cipher: keyfileObject.crypto.cipher,
+            ciphertext: keyfileObject.crypto.ciphertext,
+            iv: keyfileObject.crypto.cipherparams.iv,
+            kdf: keyfileObject.crypto.kdf,
+            kdfparams: new derivationParams_1.ScryptKeyDerivationParams(keyfileObject.crypto.kdfparams.n, keyfileObject.crypto.kdfparams.r, keyfileObject.crypto.kdfparams.p, keyfileObject.crypto.kdfparams.dklen),
+            salt: keyfileObject.crypto.kdfparams.salt,
+            mac: keyfileObject.crypto.mac,
+        });
+    }
+    /**
+     * Converts the encrypted keyfile to plain JavaScript object.
+     */
+    toJSON(addressHrp) {
+        if (this.kind == UserWalletKind.SecretKey) {
+            return this.toJSONWhenKindIsSecretKey(addressHrp);
+        }
+        return this.toJSONWhenKindIsMnemonic();
+    }
+    toJSONWhenKindIsSecretKey(addressHrp) {
+        if (!this.publicKeyWhenKindIsSecretKey) {
+            throw new errors_1.Err("Public key isn't available");
+        }
+        const cryptoSection = this.getCryptoSectionAsJSON();
+        const envelope = {
+            version: this.encryptedData.version,
+            kind: this.kind,
+            id: this.encryptedData.id,
+            address: this.publicKeyWhenKindIsSecretKey.hex(),
+            bech32: this.publicKeyWhenKindIsSecretKey.toAddress(addressHrp).toString(),
+            crypto: cryptoSection,
+        };
+        return envelope;
+    }
+    getCryptoSectionAsJSON() {
+        const cryptoSection = {
+            ciphertext: this.encryptedData.ciphertext,
+            cipherparams: { iv: this.encryptedData.iv },
+            cipher: crypto_1.CipherAlgorithm,
+            kdf: crypto_1.KeyDerivationFunction,
+            kdfparams: {
+                dklen: this.encryptedData.kdfparams.dklen,
+                salt: this.encryptedData.salt,
+                n: this.encryptedData.kdfparams.n,
+                r: this.encryptedData.kdfparams.r,
+                p: this.encryptedData.kdfparams.p,
+            },
+            mac: this.encryptedData.mac,
+        };
+        return cryptoSection;
+    }
+    toJSONWhenKindIsMnemonic() {
+        const cryptoSection = this.getCryptoSectionAsJSON();
+        return {
+            version: this.encryptedData.version,
+            id: this.encryptedData.id,
+            kind: this.kind,
+            crypto: cryptoSection,
+        };
+    }
+}
+exports.UserWallet = UserWallet;
+//# sourceMappingURL=userWallet.js.map
+
+/***/ }),
+
+/***/ 87246:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ValidatorPublicKey = exports.ValidatorSecretKey = exports.BLS = exports.VALIDATOR_PUBKEY_LENGTH = exports.VALIDATOR_SECRETKEY_LENGTH = void 0;
+const errors_1 = __nccwpck_require__(38506);
+const assertions_1 = __nccwpck_require__(3444);
+const pem_1 = __nccwpck_require__(48680);
+exports.VALIDATOR_SECRETKEY_LENGTH = 32;
+exports.VALIDATOR_PUBKEY_LENGTH = 96;
+class BLS {
+    static loadBLSModule() {
+        if (!BLS.bls) {
+            try {
+                BLS.bls = __nccwpck_require__(98014);
+            }
+            catch (error) {
+                throw new Error("BLS module is required but not installed. Please install '@multiversx/sdk-bls-wasm'.");
+            }
+        }
+    }
+    static async initIfNecessary() {
+        if (BLS.isInitialized) {
+            return;
+        }
+        BLS.loadBLSModule();
+        await BLS.bls.init(BLS.bls.BLS12_381);
+        BLS.isInitialized = true;
+    }
+    static guardInitialized() {
+        if (!BLS.isInitialized) {
+            throw new errors_1.ErrInvariantFailed("BLS modules are not initalized. Make sure that 'await BLS.initIfNecessary()' is called correctly.");
+        }
+    }
+}
+exports.BLS = BLS;
+BLS.isInitialized = false;
+class ValidatorSecretKey {
+    constructor(buffer) {
+        BLS.guardInitialized();
+        assertions_1.guardLength(buffer, exports.VALIDATOR_SECRETKEY_LENGTH);
+        this.secretKey = new BLS.bls.SecretKey();
+        this.secretKey.setLittleEndian(Uint8Array.from(buffer));
+        this.publicKey = this.secretKey.getPublicKey();
+    }
+    static fromPem(text, index = 0) {
+        return pem_1.parseValidatorKey(text, index);
+    }
+    generatePublicKey() {
+        let buffer = Buffer.from(this.publicKey.serialize());
+        return new ValidatorPublicKey(buffer);
+    }
+    sign(message) {
+        let signatureObject = this.secretKey.sign(message);
+        let signature = Buffer.from(signatureObject.serialize());
+        return signature;
+    }
+    hex() {
+        return this.valueOf().toString("hex");
+    }
+    valueOf() {
+        return Buffer.from(this.secretKey.serialize());
+    }
+}
+exports.ValidatorSecretKey = ValidatorSecretKey;
+class ValidatorPublicKey {
+    constructor(buffer) {
+        assertions_1.guardLength(buffer, exports.VALIDATOR_PUBKEY_LENGTH);
+        this.buffer = Buffer.from(buffer);
+    }
+    hex() {
+        return this.buffer.toString("hex");
+    }
+    valueOf() {
+        return this.buffer;
+    }
+}
+exports.ValidatorPublicKey = ValidatorPublicKey;
+//# sourceMappingURL=validatorKeys.js.map
+
+/***/ }),
+
+/***/ 17259:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ValidatorSigner = void 0;
+const errors_1 = __nccwpck_require__(38506);
+const validatorKeys_1 = __nccwpck_require__(87246);
+/**
+ * Validator signer (BLS signer)
+ */
+class ValidatorSigner {
+    /**
+     * Signs a message.
+     */
+    async signUsingPem(pemText, pemIndex = 0, signable) {
+        await validatorKeys_1.BLS.initIfNecessary();
+        try {
+            let secretKey = validatorKeys_1.ValidatorSecretKey.fromPem(pemText, pemIndex);
+            secretKey.sign(signable);
+        }
+        catch (err) {
+            throw new errors_1.ErrSignerCannotSign(err);
+        }
+    }
+}
+exports.ValidatorSigner = ValidatorSigner;
+//# sourceMappingURL=validatorSigner.js.map
 
 /***/ }),
 
@@ -14698,6 +22119,326 @@ exports.crypto = void 0;
 const nc = __nccwpck_require__(6005);
 exports.crypto = nc && typeof nc === 'object' && 'webcrypto' in nc ? nc.webcrypto : undefined;
 //# sourceMappingURL=cryptoNode.js.map
+
+/***/ }),
+
+/***/ 99149:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.hmac = void 0;
+const _assert_js_1 = __nccwpck_require__(13040);
+const utils_js_1 = __nccwpck_require__(26161);
+// HMAC (RFC 2104)
+class HMAC extends utils_js_1.Hash {
+    constructor(hash, _key) {
+        super();
+        this.finished = false;
+        this.destroyed = false;
+        _assert_js_1.default.hash(hash);
+        const key = (0, utils_js_1.toBytes)(_key);
+        this.iHash = hash.create();
+        if (typeof this.iHash.update !== 'function')
+            throw new TypeError('Expected instance of class which extends utils.Hash');
+        this.blockLen = this.iHash.blockLen;
+        this.outputLen = this.iHash.outputLen;
+        const blockLen = this.blockLen;
+        const pad = new Uint8Array(blockLen);
+        // blockLen can be bigger than outputLen
+        pad.set(key.length > blockLen ? hash.create().update(key).digest() : key);
+        for (let i = 0; i < pad.length; i++)
+            pad[i] ^= 0x36;
+        this.iHash.update(pad);
+        // By doing update (processing of first block) of outer hash here we can re-use it between multiple calls via clone
+        this.oHash = hash.create();
+        // Undo internal XOR && apply outer XOR
+        for (let i = 0; i < pad.length; i++)
+            pad[i] ^= 0x36 ^ 0x5c;
+        this.oHash.update(pad);
+        pad.fill(0);
+    }
+    update(buf) {
+        _assert_js_1.default.exists(this);
+        this.iHash.update(buf);
+        return this;
+    }
+    digestInto(out) {
+        _assert_js_1.default.exists(this);
+        _assert_js_1.default.bytes(out, this.outputLen);
+        this.finished = true;
+        this.iHash.digestInto(out);
+        this.oHash.update(out);
+        this.oHash.digestInto(out);
+        this.destroy();
+    }
+    digest() {
+        const out = new Uint8Array(this.oHash.outputLen);
+        this.digestInto(out);
+        return out;
+    }
+    _cloneInto(to) {
+        // Create new instance without calling constructor since key already in state and we don't know it.
+        to || (to = Object.create(Object.getPrototypeOf(this), {}));
+        const { oHash, iHash, finished, destroyed, blockLen, outputLen } = this;
+        to = to;
+        to.finished = finished;
+        to.destroyed = destroyed;
+        to.blockLen = blockLen;
+        to.outputLen = outputLen;
+        to.oHash = oHash._cloneInto(to.oHash);
+        to.iHash = iHash._cloneInto(to.iHash);
+        return to;
+    }
+    destroy() {
+        this.destroyed = true;
+        this.oHash.destroy();
+        this.iHash.destroy();
+    }
+}
+/**
+ * HMAC: RFC2104 message authentication code.
+ * @param hash - function that would be used e.g. sha256
+ * @param key - message key
+ * @param message - message data
+ */
+const hmac = (hash, key, message) => new HMAC(hash, key).update(message).digest();
+exports.hmac = hmac;
+exports.hmac.create = (hash, key) => new HMAC(hash, key);
+//# sourceMappingURL=hmac.js.map
+
+/***/ }),
+
+/***/ 35058:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.pbkdf2Async = exports.pbkdf2 = void 0;
+const _assert_js_1 = __nccwpck_require__(13040);
+const hmac_js_1 = __nccwpck_require__(99149);
+const utils_js_1 = __nccwpck_require__(26161);
+// Common prologue and epilogue for sync/async functions
+function pbkdf2Init(hash, _password, _salt, _opts) {
+    _assert_js_1.default.hash(hash);
+    const opts = (0, utils_js_1.checkOpts)({ dkLen: 32, asyncTick: 10 }, _opts);
+    const { c, dkLen, asyncTick } = opts;
+    _assert_js_1.default.number(c);
+    _assert_js_1.default.number(dkLen);
+    _assert_js_1.default.number(asyncTick);
+    if (c < 1)
+        throw new Error('PBKDF2: iterations (c) should be >= 1');
+    const password = (0, utils_js_1.toBytes)(_password);
+    const salt = (0, utils_js_1.toBytes)(_salt);
+    // DK = PBKDF2(PRF, Password, Salt, c, dkLen);
+    const DK = new Uint8Array(dkLen);
+    // U1 = PRF(Password, Salt + INT_32_BE(i))
+    const PRF = hmac_js_1.hmac.create(hash, password);
+    const PRFSalt = PRF._cloneInto().update(salt);
+    return { c, dkLen, asyncTick, DK, PRF, PRFSalt };
+}
+function pbkdf2Output(PRF, PRFSalt, DK, prfW, u) {
+    PRF.destroy();
+    PRFSalt.destroy();
+    if (prfW)
+        prfW.destroy();
+    u.fill(0);
+    return DK;
+}
+/**
+ * PBKDF2-HMAC: RFC 2898 key derivation function
+ * @param hash - hash function that would be used e.g. sha256
+ * @param password - password from which a derived key is generated
+ * @param salt - cryptographic salt
+ * @param opts - {c, dkLen} where c is work factor and dkLen is output message size
+ */
+function pbkdf2(hash, password, salt, opts) {
+    const { c, dkLen, DK, PRF, PRFSalt } = pbkdf2Init(hash, password, salt, opts);
+    let prfW; // Working copy
+    const arr = new Uint8Array(4);
+    const view = (0, utils_js_1.createView)(arr);
+    const u = new Uint8Array(PRF.outputLen);
+    // DK = T1 + T2 + ⋯ + Tdklen/hlen
+    for (let ti = 1, pos = 0; pos < dkLen; ti++, pos += PRF.outputLen) {
+        // Ti = F(Password, Salt, c, i)
+        const Ti = DK.subarray(pos, pos + PRF.outputLen);
+        view.setInt32(0, ti, false);
+        // F(Password, Salt, c, i) = U1 ^ U2 ^ ⋯ ^ Uc
+        // U1 = PRF(Password, Salt + INT_32_BE(i))
+        (prfW = PRFSalt._cloneInto(prfW)).update(arr).digestInto(u);
+        Ti.set(u.subarray(0, Ti.length));
+        for (let ui = 1; ui < c; ui++) {
+            // Uc = PRF(Password, Uc−1)
+            PRF._cloneInto(prfW).update(u).digestInto(u);
+            for (let i = 0; i < Ti.length; i++)
+                Ti[i] ^= u[i];
+        }
+    }
+    return pbkdf2Output(PRF, PRFSalt, DK, prfW, u);
+}
+exports.pbkdf2 = pbkdf2;
+async function pbkdf2Async(hash, password, salt, opts) {
+    const { c, dkLen, asyncTick, DK, PRF, PRFSalt } = pbkdf2Init(hash, password, salt, opts);
+    let prfW; // Working copy
+    const arr = new Uint8Array(4);
+    const view = (0, utils_js_1.createView)(arr);
+    const u = new Uint8Array(PRF.outputLen);
+    // DK = T1 + T2 + ⋯ + Tdklen/hlen
+    for (let ti = 1, pos = 0; pos < dkLen; ti++, pos += PRF.outputLen) {
+        // Ti = F(Password, Salt, c, i)
+        const Ti = DK.subarray(pos, pos + PRF.outputLen);
+        view.setInt32(0, ti, false);
+        // F(Password, Salt, c, i) = U1 ^ U2 ^ ⋯ ^ Uc
+        // U1 = PRF(Password, Salt + INT_32_BE(i))
+        (prfW = PRFSalt._cloneInto(prfW)).update(arr).digestInto(u);
+        Ti.set(u.subarray(0, Ti.length));
+        await (0, utils_js_1.asyncLoop)(c - 1, asyncTick, (i) => {
+            // Uc = PRF(Password, Uc−1)
+            PRF._cloneInto(prfW).update(u).digestInto(u);
+            for (let i = 0; i < Ti.length; i++)
+                Ti[i] ^= u[i];
+        });
+    }
+    return pbkdf2Output(PRF, PRFSalt, DK, prfW, u);
+}
+exports.pbkdf2Async = pbkdf2Async;
+//# sourceMappingURL=pbkdf2.js.map
+
+/***/ }),
+
+/***/ 70708:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.sha224 = exports.sha256 = void 0;
+const _sha2_js_1 = __nccwpck_require__(64919);
+const utils_js_1 = __nccwpck_require__(26161);
+// Choice: a ? b : c
+const Chi = (a, b, c) => (a & b) ^ (~a & c);
+// Majority function, true if any two inpust is true
+const Maj = (a, b, c) => (a & b) ^ (a & c) ^ (b & c);
+// Round constants:
+// first 32 bits of the fractional parts of the cube roots of the first 64 primes 2..311)
+// prettier-ignore
+const SHA256_K = new Uint32Array([
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+]);
+// Initial state (first 32 bits of the fractional parts of the square roots of the first 8 primes 2..19):
+// prettier-ignore
+const IV = new Uint32Array([
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+]);
+// Temporary buffer, not used to store anything between runs
+// Named this way because it matches specification.
+const SHA256_W = new Uint32Array(64);
+class SHA256 extends _sha2_js_1.SHA2 {
+    constructor() {
+        super(64, 32, 8, false);
+        // We cannot use array here since array allows indexing by variable
+        // which means optimizer/compiler cannot use registers.
+        this.A = IV[0] | 0;
+        this.B = IV[1] | 0;
+        this.C = IV[2] | 0;
+        this.D = IV[3] | 0;
+        this.E = IV[4] | 0;
+        this.F = IV[5] | 0;
+        this.G = IV[6] | 0;
+        this.H = IV[7] | 0;
+    }
+    get() {
+        const { A, B, C, D, E, F, G, H } = this;
+        return [A, B, C, D, E, F, G, H];
+    }
+    // prettier-ignore
+    set(A, B, C, D, E, F, G, H) {
+        this.A = A | 0;
+        this.B = B | 0;
+        this.C = C | 0;
+        this.D = D | 0;
+        this.E = E | 0;
+        this.F = F | 0;
+        this.G = G | 0;
+        this.H = H | 0;
+    }
+    process(view, offset) {
+        // Extend the first 16 words into the remaining 48 words w[16..63] of the message schedule array
+        for (let i = 0; i < 16; i++, offset += 4)
+            SHA256_W[i] = view.getUint32(offset, false);
+        for (let i = 16; i < 64; i++) {
+            const W15 = SHA256_W[i - 15];
+            const W2 = SHA256_W[i - 2];
+            const s0 = (0, utils_js_1.rotr)(W15, 7) ^ (0, utils_js_1.rotr)(W15, 18) ^ (W15 >>> 3);
+            const s1 = (0, utils_js_1.rotr)(W2, 17) ^ (0, utils_js_1.rotr)(W2, 19) ^ (W2 >>> 10);
+            SHA256_W[i] = (s1 + SHA256_W[i - 7] + s0 + SHA256_W[i - 16]) | 0;
+        }
+        // Compression function main loop, 64 rounds
+        let { A, B, C, D, E, F, G, H } = this;
+        for (let i = 0; i < 64; i++) {
+            const sigma1 = (0, utils_js_1.rotr)(E, 6) ^ (0, utils_js_1.rotr)(E, 11) ^ (0, utils_js_1.rotr)(E, 25);
+            const T1 = (H + sigma1 + Chi(E, F, G) + SHA256_K[i] + SHA256_W[i]) | 0;
+            const sigma0 = (0, utils_js_1.rotr)(A, 2) ^ (0, utils_js_1.rotr)(A, 13) ^ (0, utils_js_1.rotr)(A, 22);
+            const T2 = (sigma0 + Maj(A, B, C)) | 0;
+            H = G;
+            G = F;
+            F = E;
+            E = (D + T1) | 0;
+            D = C;
+            C = B;
+            B = A;
+            A = (T1 + T2) | 0;
+        }
+        // Add the compressed chunk to the current hash value
+        A = (A + this.A) | 0;
+        B = (B + this.B) | 0;
+        C = (C + this.C) | 0;
+        D = (D + this.D) | 0;
+        E = (E + this.E) | 0;
+        F = (F + this.F) | 0;
+        G = (G + this.G) | 0;
+        H = (H + this.H) | 0;
+        this.set(A, B, C, D, E, F, G, H);
+    }
+    roundClean() {
+        SHA256_W.fill(0);
+    }
+    destroy() {
+        this.set(0, 0, 0, 0, 0, 0, 0, 0);
+        this.buffer.fill(0);
+    }
+}
+// Constants from https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
+class SHA224 extends SHA256 {
+    constructor() {
+        super();
+        this.A = 0xc1059ed8 | 0;
+        this.B = 0x367cd507 | 0;
+        this.C = 0x3070dd17 | 0;
+        this.D = 0xf70e5939 | 0;
+        this.E = 0xffc00b31 | 0;
+        this.F = 0x68581511 | 0;
+        this.G = 0x64f98fa7 | 0;
+        this.H = 0xbefa4fa4 | 0;
+        this.outputLen = 28;
+    }
+}
+/**
+ * SHA2-256 hash function
+ * @param message - data that would be hashed
+ */
+exports.sha256 = (0, utils_js_1.wrapConstructor)(() => new SHA256());
+exports.sha224 = (0, utils_js_1.wrapConstructor)(() => new SHA224());
+//# sourceMappingURL=sha256.js.map
 
 /***/ }),
 
@@ -54580,121 +62321,6 @@ if (typeof SharedArrayBuffer !== 'undefined' && typeof Atomics !== 'undefined') 
 
 /***/ }),
 
-/***/ 23239:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-
-
-var punycode = __nccwpck_require__(85477);
-
-function BackslashError(offset, err) {
-  this.__proto__ = new Error(err);
-  this.__proto__.name = 'BackslashError';
-  this.offset = offset;
-}
-
-function isOctalDigit(c) {
-  return c >= '0' && c <= '7';
-}
-
-function isHexDigit(c) {
-  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-}
-
-function parseHex(u) {
-  u = parseInt(u, 16);
-  // http://stackoverflow.com/a/9109467/510036
-  return punycode.ucs2.encode([u]);
-}
-
-function process(arr, pos, stopChar) {
-  var escaped = false;
-  var ret = [];
-
-  function assertHexDigit(pos) {
-    var c = arr[pos];
-    if (!isHexDigit(c)) {
-      throw new BackslashError(pos, 'Unexpected token ILLEGAL');
-    }
-    return c;
-  }
-
-  while (pos < arr.length) {
-    var c = arr[pos];
-    pos++;
-    if (escaped) {
-      escaped = false;
-      switch (c) {
-        case 'n':
-          ret.push('\n');
-          continue;
-        case 'r':
-          ret.push('\r');
-          continue;
-        case 'f':
-          ret.push('\f');
-          continue;
-        case 'b':
-          ret.push('\b');
-          continue;
-        case 't':
-          ret.push('\t');
-          continue;
-        case 'v':
-          ret.push('\v');
-          continue;
-        case '\\':
-          ret.push('\\') ;
-          continue;
-      }
-      if (c === 'x') {
-        ret.push(parseHex(assertHexDigit(pos) + assertHexDigit(pos + 1)));
-        pos += 2;
-        continue;
-      }
-      if (c === 'u') {
-        ret.push(parseHex(assertHexDigit(pos) + assertHexDigit(pos + 1) + assertHexDigit(pos + 2) + assertHexDigit(pos + 3)));
-        pos += 4;
-        continue;
-      }
-      if (isOctalDigit(c)) {
-        var o;
-        if (isOctalDigit(o = arr[pos])) {
-          pos++;
-          c += o;
-          if (isOctalDigit(o = arr[pos]) && (c[0] <= '3')) {
-            pos++;
-            c += o;
-          }
-        }
-        ret.push(punycode.ucs2.encode([parseInt(c, 8)]));
-        continue;
-      }
-      ret.push(c);
-    } else if (c === '\\') {
-      escaped = true;
-    } else if (c === stopChar) {
-      pos--;
-      break;
-    } else {
-      ret.push(c);
-    }
-  }
-  return arguments.length === 3 ? {end: pos, value: ret.join('')} : ret.join('');
-}
-
-module.exports = function backslash(str) {
-  return process(str, 0);
-};
-
-module.exports.parseUntil = function parseUntil(str, pos, stopChar) {
-  return process(str, pos, stopChar);
-};
-
-
-/***/ }),
-
 /***/ 9417:
 /***/ ((module) => {
 
@@ -81860,6 +89486,41 @@ var Writable = (__nccwpck_require__(12781).Writable);
 var assert = __nccwpck_require__(39491);
 var debug = __nccwpck_require__(31133);
 
+// Preventive platform detection
+// istanbul ignore next
+(function detectUnsupportedEnvironment() {
+  var looksLikeNode = typeof process !== "undefined";
+  var looksLikeBrowser = typeof window !== "undefined" && typeof document !== "undefined";
+  var looksLikeV8 = isFunction(Error.captureStackTrace);
+  if (!looksLikeNode && (looksLikeBrowser || !looksLikeV8)) {
+    console.warn("The follow-redirects package should be excluded from browser builds.");
+  }
+}());
+
+// Whether to use the native URL object or the legacy url module
+var useNativeURL = false;
+try {
+  assert(new URL(""));
+}
+catch (error) {
+  useNativeURL = error.code === "ERR_INVALID_URL";
+}
+
+// URL fields to preserve in copy operations
+var preservedUrlFields = [
+  "auth",
+  "host",
+  "hostname",
+  "href",
+  "path",
+  "pathname",
+  "port",
+  "protocol",
+  "query",
+  "search",
+  "hash",
+];
+
 // Create handlers that pass events from native requests
 var events = ["abort", "aborted", "connect", "error", "socket", "timeout"];
 var eventHandlers = Object.create(null);
@@ -81869,19 +89530,20 @@ events.forEach(function (event) {
   };
 });
 
+// Error types with codes
 var InvalidUrlError = createErrorType(
   "ERR_INVALID_URL",
   "Invalid URL",
   TypeError
 );
-// Error types with codes
 var RedirectionError = createErrorType(
   "ERR_FR_REDIRECTION_FAILURE",
   "Redirected request failed"
 );
 var TooManyRedirectsError = createErrorType(
   "ERR_FR_TOO_MANY_REDIRECTS",
-  "Maximum number of redirects exceeded"
+  "Maximum number of redirects exceeded",
+  RedirectionError
 );
 var MaxBodyLengthExceededError = createErrorType(
   "ERR_FR_MAX_BODY_LENGTH_EXCEEDED",
@@ -81891,6 +89553,9 @@ var WriteAfterEndError = createErrorType(
   "ERR_STREAM_WRITE_AFTER_END",
   "write after end"
 );
+
+// istanbul ignore next
+var destroy = Writable.prototype.destroy || noop;
 
 // An HTTP(S) request that can be redirected
 function RedirectableRequest(options, responseCallback) {
@@ -81913,7 +89578,13 @@ function RedirectableRequest(options, responseCallback) {
   // React to responses of native requests
   var self = this;
   this._onNativeResponse = function (response) {
-    self._processResponse(response);
+    try {
+      self._processResponse(response);
+    }
+    catch (cause) {
+      self.emit("error", cause instanceof RedirectionError ?
+        cause : new RedirectionError({ cause: cause }));
+    }
   };
 
   // Perform the first request
@@ -81922,8 +89593,15 @@ function RedirectableRequest(options, responseCallback) {
 RedirectableRequest.prototype = Object.create(Writable.prototype);
 
 RedirectableRequest.prototype.abort = function () {
-  abortRequest(this._currentRequest);
+  destroyRequest(this._currentRequest);
+  this._currentRequest.abort();
   this.emit("abort");
+};
+
+RedirectableRequest.prototype.destroy = function (error) {
+  destroyRequest(this._currentRequest, error);
+  destroy.call(this, error);
+  return this;
 };
 
 // Writes buffered data to the current native request
@@ -82038,6 +89716,7 @@ RedirectableRequest.prototype.setTimeout = function (msecs, callback) {
     self.removeListener("abort", clearTimer);
     self.removeListener("error", clearTimer);
     self.removeListener("response", clearTimer);
+    self.removeListener("close", clearTimer);
     if (callback) {
       self.removeListener("timeout", callback);
     }
@@ -82064,6 +89743,7 @@ RedirectableRequest.prototype.setTimeout = function (msecs, callback) {
   this.on("abort", clearTimer);
   this.on("error", clearTimer);
   this.on("response", clearTimer);
+  this.on("close", clearTimer);
 
   return this;
 };
@@ -82122,8 +89802,7 @@ RedirectableRequest.prototype._performRequest = function () {
   var protocol = this._options.protocol;
   var nativeProtocol = this._options.nativeProtocols[protocol];
   if (!nativeProtocol) {
-    this.emit("error", new TypeError("Unsupported protocol " + protocol));
-    return;
+    throw new TypeError("Unsupported protocol " + protocol);
   }
 
   // If specified, use the agent corresponding to the protocol
@@ -82158,17 +89837,17 @@ RedirectableRequest.prototype._performRequest = function () {
     var buffers = this._requestBodyBuffers;
     (function writeNext(error) {
       // Only write if this request has not been redirected yet
-      /* istanbul ignore else */
+      // istanbul ignore else
       if (request === self._currentRequest) {
         // Report any write errors
-        /* istanbul ignore if */
+        // istanbul ignore if
         if (error) {
           self.emit("error", error);
         }
         // Write the next buffer if there are still left
         else if (i < buffers.length) {
           var buffer = buffers[i++];
-          /* istanbul ignore else */
+          // istanbul ignore else
           if (!request.finished) {
             request.write(buffer.data, buffer.encoding, writeNext);
           }
@@ -82215,15 +89894,14 @@ RedirectableRequest.prototype._processResponse = function (response) {
   }
 
   // The response is a redirect, so abort the current request
-  abortRequest(this._currentRequest);
+  destroyRequest(this._currentRequest);
   // Discard the remainder of the response to avoid waiting for data
   response.destroy();
 
   // RFC7231§6.4: A client SHOULD detect and intervene
   // in cyclical redirections (i.e., "infinite" redirection loops).
   if (++this._redirectCount > this._options.maxRedirects) {
-    this.emit("error", new TooManyRedirectsError());
-    return;
+    throw new TooManyRedirectsError();
   }
 
   // Store the request headers if applicable
@@ -82257,34 +89935,24 @@ RedirectableRequest.prototype._processResponse = function (response) {
   var currentHostHeader = removeMatchingHeaders(/^host$/i, this._options.headers);
 
   // If the redirect is relative, carry over the host of the last request
-  var currentUrlParts = url.parse(this._currentUrl);
+  var currentUrlParts = parseUrl(this._currentUrl);
   var currentHost = currentHostHeader || currentUrlParts.host;
   var currentUrl = /^\w+:/.test(location) ? this._currentUrl :
     url.format(Object.assign(currentUrlParts, { host: currentHost }));
 
-  // Determine the URL of the redirection
-  var redirectUrl;
-  try {
-    redirectUrl = url.resolve(currentUrl, location);
-  }
-  catch (cause) {
-    this.emit("error", new RedirectionError({ cause: cause }));
-    return;
-  }
-
   // Create the redirected request
-  debug("redirecting to", redirectUrl);
+  var redirectUrl = resolveUrl(location, currentUrl);
+  debug("redirecting to", redirectUrl.href);
   this._isRedirect = true;
-  var redirectUrlParts = url.parse(redirectUrl);
-  Object.assign(this._options, redirectUrlParts);
+  spreadUrlObject(redirectUrl, this._options);
 
   // Drop confidential headers when redirecting to a less secure protocol
   // or to a different domain that is not a superdomain
-  if (redirectUrlParts.protocol !== currentUrlParts.protocol &&
-     redirectUrlParts.protocol !== "https:" ||
-     redirectUrlParts.host !== currentHost &&
-     !isSubdomain(redirectUrlParts.host, currentHost)) {
-    removeMatchingHeaders(/^(?:authorization|cookie)$/i, this._options.headers);
+  if (redirectUrl.protocol !== currentUrlParts.protocol &&
+     redirectUrl.protocol !== "https:" ||
+     redirectUrl.host !== currentHost &&
+     !isSubdomain(redirectUrl.host, currentHost)) {
+    removeMatchingHeaders(/^(?:(?:proxy-)?authorization|cookie)$/i, this._options.headers);
   }
 
   // Evaluate the beforeRedirect callback
@@ -82298,23 +89966,12 @@ RedirectableRequest.prototype._processResponse = function (response) {
       method: method,
       headers: requestHeaders,
     };
-    try {
-      beforeRedirect(this._options, responseDetails, requestDetails);
-    }
-    catch (err) {
-      this.emit("error", err);
-      return;
-    }
+    beforeRedirect(this._options, responseDetails, requestDetails);
     this._sanitizeOptions(this._options);
   }
 
   // Perform the redirected request
-  try {
-    this._performRequest();
-  }
-  catch (cause) {
-    this.emit("error", new RedirectionError({ cause: cause }));
-  }
+  this._performRequest();
 };
 
 // Wraps the key/value object of protocols with redirect functionality
@@ -82334,27 +89991,16 @@ function wrap(protocols) {
 
     // Executes a request, following redirects
     function request(input, options, callback) {
-      // Parse parameters
-      if (isString(input)) {
-        var parsed;
-        try {
-          parsed = urlToOptions(new URL(input));
-        }
-        catch (err) {
-          /* istanbul ignore next */
-          parsed = url.parse(input);
-        }
-        if (!isString(parsed.protocol)) {
-          throw new InvalidUrlError({ input });
-        }
-        input = parsed;
+      // Parse parameters, ensuring that input is an object
+      if (isURL(input)) {
+        input = spreadUrlObject(input);
       }
-      else if (URL && (input instanceof URL)) {
-        input = urlToOptions(input);
+      else if (isString(input)) {
+        input = spreadUrlObject(parseUrl(input));
       }
       else {
         callback = options;
-        options = input;
+        options = validateUrl(input);
         input = { protocol: protocol };
       }
       if (isFunction(options)) {
@@ -82393,27 +90039,57 @@ function wrap(protocols) {
   return exports;
 }
 
-/* istanbul ignore next */
 function noop() { /* empty */ }
 
-// from https://github.com/nodejs/node/blob/master/lib/internal/url.js
-function urlToOptions(urlObject) {
-  var options = {
-    protocol: urlObject.protocol,
-    hostname: urlObject.hostname.startsWith("[") ?
-      /* istanbul ignore next */
-      urlObject.hostname.slice(1, -1) :
-      urlObject.hostname,
-    hash: urlObject.hash,
-    search: urlObject.search,
-    pathname: urlObject.pathname,
-    path: urlObject.pathname + urlObject.search,
-    href: urlObject.href,
-  };
-  if (urlObject.port !== "") {
-    options.port = Number(urlObject.port);
+function parseUrl(input) {
+  var parsed;
+  // istanbul ignore else
+  if (useNativeURL) {
+    parsed = new URL(input);
   }
-  return options;
+  else {
+    // Ensure the URL is valid and absolute
+    parsed = validateUrl(url.parse(input));
+    if (!isString(parsed.protocol)) {
+      throw new InvalidUrlError({ input });
+    }
+  }
+  return parsed;
+}
+
+function resolveUrl(relative, base) {
+  // istanbul ignore next
+  return useNativeURL ? new URL(relative, base) : parseUrl(url.resolve(base, relative));
+}
+
+function validateUrl(input) {
+  if (/^\[/.test(input.hostname) && !/^\[[:0-9a-f]+\]$/i.test(input.hostname)) {
+    throw new InvalidUrlError({ input: input.href || input });
+  }
+  if (/^\[/.test(input.host) && !/^\[[:0-9a-f]+\](:\d+)?$/i.test(input.host)) {
+    throw new InvalidUrlError({ input: input.href || input });
+  }
+  return input;
+}
+
+function spreadUrlObject(urlObject, target) {
+  var spread = target || {};
+  for (var key of preservedUrlFields) {
+    spread[key] = urlObject[key];
+  }
+
+  // Fix IPv6 hostname
+  if (spread.hostname.startsWith("[")) {
+    spread.hostname = spread.hostname.slice(1, -1);
+  }
+  // Ensure port is a number
+  if (spread.port !== "") {
+    spread.port = Number(spread.port);
+  }
+  // Concatenate path
+  spread.path = spread.search ? spread.pathname + spread.search : spread.pathname;
+
+  return spread;
 }
 
 function removeMatchingHeaders(regex, headers) {
@@ -82431,7 +90107,10 @@ function removeMatchingHeaders(regex, headers) {
 function createErrorType(code, message, baseClass) {
   // Create constructor
   function CustomError(properties) {
-    Error.captureStackTrace(this, this.constructor);
+    // istanbul ignore else
+    if (isFunction(Error.captureStackTrace)) {
+      Error.captureStackTrace(this, this.constructor);
+    }
     Object.assign(this, properties || {});
     this.code = code;
     this.message = this.cause ? message + ": " + this.cause.message : message;
@@ -82439,17 +90118,25 @@ function createErrorType(code, message, baseClass) {
 
   // Attach constructor and set default properties
   CustomError.prototype = new (baseClass || Error)();
-  CustomError.prototype.constructor = CustomError;
-  CustomError.prototype.name = "Error [" + code + "]";
+  Object.defineProperties(CustomError.prototype, {
+    constructor: {
+      value: CustomError,
+      enumerable: false,
+    },
+    name: {
+      value: "Error [" + code + "]",
+      enumerable: false,
+    },
+  });
   return CustomError;
 }
 
-function abortRequest(request) {
+function destroyRequest(request, error) {
   for (var event of events) {
     request.removeListener(event, eventHandlers[event]);
   }
   request.on("error", noop);
-  request.abort();
+  request.destroy(error);
 }
 
 function isSubdomain(subdomain, domain) {
@@ -82468,6 +90155,10 @@ function isFunction(value) {
 
 function isBuffer(value) {
   return typeof value === "object" && ("length" in value);
+}
+
+function isURL(value) {
+  return URL && value instanceof URL;
 }
 
 // Exports
@@ -109189,489 +116880,863 @@ module.exports = new Type('tag:yaml.org,2002:timestamp', {
 
 /***/ }),
 
-/***/ 58569:
+/***/ 55031:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var backslash = __nccwpck_require__(23239);
-module.exports = {
-  validate: validate,
-  parse: parse
+var json_stringify = (__nccwpck_require__(78574).stringify);
+var json_parse     = __nccwpck_require__(89099);
+
+module.exports = function(options) {
+    return  {
+        parse: json_parse(options),
+        stringify: json_stringify
+    }
+};
+//create the default method members with no options applied for backwards compatibility
+module.exports.parse = json_parse();
+module.exports.stringify = json_stringify;
+
+
+/***/ }),
+
+/***/ 89099:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var BigNumber = null;
+
+// regexpxs extracted from
+// (c) BSD-3-Clause
+// https://github.com/fastify/secure-json-parse/graphs/contributors and https://github.com/hapijs/bourne/graphs/contributors
+
+const suspectProtoRx = /(?:_|\\u005[Ff])(?:_|\\u005[Ff])(?:p|\\u0070)(?:r|\\u0072)(?:o|\\u006[Ff])(?:t|\\u0074)(?:o|\\u006[Ff])(?:_|\\u005[Ff])(?:_|\\u005[Ff])/;
+const suspectConstructorRx = /(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)/;
+
+/*
+    json_parse.js
+    2012-06-20
+
+    Public Domain.
+
+    NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+
+    This file creates a json_parse function.
+    During create you can (optionally) specify some behavioural switches
+
+        require('json-bigint')(options)
+
+            The optional options parameter holds switches that drive certain
+            aspects of the parsing process:
+            * options.strict = true will warn about duplicate-key usage in the json.
+              The default (strict = false) will silently ignore those and overwrite
+              values for keys that are in duplicate use.
+
+    The resulting function follows this signature:
+        json_parse(text, reviver)
+            This method parses a JSON text to produce an object or array.
+            It can throw a SyntaxError exception.
+
+            The optional reviver parameter is a function that can filter and
+            transform the results. It receives each of the keys and values,
+            and its return value is used instead of the original value.
+            If it returns what it received, then the structure is not modified.
+            If it returns undefined then the member is deleted.
+
+            Example:
+
+            // Parse the text. Values that look like ISO date strings will
+            // be converted to Date objects.
+
+            myData = json_parse(text, function (key, value) {
+                var a;
+                if (typeof value === 'string') {
+                    a =
+/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)Z$/.exec(value);
+                    if (a) {
+                        return new Date(Date.UTC(+a[1], +a[2] - 1, +a[3], +a[4],
+                            +a[5], +a[6]));
+                    }
+                }
+                return value;
+            });
+
+    This is a reference implementation. You are free to copy, modify, or
+    redistribute.
+
+    This code should be minified before deployment.
+    See http://javascript.crockford.com/jsmin.html
+
+    USE YOUR OWN COPY. IT IS EXTREMELY UNWISE TO LOAD CODE FROM SERVERS YOU DO
+    NOT CONTROL.
+*/
+
+/*members "", "\"", "\/", "\\", at, b, call, charAt, f, fromCharCode,
+    hasOwnProperty, message, n, name, prototype, push, r, t, text
+*/
+
+var json_parse = function (options) {
+  'use strict';
+
+  // This is a function that can parse a JSON text, producing a JavaScript
+  // data structure. It is a simple, recursive descent parser. It does not use
+  // eval or regular expressions, so it can be used as a model for implementing
+  // a JSON parser in other languages.
+
+  // We are defining the function inside of another function to avoid creating
+  // global variables.
+
+  // Default options one can override by passing options to the parse()
+  var _options = {
+    strict: false, // not being strict means do not generate syntax errors for "duplicate key"
+    storeAsString: false, // toggles whether the values should be stored as BigNumber (default) or a string
+    alwaysParseAsBig: false, // toggles whether all numbers should be Big
+    useNativeBigInt: false, // toggles whether to use native BigInt instead of bignumber.js
+    protoAction: 'error',
+    constructorAction: 'error',
+  };
+
+  // If there are options, then use them to override the default _options
+  if (options !== undefined && options !== null) {
+    if (options.strict === true) {
+      _options.strict = true;
+    }
+    if (options.storeAsString === true) {
+      _options.storeAsString = true;
+    }
+    _options.alwaysParseAsBig =
+      options.alwaysParseAsBig === true ? options.alwaysParseAsBig : false;
+    _options.useNativeBigInt =
+      options.useNativeBigInt === true ? options.useNativeBigInt : false;
+
+    if (typeof options.constructorAction !== 'undefined') {
+      if (
+        options.constructorAction === 'error' ||
+        options.constructorAction === 'ignore' ||
+        options.constructorAction === 'preserve'
+      ) {
+        _options.constructorAction = options.constructorAction;
+      } else {
+        throw new Error(
+          `Incorrect value for constructorAction option, must be "error", "ignore" or undefined but passed ${options.constructorAction}`
+        );
+      }
+    }
+
+    if (typeof options.protoAction !== 'undefined') {
+      if (
+        options.protoAction === 'error' ||
+        options.protoAction === 'ignore' ||
+        options.protoAction === 'preserve'
+      ) {
+        _options.protoAction = options.protoAction;
+      } else {
+        throw new Error(
+          `Incorrect value for protoAction option, must be "error", "ignore" or undefined but passed ${options.protoAction}`
+        );
+      }
+    }
+  }
+
+  var at, // The index of the current character
+    ch, // The current character
+    escapee = {
+      '"': '"',
+      '\\': '\\',
+      '/': '/',
+      b: '\b',
+      f: '\f',
+      n: '\n',
+      r: '\r',
+      t: '\t',
+    },
+    text,
+    error = function (m) {
+      // Call error when something is wrong.
+
+      throw {
+        name: 'SyntaxError',
+        message: m,
+        at: at,
+        text: text,
+      };
+    },
+    next = function (c) {
+      // If a c parameter is provided, verify that it matches the current character.
+
+      if (c && c !== ch) {
+        error("Expected '" + c + "' instead of '" + ch + "'");
+      }
+
+      // Get the next character. When there are no more characters,
+      // return the empty string.
+
+      ch = text.charAt(at);
+      at += 1;
+      return ch;
+    },
+    number = function () {
+      // Parse a number value.
+
+      var number,
+        string = '';
+
+      if (ch === '-') {
+        string = '-';
+        next('-');
+      }
+      while (ch >= '0' && ch <= '9') {
+        string += ch;
+        next();
+      }
+      if (ch === '.') {
+        string += '.';
+        while (next() && ch >= '0' && ch <= '9') {
+          string += ch;
+        }
+      }
+      if (ch === 'e' || ch === 'E') {
+        string += ch;
+        next();
+        if (ch === '-' || ch === '+') {
+          string += ch;
+          next();
+        }
+        while (ch >= '0' && ch <= '9') {
+          string += ch;
+          next();
+        }
+      }
+      number = +string;
+      if (!isFinite(number)) {
+        error('Bad number');
+      } else {
+        if (BigNumber == null) BigNumber = __nccwpck_require__(87558);
+        //if (number > 9007199254740992 || number < -9007199254740992)
+        // Bignumber has stricter check: everything with length > 15 digits disallowed
+        if (string.length > 15)
+          return _options.storeAsString
+            ? string
+            : _options.useNativeBigInt
+            ? BigInt(string)
+            : new BigNumber(string);
+        else
+          return !_options.alwaysParseAsBig
+            ? number
+            : _options.useNativeBigInt
+            ? BigInt(number)
+            : new BigNumber(number);
+      }
+    },
+    string = function () {
+      // Parse a string value.
+
+      var hex,
+        i,
+        string = '',
+        uffff;
+
+      // When parsing for string values, we must look for " and \ characters.
+
+      if (ch === '"') {
+        var startAt = at;
+        while (next()) {
+          if (ch === '"') {
+            if (at - 1 > startAt) string += text.substring(startAt, at - 1);
+            next();
+            return string;
+          }
+          if (ch === '\\') {
+            if (at - 1 > startAt) string += text.substring(startAt, at - 1);
+            next();
+            if (ch === 'u') {
+              uffff = 0;
+              for (i = 0; i < 4; i += 1) {
+                hex = parseInt(next(), 16);
+                if (!isFinite(hex)) {
+                  break;
+                }
+                uffff = uffff * 16 + hex;
+              }
+              string += String.fromCharCode(uffff);
+            } else if (typeof escapee[ch] === 'string') {
+              string += escapee[ch];
+            } else {
+              break;
+            }
+            startAt = at;
+          }
+        }
+      }
+      error('Bad string');
+    },
+    white = function () {
+      // Skip whitespace.
+
+      while (ch && ch <= ' ') {
+        next();
+      }
+    },
+    word = function () {
+      // true, false, or null.
+
+      switch (ch) {
+        case 't':
+          next('t');
+          next('r');
+          next('u');
+          next('e');
+          return true;
+        case 'f':
+          next('f');
+          next('a');
+          next('l');
+          next('s');
+          next('e');
+          return false;
+        case 'n':
+          next('n');
+          next('u');
+          next('l');
+          next('l');
+          return null;
+      }
+      error("Unexpected '" + ch + "'");
+    },
+    value, // Place holder for the value function.
+    array = function () {
+      // Parse an array value.
+
+      var array = [];
+
+      if (ch === '[') {
+        next('[');
+        white();
+        if (ch === ']') {
+          next(']');
+          return array; // empty array
+        }
+        while (ch) {
+          array.push(value());
+          white();
+          if (ch === ']') {
+            next(']');
+            return array;
+          }
+          next(',');
+          white();
+        }
+      }
+      error('Bad array');
+    },
+    object = function () {
+      // Parse an object value.
+
+      var key,
+        object = Object.create(null);
+
+      if (ch === '{') {
+        next('{');
+        white();
+        if (ch === '}') {
+          next('}');
+          return object; // empty object
+        }
+        while (ch) {
+          key = string();
+          white();
+          next(':');
+          if (
+            _options.strict === true &&
+            Object.hasOwnProperty.call(object, key)
+          ) {
+            error('Duplicate key "' + key + '"');
+          }
+
+          if (suspectProtoRx.test(key) === true) {
+            if (_options.protoAction === 'error') {
+              error('Object contains forbidden prototype property');
+            } else if (_options.protoAction === 'ignore') {
+              value();
+            } else {
+              object[key] = value();
+            }
+          } else if (suspectConstructorRx.test(key) === true) {
+            if (_options.constructorAction === 'error') {
+              error('Object contains forbidden constructor property');
+            } else if (_options.constructorAction === 'ignore') {
+              value();
+            } else {
+              object[key] = value();
+            }
+          } else {
+            object[key] = value();
+          }
+
+          white();
+          if (ch === '}') {
+            next('}');
+            return object;
+          }
+          next(',');
+          white();
+        }
+      }
+      error('Bad object');
+    };
+
+  value = function () {
+    // Parse a JSON value. It could be an object, an array, a string, a number,
+    // or a word.
+
+    white();
+    switch (ch) {
+      case '{':
+        return object();
+      case '[':
+        return array();
+      case '"':
+        return string();
+      case '-':
+        return number();
+      default:
+        return ch >= '0' && ch <= '9' ? number() : word();
+    }
+  };
+
+  // Return the json_parse function. It will have access to all of the above
+  // functions and variables.
+
+  return function (source, reviver) {
+    var result;
+
+    text = source + '';
+    at = 0;
+    ch = ' ';
+    result = value();
+    white();
+    if (ch) {
+      error('Syntax error');
+    }
+
+    // If there is a reviver function, we recursively walk the new structure,
+    // passing each name/value pair to the reviver function for possible
+    // transformation, starting with a temporary root object that holds the result
+    // in an empty key. If there is not a reviver function, we simply return the
+    // result.
+
+    return typeof reviver === 'function'
+      ? (function walk(holder, key) {
+          var k,
+            v,
+            value = holder[key];
+          if (value && typeof value === 'object') {
+            Object.keys(value).forEach(function (k) {
+              v = walk(value, k);
+              if (v !== undefined) {
+                value[k] = v;
+              } else {
+                delete value[k];
+              }
+            });
+          }
+          return reviver.call(holder, key, value);
+        })({ '': result }, '')
+      : result;
+  };
 };
 
-/**
- * Validates a json string.
- * Errors are returned
- * @param jsonString
- * @param allowDuplicatedKeys
- * @returns {String} error. undefined if no error
- */
-function validate(jsonString, allowDuplicatedKeys) {
-  var error;
-  allowDuplicatedKeys = allowDuplicatedKeys || false;
-  if (typeof jsonString !== 'string') {
-    error = 'Input must be a string';
-  } else {
-    try {
-      // Try to find a value starting from index 0
-      _findValue(jsonString, 0, allowDuplicatedKeys, false);
-    } catch(e) {
-      error = e.message;
+module.exports = json_parse;
+
+
+/***/ }),
+
+/***/ 78574:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var BigNumber = __nccwpck_require__(87558);
+
+/*
+    json2.js
+    2013-05-26
+
+    Public Domain.
+
+    NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+
+    See http://www.JSON.org/js.html
+
+
+    This code should be minified before deployment.
+    See http://javascript.crockford.com/jsmin.html
+
+    USE YOUR OWN COPY. IT IS EXTREMELY UNWISE TO LOAD CODE FROM SERVERS YOU DO
+    NOT CONTROL.
+
+
+    This file creates a global JSON object containing two methods: stringify
+    and parse.
+
+        JSON.stringify(value, replacer, space)
+            value       any JavaScript value, usually an object or array.
+
+            replacer    an optional parameter that determines how object
+                        values are stringified for objects. It can be a
+                        function or an array of strings.
+
+            space       an optional parameter that specifies the indentation
+                        of nested structures. If it is omitted, the text will
+                        be packed without extra whitespace. If it is a number,
+                        it will specify the number of spaces to indent at each
+                        level. If it is a string (such as '\t' or '&nbsp;'),
+                        it contains the characters used to indent at each level.
+
+            This method produces a JSON text from a JavaScript value.
+
+            When an object value is found, if the object contains a toJSON
+            method, its toJSON method will be called and the result will be
+            stringified. A toJSON method does not serialize: it returns the
+            value represented by the name/value pair that should be serialized,
+            or undefined if nothing should be serialized. The toJSON method
+            will be passed the key associated with the value, and this will be
+            bound to the value
+
+            For example, this would serialize Dates as ISO strings.
+
+                Date.prototype.toJSON = function (key) {
+                    function f(n) {
+                        // Format integers to have at least two digits.
+                        return n < 10 ? '0' + n : n;
+                    }
+
+                    return this.getUTCFullYear()   + '-' +
+                         f(this.getUTCMonth() + 1) + '-' +
+                         f(this.getUTCDate())      + 'T' +
+                         f(this.getUTCHours())     + ':' +
+                         f(this.getUTCMinutes())   + ':' +
+                         f(this.getUTCSeconds())   + 'Z';
+                };
+
+            You can provide an optional replacer method. It will be passed the
+            key and value of each member, with this bound to the containing
+            object. The value that is returned from your method will be
+            serialized. If your method returns undefined, then the member will
+            be excluded from the serialization.
+
+            If the replacer parameter is an array of strings, then it will be
+            used to select the members to be serialized. It filters the results
+            such that only members with keys listed in the replacer array are
+            stringified.
+
+            Values that do not have JSON representations, such as undefined or
+            functions, will not be serialized. Such values in objects will be
+            dropped; in arrays they will be replaced with null. You can use
+            a replacer function to replace those with JSON values.
+            JSON.stringify(undefined) returns undefined.
+
+            The optional space parameter produces a stringification of the
+            value that is filled with line breaks and indentation to make it
+            easier to read.
+
+            If the space parameter is a non-empty string, then that string will
+            be used for indentation. If the space parameter is a number, then
+            the indentation will be that many spaces.
+
+            Example:
+
+            text = JSON.stringify(['e', {pluribus: 'unum'}]);
+            // text is '["e",{"pluribus":"unum"}]'
+
+
+            text = JSON.stringify(['e', {pluribus: 'unum'}], null, '\t');
+            // text is '[\n\t"e",\n\t{\n\t\t"pluribus": "unum"\n\t}\n]'
+
+            text = JSON.stringify([new Date()], function (key, value) {
+                return this[key] instanceof Date ?
+                    'Date(' + this[key] + ')' : value;
+            });
+            // text is '["Date(---current time---)"]'
+
+
+        JSON.parse(text, reviver)
+            This method parses a JSON text to produce an object or array.
+            It can throw a SyntaxError exception.
+
+            The optional reviver parameter is a function that can filter and
+            transform the results. It receives each of the keys and values,
+            and its return value is used instead of the original value.
+            If it returns what it received, then the structure is not modified.
+            If it returns undefined then the member is deleted.
+
+            Example:
+
+            // Parse the text. Values that look like ISO date strings will
+            // be converted to Date objects.
+
+            myData = JSON.parse(text, function (key, value) {
+                var a;
+                if (typeof value === 'string') {
+                    a =
+/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)Z$/.exec(value);
+                    if (a) {
+                        return new Date(Date.UTC(+a[1], +a[2] - 1, +a[3], +a[4],
+                            +a[5], +a[6]));
+                    }
+                }
+                return value;
+            });
+
+            myData = JSON.parse('["Date(09/09/2001)"]', function (key, value) {
+                var d;
+                if (typeof value === 'string' &&
+                        value.slice(0, 5) === 'Date(' &&
+                        value.slice(-1) === ')') {
+                    d = new Date(value.slice(5, -1));
+                    if (d) {
+                        return d;
+                    }
+                }
+                return value;
+            });
+
+
+    This is a reference implementation. You are free to copy, modify, or
+    redistribute.
+*/
+
+/*jslint evil: true, regexp: true */
+
+/*members "", "\b", "\t", "\n", "\f", "\r", "\"", JSON, "\\", apply,
+    call, charCodeAt, getUTCDate, getUTCFullYear, getUTCHours,
+    getUTCMinutes, getUTCMonth, getUTCSeconds, hasOwnProperty, join,
+    lastIndex, length, parse, prototype, push, replace, slice, stringify,
+    test, toJSON, toString, valueOf
+*/
+
+
+// Create a JSON object only if one does not already exist. We create the
+// methods in a closure to avoid creating global variables.
+
+var JSON = module.exports;
+
+(function () {
+    'use strict';
+
+    function f(n) {
+        // Format integers to have at least two digits.
+        return n < 10 ? '0' + n : n;
     }
-  }
-  return error;
-}
 
-/**
- * Parses a json. Errors are thrown if any
- * @param jsonString
- * @param allowDuplicatedKeys
- * @returns {Object}
- */
-function parse(jsonString, allowDuplicatedKeys) {
-  if (typeof jsonString !== 'string') {
-    throw new Error('Input must be a string');
-  }
+    var cx = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
+        escapable = /[\\\"\x00-\x1f\x7f-\x9f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
+        gap,
+        indent,
+        meta = {    // table of character substitutions
+            '\b': '\\b',
+            '\t': '\\t',
+            '\n': '\\n',
+            '\f': '\\f',
+            '\r': '\\r',
+            '"' : '\\"',
+            '\\': '\\\\'
+        },
+        rep;
 
-  allowDuplicatedKeys = allowDuplicatedKeys || false;
 
-  // Try to find a value starting from index 0
-  var value = _findValue(jsonString, 0, allowDuplicatedKeys, true);
-  return value.value;
-}
+    function quote(string) {
 
-/**
- * Find the comma separator, ], } or end of file
- * @param {String} str - original json string
- * @param {Number} startInd - starting index
- * @returns {{start: Number, end: Number, value: String}} value: the separator found
- * @private
- */
-function _findSeparator(str, startInd) {
-  var len = str.length;
-  var sepStartInd = startInd;
-  var sepEndInd;
-  for (var i = startInd; i < len; i++) {
-    var ch = str[i];
-    if (ch === ',') {
-      sepEndInd = i;
-      break;
-    } else if ( ch === ']' || ch === '}') {
-      sepEndInd = i - 1;
-      break;
-    } else if (!_isWhiteSpace(ch)) {
-      throw _syntaxError(str, i, 'expecting end of expression or separator');
+// If the string contains no control characters, no quote characters, and no
+// backslash characters, then we can safely slap some quotes around it.
+// Otherwise we must also replace the offending characters with safe escape
+// sequences.
+
+        escapable.lastIndex = 0;
+        return escapable.test(string) ? '"' + string.replace(escapable, function (a) {
+            var c = meta[a];
+            return typeof c === 'string'
+                ? c
+                : '\\u' + ('0000' + a.charCodeAt(0).toString(16)).slice(-4);
+        }) + '"' : '"' + string + '"';
     }
-  }
 
-  var value;
-  if (sepEndInd === undefined) {
-    sepEndInd = len;
-    value = str[sepEndInd];
-  } else {
-    value = str[sepEndInd];
-    sepEndInd++;
-  }
-  return {
-    start: sepStartInd,
-    end: sepEndInd,
-    value: value
-  };
-}
 
-/**
- * Find the semi-colon separator ':'
- * @param {String} str - original json string
- * @param {Number} startInd
- * @returns {{start: Number, end: Number}}
- * @private
- */
-function _findSemiColonSeparator(str, startInd) {
-  var len = str.length;
-  var semiColStartInd = startInd;
-  var semiColEndInd;
-  for (var i = startInd; i < len; i++) {
-    var ch = str[i];
-    if (ch === ':') {
-      semiColEndInd = i;
-      break;
-    } else if (!_isWhiteSpace(ch)) {
-      throw _syntaxError(str, i, 'expecting \':\'');
-    }
-  }
-  if (semiColEndInd === undefined) {
-    throw _syntaxError(str, i, 'expecting \':\'');
-  }
-  semiColEndInd++;
-  return {
-    start: semiColStartInd,
-    end: semiColEndInd
-  };
-}
+    function str(key, holder) {
 
-/**
- * Find a value it can be number, array, object, strings or boolean
- * @param {String} str - original json string
- * @param {Number} startInd
- * @param {Boolean} allowDuplicatedKeys - allow duplicated keys in objects or not
- * @returns {{value: *, start: Number, end: Number}}
- * @private
- */
-function _findValue(str, startInd, allowDuplicatedKeys, parse) {
-  var len = str.length;
-  var valueStartInd;
-  var valueEndInd;
-  var isArray = false;
-  var isObject = false;
-  var isString = false;
-  var isNumber = false;
-  var dotFound = false;
-  var whiteSpaceInNumber = false;
-  var value;
+// Produce a string from holder[key].
 
-  for (var i = startInd; i < len; i++) {
+        var i,          // The loop counter.
+            k,          // The member key.
+            v,          // The member value.
+            length,
+            mind = gap,
+            partial,
+            value = holder[key],
+            isBigNumber = value != null && (value instanceof BigNumber || BigNumber.isBigNumber(value));
 
-    var ch = str[i];
-    if (valueStartInd === undefined) {
-      if (!_isWhiteSpace(ch)) {
-        if (ch === '[') {
-          isArray = true;
-        } else if (ch === '{') {
-          isObject = true;
-        } else if (ch === '"') {
-          isString = true;
-        } else if (_isTrueFromIndex(str, i)) {
-          valueStartInd = i;
-          i = i + 3;
-          valueEndInd = i;
-          value = true;
-          break;
-        } else if (_isFalseFromIndex(str, i)) {
-          valueStartInd = i;
-          i = i + 4;
-          valueEndInd = i;
-          value = false;
-          break;
-        } else if (_isNullFromIndex(str, i)) {
-          valueStartInd = i;
-          i = i + 3;
-          valueEndInd = i;
-          value = null;
-          break;
-        } else if (_isNumber(ch)) {
-          isNumber = true;
-        } else if (ch === '-') {
-          isNumber = true;
-        } else {
-          throw _syntaxError(str, i, '');
+// If the value has a toJSON method, call it to obtain a replacement value.
+
+        if (value && typeof value === 'object' &&
+                typeof value.toJSON === 'function') {
+            value = value.toJSON(key);
         }
-        valueStartInd = i;
-      }
-    } else {
-      if (isArray) {
-        var arr = _findArray(str, i, allowDuplicatedKeys, parse);
-        valueEndInd = arr.end;
-        value = arr.value;
-        break;
-      } else if (isObject) {
-        var obj = _findObject(str, i, allowDuplicatedKeys, parse);
-        valueEndInd = obj.end;
-        value = obj.value;
-        break;
-      } else if (isString && ch === '"' && _hasEvenNumberOfBackSlash(str, i - 1)) {
-        valueEndInd = i;
-        value = backslash(str.substring(valueStartInd + 1, valueEndInd));
-        break;
-      } else if (isNumber) {
-        if(_isWhiteSpace(ch)) {
-          whiteSpaceInNumber = true;
-        } else if (ch === ',' || ch === ']' || ch === '}') {
-          value = parseFloat(str.substring(valueStartInd, valueEndInd), 10);
-          valueEndInd = i - 1;
-          break;
-        } else if (_isNumber(ch) && !whiteSpaceInNumber) {
-          continue;
-        } else if (ch === '.' && !dotFound && !whiteSpaceInNumber) {
-          dotFound = true;
-        } else {
-          throw _syntaxError(str, i, 'expecting number');
+
+// If we were called with a replacer function, then call the replacer to
+// obtain a replacement value.
+
+        if (typeof rep === 'function') {
+            value = rep.call(holder, key, value);
         }
-      }
-    }
-  }
 
-  if (valueEndInd === undefined) {
-    if (isNumber) {
-      value = parseFloat(str.substring(valueStartInd, i), 10);
-      valueEndInd = i - 1;
-    } else {
-      throw _syntaxError(str, i, 'unclosed statement');
-    }
-  }
-  valueEndInd++;
-  return {
-    value: value,
-    start: valueStartInd,
-    end: valueEndInd
-  };
-}
+// What happens next depends on the value's type.
 
-/**
- * Find a key in an object
- * @param {String} str - original json string
- * @param {Number} startInd
- * @returns {{start: Number, end: Number, value: String}}
- * @private
- */
-function _findKey(str, startInd) {
-  var len = str.length;
-  var keyStartInd;
-  var keyEndInd;
-  for (var i = startInd; i < len; i++) {
-    var ch = str[i];
-    if (keyStartInd === undefined) {
-      if (!_isWhiteSpace(ch)) {
-        if (ch !== '"') {
-          throw _syntaxError(str, i, 'expecting String');
+        switch (typeof value) {
+        case 'string':
+            if (isBigNumber) {
+                return value;
+            } else {
+                return quote(value);
+            }
+
+        case 'number':
+
+// JSON numbers must be finite. Encode non-finite numbers as null.
+
+            return isFinite(value) ? String(value) : 'null';
+
+        case 'boolean':
+        case 'null':
+        case 'bigint':
+
+// If the value is a boolean or null, convert it to a string. Note:
+// typeof null does not produce 'null'. The case is included here in
+// the remote chance that this gets fixed someday.
+
+            return String(value);
+
+// If the type is 'object', we might be dealing with an object or an array or
+// null.
+
+        case 'object':
+
+// Due to a specification blunder in ECMAScript, typeof null is 'object',
+// so watch out for that case.
+
+            if (!value) {
+                return 'null';
+            }
+
+// Make an array to hold the partial results of stringifying this object value.
+
+            gap += indent;
+            partial = [];
+
+// Is the value an array?
+
+            if (Object.prototype.toString.apply(value) === '[object Array]') {
+
+// The value is an array. Stringify every element. Use null as a placeholder
+// for non-JSON values.
+
+                length = value.length;
+                for (i = 0; i < length; i += 1) {
+                    partial[i] = str(i, value) || 'null';
+                }
+
+// Join all of the elements together, separated with commas, and wrap them in
+// brackets.
+
+                v = partial.length === 0
+                    ? '[]'
+                    : gap
+                    ? '[\n' + gap + partial.join(',\n' + gap) + '\n' + mind + ']'
+                    : '[' + partial.join(',') + ']';
+                gap = mind;
+                return v;
+            }
+
+// If the replacer is an array, use it to select the members to be stringified.
+
+            if (rep && typeof rep === 'object') {
+                length = rep.length;
+                for (i = 0; i < length; i += 1) {
+                    if (typeof rep[i] === 'string') {
+                        k = rep[i];
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (gap ? ': ' : ':') + v);
+                        }
+                    }
+                }
+            } else {
+
+// Otherwise, iterate through all of the keys in the object.
+
+                Object.keys(value).forEach(function(k) {
+                    var v = str(k, value);
+                    if (v) {
+                        partial.push(quote(k) + (gap ? ': ' : ':') + v);
+                    }
+                });
+            }
+
+// Join all of the member texts together, separated with commas,
+// and wrap them in braces.
+
+            v = partial.length === 0
+                ? '{}'
+                : gap
+                ? '{\n' + gap + partial.join(',\n' + gap) + '\n' + mind + '}'
+                : '{' + partial.join(',') + '}';
+            gap = mind;
+            return v;
         }
-        keyStartInd = i;
-      }
-    } else {
-      if (ch === '"' && _hasEvenNumberOfBackSlash(str, i - 1)) {
-        keyEndInd = i;
-        break;
-      }
     }
-  }
 
-  if (keyEndInd === undefined) {
-    throw _syntaxError(str, len, 'expecting String');
-  }
+// If the JSON object does not yet have a stringify method, give it one.
 
-  var value = backslash(str.substring(keyStartInd + 1, keyEndInd));
-  if (value === '') {
-    throw _syntaxError(str, keyStartInd, 'empty string');
-  }
-  keyEndInd++;
-  return {
-    start: keyStartInd,
-    end: keyEndInd,
-    value: value
-  };
-}
+    if (typeof JSON.stringify !== 'function') {
+        JSON.stringify = function (value, replacer, space) {
 
-/**
- * Find an object by identifying the key, ':' separator and value
- * @param {String} str - original json string
- * @param {Number} startInd
- * @param {Boolean} allowDuplicatedKeys
- * @returns {{start: Number, end: Number, value: Object}}
- * @private
- */
-function _findObject(str, startInd, allowDuplicatedKeys, parse) {
-  var i = startInd;
-  var sepValue = ',';
-  var obj = {};
-  var keys = [];
-  var values = [];
+// The stringify method takes a value and an optional replacer, and an optional
+// space parameter, and returns a JSON text. The replacer can be a function
+// that can replace values, or an array of strings that will select the keys.
+// A default replacer method can be provided. Use of the space parameter can
+// produce text that is more easily readable.
 
-  var j = startInd;
-  while (_isWhiteSpace(str[j])) {
-    j++;
-  }
+            var i;
+            gap = '';
+            indent = '';
 
-  if (str[j] === '}') {
-    return {
-      start: startInd,
-      end: j,
-      value: obj
-    };
-  }
+// If the space parameter is a number, make an indent string containing that
+// many spaces.
 
-  while (sepValue === ',') {
-    var key = _findKey(str, i);
-    var semi = _findSemiColonSeparator(str, key.end);
-    var value = _findValue(str, semi.end, allowDuplicatedKeys, parse);
-    var sepIndex = _findSeparator(str, value.end);
+            if (typeof space === 'number') {
+                for (i = 0; i < space; i += 1) {
+                    indent += ' ';
+                }
 
-    if (!allowDuplicatedKeys) {
-      if(keys.indexOf(key.value) !== -1) {
-        key.value = key.value + '1';
-        // throw _syntaxError(str, key.end, 'duplicated keys "' + key.value + '"');
-      }
+// If the space parameter is a string, it will be used as the indent string.
+
+            } else if (typeof space === 'string') {
+                indent = space;
+            }
+
+// If there is a replacer, it must be a function or an array.
+// Otherwise, throw an error.
+
+            rep = replacer;
+            if (replacer && typeof replacer !== 'function' &&
+                    (typeof replacer !== 'object' ||
+                    typeof replacer.length !== 'number')) {
+                throw new Error('JSON.stringify');
+            }
+
+// Make a fake root object containing our value under the key of ''.
+// Return the result of stringifying the value.
+
+            return str('', {'': value});
+        };
     }
-    keys.push(key.value);
-    values.push(value.value);
-    i = sepIndex.end;
-    sepValue = sepIndex.value;
-  }
+}());
 
-  if (parse) {
-    var indx = 0;
-    for(indx = 0; indx < keys.length; indx++) {
-      obj[keys[indx]] = values[indx];
-    }
-  }
-
-  return {
-    start: startInd,
-    end: i,
-    value: obj
-  };
-}
-
-/**
- * Going backward from an index, determine if there are even number
- * of consecutive backslashes in the string
- * @param {String} str - original json string
- * @param {Number} endInd
- * @returns {Boolean}
- * @private
- */
-function _hasEvenNumberOfBackSlash(str, endInd) {
-  var i = endInd;
-  var count = 0;
-  while(i > -1 && str[i] === '\\') {
-    count++;
-    i--;
-  }
-  return (count % 2) === 0;
-}
-
-/**
- * Find an array by identifying values separated by ',' separator
- * @param {String} str - original json string
- * @param {Number} startInd
- * @returns {{start: Number, end: Number, value: Array}}
- * @private
- */
-function _findArray(str, startInd, allowDuplicatedKeys, parse) {
-  var i = startInd;
-  var sepValue = ',';
-  var arr = [];
-
-  var j = startInd;
-  while (_isWhiteSpace(str[j])) {
-    j++;
-  }
-
-  if (str[j] === ']') {
-    return {
-      start: startInd,
-      end: j,
-      value: arr
-    };
-  }
-
-  while (sepValue === ',') {
-    var value = _findValue(str, i, allowDuplicatedKeys, parse);
-    var sepIndex = _findSeparator(str, value.end);
-
-    if (parse) {
-      arr.push(value.value);
-    }
-    i = sepIndex.end;
-    sepValue = sepIndex.value;
-  }
-  return {
-    start: startInd,
-    end: i,
-    value: arr
-  };
-}
-
-/**
- * Determine if the string is 'true' from specified index
- * @param {String} str - original json string
- * @param {Number} ind
- * @returns {Boolean}
- * @private
- */
-function _isTrueFromIndex(str, ind) {
-  return (str.substr(ind, 4) === 'true');
-}
-
-/**
- * Determine if the string is 'false' from specified index
- * @param {String} str - original json string
- * @param {Number} ind
- * @returns {Boolean}
- * @private
- */
-function _isFalseFromIndex(str, ind) {
-  return (str.substr(ind, 5) === 'false');
-}
-
-/**
- * Determine if the string is 'null' from specified index
- * @param {String} str - original json string
- * @param {Number} ind
- * @returns {Boolean}
- * @private
- */
-function _isNullFromIndex(str, ind) {
-  return (str.substr(ind, 4) === 'null');
-}
-
-var white = new RegExp(/^\s$/);
-/**
- * Determine if this character is a white space
- * @param {String} ch - single character string
- * @returns {Boolean}
- * @private
- */
-function _isWhiteSpace(ch){
-  return white.test(ch);
-}
-
-var numberReg = new RegExp(/^\d$/);
-/**
- * Determine if this character is a numeric character
- * @param {String} ch - single character string
- * @returns {Boolean}
- * @private
- */
-function _isNumber(ch) {
-  return numberReg.test(ch);
-}
-
-/**
- * Generate syntax error
- * @param {String} str - original json string
- * @param {Number} index - index in which the error was detected
- * @param {String} reason
- * @returns {Error}
- * @private
- */
-function _syntaxError(str, index, reason) {
-  var regionLen = 10;
-
-  var regionStr;
-  if (str.length < index + regionLen) {
-    regionStr = str.substr(_normalizeNegativeNumber(str.length - regionLen), str.length);
-  } else if (index - (regionLen/2) < 0) {
-    regionStr = str.substr(0, regionLen);
-  } else {
-    regionStr = str.substr(_normalizeNegativeNumber(index - (regionLen/2)), regionLen);
-  }
-
-  var message;
-  if (reason) {
-    message = 'Syntax error: ' + reason + ' near ' + regionStr;
-  } else {
-    message = 'Syntax error near ' + regionStr;
-  }
-  return new Error(message);
-}
-
-/**
- * Return 0 if number is negative, the original number otherwise
- * @param {Number} num
- * @returns {Number}
- * @private
- */
-function _normalizeNegativeNumber(num) {
-  return (num < 0) ? 0 : num;
-}
 
 /***/ }),
 
@@ -145845,9 +153910,14 @@ Reader.prototype.bytes = function read_bytes() {
     this.pos += length;
     if (Array.isArray(this.buf)) // plain array
         return this.buf.slice(start, end);
-    return start === end // fix for IE 10/Win8 and others' subarray returning array of size 1
-        ? new this.buf.constructor(0)
-        : this._slice.call(this.buf, start, end);
+
+    if (start === end) { // fix for IE 10/Win8 and others' subarray returning array of size 1
+        var nativeBuffer = util.Buffer;
+        return nativeBuffer
+            ? nativeBuffer.alloc(0)
+            : new this.buf.constructor(0);
+    }
+    return this._slice.call(this.buf, start, end);
 };
 
 /**
@@ -146015,7 +154085,7 @@ module.exports = {};
 /**
  * Named roots.
  * This is where pbjs stores generated structures (the option `-r, --root` specifies a name).
- * Can also be used manually to make roots available accross modules.
+ * Can also be used manually to make roots available across modules.
  * @name roots
  * @type {Object.<string,Root>}
  * @example
@@ -146719,13 +154789,30 @@ function newError(name) {
             merge(this, properties);
     }
 
-    (CustomError.prototype = Object.create(Error.prototype)).constructor = CustomError;
-
-    Object.defineProperty(CustomError.prototype, "name", { get: function() { return name; } });
-
-    CustomError.prototype.toString = function toString() {
-        return this.name + ": " + this.message;
-    };
+    CustomError.prototype = Object.create(Error.prototype, {
+        constructor: {
+            value: CustomError,
+            writable: true,
+            enumerable: false,
+            configurable: true,
+        },
+        name: {
+            get: function get() { return name; },
+            set: undefined,
+            enumerable: false,
+            // configurable: false would accurately preserve the behavior of
+            // the original, but I'm guessing that was not intentional.
+            // For an actual error subclass, this property would
+            // be configurable.
+            configurable: true,
+        },
+        toString: {
+            value: function value() { return this.name + ": " + this.message; },
+            writable: true,
+            enumerable: false,
+            configurable: true,
+        },
+    });
 
     return CustomError;
 }
@@ -187977,6 +196064,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.robot = void 0;
 const out_1 = __nccwpck_require__(60012);
 const out_2 = __nccwpck_require__(14251);
+const out_3 = __nccwpck_require__(60012);
 const axios_1 = __importDefault(__nccwpck_require__(88757));
 const robot = (app) => {
     app.on(['pull_request.opened', 'pull_request.synchronize'], async (context) => {
@@ -188139,6 +196227,8 @@ const robot = (app) => {
                         return 'https://devnet-api.multiversx.com';
                     case 'testnet':
                         return 'https://testnet-api.multiversx.com';
+                    case 'vibeox':
+                        return 'https://vibeox-api.multiversx.com';
                 }
                 throw new Error(`Invalid network: ${network}`);
             }
@@ -188150,6 +196240,7 @@ const robot = (app) => {
                 const mainnetRegex = /^(identities|accounts|tokens)\b/;
                 const testnetRegex = /^testnet\/(identities|accounts|tokens)\b/;
                 const devnetRegex = /^devnet\/(identities|accounts|tokens)\b/;
+                const vibeoxRegex = /^vibeox\/(identities|accounts|tokens)\b/;
                 if (mainnetRegex.test(fileName)) {
                     return 'mainnet';
                 }
@@ -188158,6 +196249,10 @@ const robot = (app) => {
                 }
                 if (devnetRegex.test(fileName)) {
                     return 'devnet';
+                }
+                if (vibeoxRegex.test(fileName)) {
+                    out_3.LibraryConfig.DefaultAddressHrp = 'vibe';
+                    return 'vibeox';
                 }
                 return undefined;
             }
@@ -192362,10 +200457,11 @@ module.exports = SonicBoom
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 "use strict";
-// Axios v1.3.6 Copyright (c) 2023 Matt Zabriskie and contributors
+/*! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */
 
 
 const FormData$1 = __nccwpck_require__(64334);
+const crypto = __nccwpck_require__(6113);
 const url = __nccwpck_require__(57310);
 const proxyFromEnv = __nccwpck_require__(63329);
 const http = __nccwpck_require__(13685);
@@ -192374,19 +200470,20 @@ const util = __nccwpck_require__(73837);
 const followRedirects = __nccwpck_require__(67707);
 const zlib = __nccwpck_require__(59796);
 const stream = __nccwpck_require__(12781);
-const EventEmitter = __nccwpck_require__(82361);
+const events = __nccwpck_require__(82361);
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
 const FormData__default = /*#__PURE__*/_interopDefaultLegacy(FormData$1);
+const crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
 const url__default = /*#__PURE__*/_interopDefaultLegacy(url);
+const proxyFromEnv__default = /*#__PURE__*/_interopDefaultLegacy(proxyFromEnv);
 const http__default = /*#__PURE__*/_interopDefaultLegacy(http);
 const https__default = /*#__PURE__*/_interopDefaultLegacy(https);
 const util__default = /*#__PURE__*/_interopDefaultLegacy(util);
 const followRedirects__default = /*#__PURE__*/_interopDefaultLegacy(followRedirects);
 const zlib__default = /*#__PURE__*/_interopDefaultLegacy(zlib);
 const stream__default = /*#__PURE__*/_interopDefaultLegacy(stream);
-const EventEmitter__default = /*#__PURE__*/_interopDefaultLegacy(EventEmitter);
 
 function bind(fn, thisArg) {
   return function wrap() {
@@ -192398,6 +200495,7 @@ function bind(fn, thisArg) {
 
 const {toString} = Object.prototype;
 const {getPrototypeOf} = Object;
+const {iterator, toStringTag} = Symbol;
 
 const kindOf = (cache => thing => {
     const str = toString.call(thing);
@@ -192524,7 +200622,7 @@ const isPlainObject = (val) => {
   }
 
   const prototype = getPrototypeOf(val);
-  return (prototype === null || prototype === Object.prototype || Object.getPrototypeOf(prototype) === null) && !(Symbol.toStringTag in val) && !(Symbol.iterator in val);
+  return (prototype === null || prototype === Object.prototype || Object.getPrototypeOf(prototype) === null) && !(toStringTag in val) && !(iterator in val);
 };
 
 /**
@@ -192600,6 +200698,8 @@ const isFormData = (thing) => {
  * @returns {boolean} True if value is a URLSearchParams object, otherwise false
  */
 const isURLSearchParams = kindOfTest('URLSearchParams');
+
+const [isReadableStream, isRequest, isResponse, isHeaders] = ['ReadableStream', 'Request', 'Response', 'Headers'].map(kindOfTest);
 
 /**
  * Trim excess whitespace off the beginning and end of a string
@@ -192873,13 +200973,13 @@ const isTypedArray = (TypedArray => {
  * @returns {void}
  */
 const forEachEntry = (obj, fn) => {
-  const generator = obj && obj[Symbol.iterator];
+  const generator = obj && obj[iterator];
 
-  const iterator = generator.call(obj);
+  const _iterator = generator.call(obj);
 
   let result;
 
-  while ((result = iterator.next()) && !result.done) {
+  while ((result = _iterator.next()) && !result.done) {
     const pair = result.value;
     fn.call(obj, pair[0], pair[1]);
   }
@@ -192932,8 +201032,9 @@ const reduceDescriptors = (obj, reducer) => {
   const reducedDescriptors = {};
 
   forEach(descriptors, (descriptor, name) => {
-    if (reducer(descriptor, name, obj) !== false) {
-      reducedDescriptors[name] = descriptor;
+    let ret;
+    if ((ret = reducer(descriptor, name, obj)) !== false) {
+      reducedDescriptors[name] = ret || descriptor;
     }
   });
 
@@ -192988,28 +201089,7 @@ const toObjectSet = (arrayOrString, delimiter) => {
 const noop = () => {};
 
 const toFiniteNumber = (value, defaultValue) => {
-  value = +value;
-  return Number.isFinite(value) ? value : defaultValue;
-};
-
-const ALPHA = 'abcdefghijklmnopqrstuvwxyz';
-
-const DIGIT = '0123456789';
-
-const ALPHABET = {
-  DIGIT,
-  ALPHA,
-  ALPHA_DIGIT: ALPHA + ALPHA.toUpperCase() + DIGIT
-};
-
-const generateString = (size = 16, alphabet = ALPHABET.ALPHA_DIGIT) => {
-  let str = '';
-  const {length} = alphabet;
-  while (size--) {
-    str += alphabet[Math.random() * length|0];
-  }
-
-  return str;
+  return value != null && Number.isFinite(value = +value) ? value : defaultValue;
 };
 
 /**
@@ -193020,7 +201100,7 @@ const generateString = (size = 16, alphabet = ALPHABET.ALPHA_DIGIT) => {
  * @returns {boolean}
  */
 function isSpecCompliantForm(thing) {
-  return !!(thing && isFunction(thing.append) && thing[Symbol.toStringTag] === 'FormData' && thing[Symbol.iterator]);
+  return !!(thing && isFunction(thing.append) && thing[toStringTag] === 'FormData' && thing[iterator]);
 }
 
 const toJSONObject = (obj) => {
@@ -193054,7 +201134,46 @@ const toJSONObject = (obj) => {
   return visit(obj, 0);
 };
 
-const utils = {
+const isAsyncFn = kindOfTest('AsyncFunction');
+
+const isThenable = (thing) =>
+  thing && (isObject(thing) || isFunction(thing)) && isFunction(thing.then) && isFunction(thing.catch);
+
+// original code
+// https://github.com/DigitalBrainJS/AxiosPromise/blob/16deab13710ec09779922131f3fa5954320f83ab/lib/utils.js#L11-L34
+
+const _setImmediate = ((setImmediateSupported, postMessageSupported) => {
+  if (setImmediateSupported) {
+    return setImmediate;
+  }
+
+  return postMessageSupported ? ((token, callbacks) => {
+    _global.addEventListener("message", ({source, data}) => {
+      if (source === _global && data === token) {
+        callbacks.length && callbacks.shift()();
+      }
+    }, false);
+
+    return (cb) => {
+      callbacks.push(cb);
+      _global.postMessage(token, "*");
+    }
+  })(`axios@${Math.random()}`, []) : (cb) => setTimeout(cb);
+})(
+  typeof setImmediate === 'function',
+  isFunction(_global.postMessage)
+);
+
+const asap = typeof queueMicrotask !== 'undefined' ?
+  queueMicrotask.bind(_global) : ( typeof process !== 'undefined' && process.nextTick || _setImmediate);
+
+// *********************
+
+
+const isIterable = (thing) => thing != null && isFunction(thing[iterator]);
+
+
+const utils$1 = {
   isArray,
   isArrayBuffer,
   isBuffer,
@@ -193065,6 +201184,10 @@ const utils = {
   isBoolean,
   isObject,
   isPlainObject,
+  isReadableStream,
+  isRequest,
+  isResponse,
+  isHeaders,
   isUndefined,
   isDate,
   isFile,
@@ -193100,10 +201223,13 @@ const utils = {
   findKey,
   global: _global,
   isContextDefined,
-  ALPHABET,
-  generateString,
   isSpecCompliantForm,
-  toJSONObject
+  toJSONObject,
+  isAsyncFn,
+  isThenable,
+  setImmediate: _setImmediate,
+  asap,
+  isIterable
 };
 
 /**
@@ -193131,10 +201257,13 @@ function AxiosError(message, code, config, request, response) {
   code && (this.code = code);
   config && (this.config = config);
   request && (this.request = request);
-  response && (this.response = response);
+  if (response) {
+    this.response = response;
+    this.status = response.status ? response.status : null;
+  }
 }
 
-utils.inherits(AxiosError, Error, {
+utils$1.inherits(AxiosError, Error, {
   toJSON: function toJSON() {
     return {
       // Standard
@@ -193149,9 +201278,9 @@ utils.inherits(AxiosError, Error, {
       columnNumber: this.columnNumber,
       stack: this.stack,
       // Axios
-      config: utils.toJSONObject(this.config),
+      config: utils$1.toJSONObject(this.config),
       code: this.code,
-      status: this.response && this.response.status ? this.response.status : null
+      status: this.status
     };
   }
 });
@@ -193184,7 +201313,7 @@ Object.defineProperty(prototype$1, 'isAxiosError', {value: true});
 AxiosError.from = (error, code, config, request, response, customProps) => {
   const axiosError = Object.create(prototype$1);
 
-  utils.toFlatObject(error, axiosError, function filter(obj) {
+  utils$1.toFlatObject(error, axiosError, function filter(obj) {
     return obj !== Error.prototype;
   }, prop => {
     return prop !== 'isAxiosError';
@@ -193209,7 +201338,7 @@ AxiosError.from = (error, code, config, request, response, customProps) => {
  * @returns {boolean}
  */
 function isVisitable(thing) {
-  return utils.isPlainObject(thing) || utils.isArray(thing);
+  return utils$1.isPlainObject(thing) || utils$1.isArray(thing);
 }
 
 /**
@@ -193220,7 +201349,7 @@ function isVisitable(thing) {
  * @returns {string} the key without the brackets.
  */
 function removeBrackets(key) {
-  return utils.endsWith(key, '[]') ? key.slice(0, -2) : key;
+  return utils$1.endsWith(key, '[]') ? key.slice(0, -2) : key;
 }
 
 /**
@@ -193249,10 +201378,10 @@ function renderKey(path, key, dots) {
  * @returns {boolean}
  */
 function isFlatArray(arr) {
-  return utils.isArray(arr) && !arr.some(isVisitable);
+  return utils$1.isArray(arr) && !arr.some(isVisitable);
 }
 
-const predicates = utils.toFlatObject(utils, {}, null, function filter(prop) {
+const predicates = utils$1.toFlatObject(utils$1, {}, null, function filter(prop) {
   return /^is[A-Z]/.test(prop);
 });
 
@@ -193280,7 +201409,7 @@ const predicates = utils.toFlatObject(utils, {}, null, function filter(prop) {
  * @returns
  */
 function toFormData(obj, formData, options) {
-  if (!utils.isObject(obj)) {
+  if (!utils$1.isObject(obj)) {
     throw new TypeError('target must be an object');
   }
 
@@ -193288,13 +201417,13 @@ function toFormData(obj, formData, options) {
   formData = formData || new (FormData__default["default"] || FormData)();
 
   // eslint-disable-next-line no-param-reassign
-  options = utils.toFlatObject(options, {
+  options = utils$1.toFlatObject(options, {
     metaTokens: true,
     dots: false,
     indexes: false
   }, false, function defined(option, source) {
     // eslint-disable-next-line no-eq-null,eqeqeq
-    return !utils.isUndefined(source[option]);
+    return !utils$1.isUndefined(source[option]);
   });
 
   const metaTokens = options.metaTokens;
@@ -193303,24 +201432,24 @@ function toFormData(obj, formData, options) {
   const dots = options.dots;
   const indexes = options.indexes;
   const _Blob = options.Blob || typeof Blob !== 'undefined' && Blob;
-  const useBlob = _Blob && utils.isSpecCompliantForm(formData);
+  const useBlob = _Blob && utils$1.isSpecCompliantForm(formData);
 
-  if (!utils.isFunction(visitor)) {
+  if (!utils$1.isFunction(visitor)) {
     throw new TypeError('visitor must be a function');
   }
 
   function convertValue(value) {
     if (value === null) return '';
 
-    if (utils.isDate(value)) {
+    if (utils$1.isDate(value)) {
       return value.toISOString();
     }
 
-    if (!useBlob && utils.isBlob(value)) {
+    if (!useBlob && utils$1.isBlob(value)) {
       throw new AxiosError('Blob is not supported. Use a Buffer instead.');
     }
 
-    if (utils.isArrayBuffer(value) || utils.isTypedArray(value)) {
+    if (utils$1.isArrayBuffer(value) || utils$1.isTypedArray(value)) {
       return useBlob && typeof Blob === 'function' ? new Blob([value]) : Buffer.from(value);
     }
 
@@ -193341,20 +201470,20 @@ function toFormData(obj, formData, options) {
     let arr = value;
 
     if (value && !path && typeof value === 'object') {
-      if (utils.endsWith(key, '{}')) {
+      if (utils$1.endsWith(key, '{}')) {
         // eslint-disable-next-line no-param-reassign
         key = metaTokens ? key : key.slice(0, -2);
         // eslint-disable-next-line no-param-reassign
         value = JSON.stringify(value);
       } else if (
-        (utils.isArray(value) && isFlatArray(value)) ||
-        ((utils.isFileList(value) || utils.endsWith(key, '[]')) && (arr = utils.toArray(value))
+        (utils$1.isArray(value) && isFlatArray(value)) ||
+        ((utils$1.isFileList(value) || utils$1.endsWith(key, '[]')) && (arr = utils$1.toArray(value))
         )) {
         // eslint-disable-next-line no-param-reassign
         key = removeBrackets(key);
 
         arr.forEach(function each(el, index) {
-          !(utils.isUndefined(el) || el === null) && formData.append(
+          !(utils$1.isUndefined(el) || el === null) && formData.append(
             // eslint-disable-next-line no-nested-ternary
             indexes === true ? renderKey([key], index, dots) : (indexes === null ? key : key + '[]'),
             convertValue(el)
@@ -193382,7 +201511,7 @@ function toFormData(obj, formData, options) {
   });
 
   function build(value, path) {
-    if (utils.isUndefined(value)) return;
+    if (utils$1.isUndefined(value)) return;
 
     if (stack.indexOf(value) !== -1) {
       throw Error('Circular reference detected in ' + path.join('.'));
@@ -193390,9 +201519,9 @@ function toFormData(obj, formData, options) {
 
     stack.push(value);
 
-    utils.forEach(value, function each(el, key) {
-      const result = !(utils.isUndefined(el) || el === null) && visitor.call(
-        formData, el, utils.isString(key) ? key.trim() : key, path, exposedHelpers
+    utils$1.forEach(value, function each(el, key) {
+      const result = !(utils$1.isUndefined(el) || el === null) && visitor.call(
+        formData, el, utils$1.isString(key) ? key.trim() : key, path, exposedHelpers
       );
 
       if (result === true) {
@@ -193403,7 +201532,7 @@ function toFormData(obj, formData, options) {
     stack.pop();
   }
 
-  if (!utils.isObject(obj)) {
+  if (!utils$1.isObject(obj)) {
     throw new TypeError('data must be an object');
   }
 
@@ -193488,7 +201617,7 @@ function encode(val) {
  *
  * @param {string} url The base of the url (e.g., http://www.google.com)
  * @param {object} [params] The params to be appended
- * @param {?object} options
+ * @param {?(object|Function)} options
  *
  * @returns {string} The formatted url
  */
@@ -193500,6 +201629,12 @@ function buildURL(url, params, options) {
   
   const _encode = options && options.encode || encode;
 
+  if (utils$1.isFunction(options)) {
+    options = {
+      serialize: options
+    };
+  } 
+
   const serializeFn = options && options.serialize;
 
   let serializedParams;
@@ -193507,7 +201642,7 @@ function buildURL(url, params, options) {
   if (serializeFn) {
     serializedParams = serializeFn(params, options);
   } else {
-    serializedParams = utils.isURLSearchParams(params) ?
+    serializedParams = utils$1.isURLSearchParams(params) ?
       params.toString() :
       new AxiosURLSearchParams(params, options).toString(_encode);
   }
@@ -193582,7 +201717,7 @@ class InterceptorManager {
    * @returns {void}
    */
   forEach(fn) {
-    utils.forEach(this.handlers, function forEachHandler(h) {
+    utils$1.forEach(this.handlers, function forEachHandler(h) {
       if (h !== null) {
         fn(h);
       }
@@ -193600,20 +201735,103 @@ const transitionalDefaults = {
 
 const URLSearchParams = url__default["default"].URLSearchParams;
 
-const platform = {
+const ALPHA = 'abcdefghijklmnopqrstuvwxyz';
+
+const DIGIT = '0123456789';
+
+const ALPHABET = {
+  DIGIT,
+  ALPHA,
+  ALPHA_DIGIT: ALPHA + ALPHA.toUpperCase() + DIGIT
+};
+
+const generateString = (size = 16, alphabet = ALPHABET.ALPHA_DIGIT) => {
+  let str = '';
+  const {length} = alphabet;
+  const randomValues = new Uint32Array(size);
+  crypto__default["default"].randomFillSync(randomValues);
+  for (let i = 0; i < size; i++) {
+    str += alphabet[randomValues[i] % length];
+  }
+
+  return str;
+};
+
+
+const platform$1 = {
   isNode: true,
   classes: {
     URLSearchParams,
     FormData: FormData__default["default"],
     Blob: typeof Blob !== 'undefined' && Blob || null
   },
+  ALPHABET,
+  generateString,
   protocols: [ 'http', 'https', 'file', 'data' ]
+};
+
+const hasBrowserEnv = typeof window !== 'undefined' && typeof document !== 'undefined';
+
+const _navigator = typeof navigator === 'object' && navigator || undefined;
+
+/**
+ * Determine if we're running in a standard browser environment
+ *
+ * This allows axios to run in a web worker, and react-native.
+ * Both environments support XMLHttpRequest, but not fully standard globals.
+ *
+ * web workers:
+ *  typeof window -> undefined
+ *  typeof document -> undefined
+ *
+ * react-native:
+ *  navigator.product -> 'ReactNative'
+ * nativescript
+ *  navigator.product -> 'NativeScript' or 'NS'
+ *
+ * @returns {boolean}
+ */
+const hasStandardBrowserEnv = hasBrowserEnv &&
+  (!_navigator || ['ReactNative', 'NativeScript', 'NS'].indexOf(_navigator.product) < 0);
+
+/**
+ * Determine if we're running in a standard browser webWorker environment
+ *
+ * Although the `isStandardBrowserEnv` method indicates that
+ * `allows axios to run in a web worker`, the WebWorker will still be
+ * filtered out due to its judgment standard
+ * `typeof window !== 'undefined' && typeof document !== 'undefined'`.
+ * This leads to a problem when axios post `FormData` in webWorker
+ */
+const hasStandardBrowserWebWorkerEnv = (() => {
+  return (
+    typeof WorkerGlobalScope !== 'undefined' &&
+    // eslint-disable-next-line no-undef
+    self instanceof WorkerGlobalScope &&
+    typeof self.importScripts === 'function'
+  );
+})();
+
+const origin = hasBrowserEnv && window.location.href || 'http://localhost';
+
+const utils = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  hasBrowserEnv: hasBrowserEnv,
+  hasStandardBrowserWebWorkerEnv: hasStandardBrowserWebWorkerEnv,
+  hasStandardBrowserEnv: hasStandardBrowserEnv,
+  navigator: _navigator,
+  origin: origin
+});
+
+const platform = {
+  ...utils,
+  ...platform$1
 };
 
 function toURLEncodedForm(data, options) {
   return toFormData(data, new platform.classes.URLSearchParams(), Object.assign({
     visitor: function(value, key, path, helpers) {
-      if (utils.isBuffer(value)) {
+      if (platform.isNode && utils$1.isBuffer(value)) {
         this.append(key, value.toString('base64'));
         return false;
       }
@@ -193635,7 +201853,7 @@ function parsePropPath(name) {
   // foo.x.y.z
   // foo-x-y-z
   // foo x y z
-  return utils.matchAll(/\w+|\[(\w*)]/g, name).map(match => {
+  return utils$1.matchAll(/\w+|\[(\w*)]/g, name).map(match => {
     return match[0] === '[]' ? '' : match[1] || match[0];
   });
 }
@@ -193670,12 +201888,15 @@ function arrayToObject(arr) {
 function formDataToJSON(formData) {
   function buildPath(path, value, target, index) {
     let name = path[index++];
+
+    if (name === '__proto__') return true;
+
     const isNumericKey = Number.isFinite(+name);
     const isLast = index >= path.length;
-    name = !name && utils.isArray(target) ? target.length : name;
+    name = !name && utils$1.isArray(target) ? target.length : name;
 
     if (isLast) {
-      if (utils.hasOwnProp(target, name)) {
+      if (utils$1.hasOwnProp(target, name)) {
         target[name] = [target[name], value];
       } else {
         target[name] = value;
@@ -193684,23 +201905,23 @@ function formDataToJSON(formData) {
       return !isNumericKey;
     }
 
-    if (!target[name] || !utils.isObject(target[name])) {
+    if (!target[name] || !utils$1.isObject(target[name])) {
       target[name] = [];
     }
 
     const result = buildPath(path, value, target[name], index);
 
-    if (result && utils.isArray(target[name])) {
+    if (result && utils$1.isArray(target[name])) {
       target[name] = arrayToObject(target[name]);
     }
 
     return !isNumericKey;
   }
 
-  if (utils.isFormData(formData) && utils.isFunction(formData.entries)) {
+  if (utils$1.isFormData(formData) && utils$1.isFunction(formData.entries)) {
     const obj = {};
 
-    utils.forEachEntry(formData, (name, value) => {
+    utils$1.forEachEntry(formData, (name, value) => {
       buildPath(parsePropPath(name), value, obj, 0);
     });
 
@@ -193709,10 +201930,6 @@ function formDataToJSON(formData) {
 
   return null;
 }
-
-const DEFAULT_CONTENT_TYPE = {
-  'Content-Type': undefined
-};
 
 /**
  * It takes a string, tries to parse it, and if it fails, it returns the stringified version
@@ -193725,10 +201942,10 @@ const DEFAULT_CONTENT_TYPE = {
  * @returns {string} A stringified version of the rawValue.
  */
 function stringifySafely(rawValue, parser, encoder) {
-  if (utils.isString(rawValue)) {
+  if (utils$1.isString(rawValue)) {
     try {
       (parser || JSON.parse)(rawValue);
-      return utils.trim(rawValue);
+      return utils$1.trim(rawValue);
     } catch (e) {
       if (e.name !== 'SyntaxError') {
         throw e;
@@ -193743,38 +201960,36 @@ const defaults = {
 
   transitional: transitionalDefaults,
 
-  adapter: ['xhr', 'http'],
+  adapter: ['xhr', 'http', 'fetch'],
 
   transformRequest: [function transformRequest(data, headers) {
     const contentType = headers.getContentType() || '';
     const hasJSONContentType = contentType.indexOf('application/json') > -1;
-    const isObjectPayload = utils.isObject(data);
+    const isObjectPayload = utils$1.isObject(data);
 
-    if (isObjectPayload && utils.isHTMLForm(data)) {
+    if (isObjectPayload && utils$1.isHTMLForm(data)) {
       data = new FormData(data);
     }
 
-    const isFormData = utils.isFormData(data);
+    const isFormData = utils$1.isFormData(data);
 
     if (isFormData) {
-      if (!hasJSONContentType) {
-        return data;
-      }
       return hasJSONContentType ? JSON.stringify(formDataToJSON(data)) : data;
     }
 
-    if (utils.isArrayBuffer(data) ||
-      utils.isBuffer(data) ||
-      utils.isStream(data) ||
-      utils.isFile(data) ||
-      utils.isBlob(data)
+    if (utils$1.isArrayBuffer(data) ||
+      utils$1.isBuffer(data) ||
+      utils$1.isStream(data) ||
+      utils$1.isFile(data) ||
+      utils$1.isBlob(data) ||
+      utils$1.isReadableStream(data)
     ) {
       return data;
     }
-    if (utils.isArrayBufferView(data)) {
+    if (utils$1.isArrayBufferView(data)) {
       return data.buffer;
     }
-    if (utils.isURLSearchParams(data)) {
+    if (utils$1.isURLSearchParams(data)) {
       headers.setContentType('application/x-www-form-urlencoded;charset=utf-8', false);
       return data.toString();
     }
@@ -193786,7 +202001,7 @@ const defaults = {
         return toURLEncodedForm(data, this.formSerializer).toString();
       }
 
-      if ((isFileList = utils.isFileList(data)) || contentType.indexOf('multipart/form-data') > -1) {
+      if ((isFileList = utils$1.isFileList(data)) || contentType.indexOf('multipart/form-data') > -1) {
         const _FormData = this.env && this.env.FormData;
 
         return toFormData(
@@ -193810,7 +202025,11 @@ const defaults = {
     const forcedJSONParsing = transitional && transitional.forcedJSONParsing;
     const JSONRequested = this.responseType === 'json';
 
-    if (data && utils.isString(data) && ((forcedJSONParsing && !this.responseType) || JSONRequested)) {
+    if (utils$1.isResponse(data) || utils$1.isReadableStream(data)) {
+      return data;
+    }
+
+    if (data && utils$1.isString(data) && ((forcedJSONParsing && !this.responseType) || JSONRequested)) {
       const silentJSONParsing = transitional && transitional.silentJSONParsing;
       const strictJSONParsing = !silentJSONParsing && JSONRequested;
 
@@ -193852,24 +202071,21 @@ const defaults = {
 
   headers: {
     common: {
-      'Accept': 'application/json, text/plain, */*'
+      'Accept': 'application/json, text/plain, */*',
+      'Content-Type': undefined
     }
   }
 };
 
-utils.forEach(['delete', 'get', 'head'], function forEachMethodNoData(method) {
+utils$1.forEach(['delete', 'get', 'head', 'post', 'put', 'patch'], (method) => {
   defaults.headers[method] = {};
-});
-
-utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
-  defaults.headers[method] = utils.merge(DEFAULT_CONTENT_TYPE);
 });
 
 const defaults$1 = defaults;
 
 // RawAxiosHeaders whose duplicates are ignored by node
 // c.f. https://nodejs.org/api/http.html#http_message_headers
-const ignoreDuplicateOf = utils.toObjectSet([
+const ignoreDuplicateOf = utils$1.toObjectSet([
   'age', 'authorization', 'content-length', 'content-type', 'etag',
   'expires', 'from', 'host', 'if-modified-since', 'if-unmodified-since',
   'last-modified', 'location', 'max-forwards', 'proxy-authorization',
@@ -193930,7 +202146,7 @@ function normalizeValue(value) {
     return value;
   }
 
-  return utils.isArray(value) ? value.map(normalizeValue) : String(value);
+  return utils$1.isArray(value) ? value.map(normalizeValue) : String(value);
 }
 
 function parseTokens(str) {
@@ -193948,7 +202164,7 @@ function parseTokens(str) {
 const isValidHeaderName = (str) => /^[-_a-zA-Z0-9^`|~,!#$%&'*+.]+$/.test(str.trim());
 
 function matchHeaderValue(context, value, header, filter, isHeaderNameFilter) {
-  if (utils.isFunction(filter)) {
+  if (utils$1.isFunction(filter)) {
     return filter.call(this, value, header);
   }
 
@@ -193956,13 +202172,13 @@ function matchHeaderValue(context, value, header, filter, isHeaderNameFilter) {
     value = header;
   }
 
-  if (!utils.isString(value)) return;
+  if (!utils$1.isString(value)) return;
 
-  if (utils.isString(filter)) {
+  if (utils$1.isString(filter)) {
     return value.indexOf(filter) !== -1;
   }
 
-  if (utils.isRegExp(filter)) {
+  if (utils$1.isRegExp(filter)) {
     return filter.test(value);
   }
 }
@@ -193975,7 +202191,7 @@ function formatHeader(header) {
 }
 
 function buildAccessors(obj, header) {
-  const accessorName = utils.toCamelCase(' ' + header);
+  const accessorName = utils$1.toCamelCase(' ' + header);
 
   ['get', 'set', 'has'].forEach(methodName => {
     Object.defineProperty(obj, methodName + accessorName, {
@@ -194002,7 +202218,7 @@ class AxiosHeaders {
         throw new Error('header name must be a non-empty string');
       }
 
-      const key = utils.findKey(self, lHeader);
+      const key = utils$1.findKey(self, lHeader);
 
       if(!key || self[key] === undefined || _rewrite === true || (_rewrite === undefined && self[key] !== false)) {
         self[key || _header] = normalizeValue(_value);
@@ -194010,12 +202226,24 @@ class AxiosHeaders {
     }
 
     const setHeaders = (headers, _rewrite) =>
-      utils.forEach(headers, (_value, _header) => setHeader(_value, _header, _rewrite));
+      utils$1.forEach(headers, (_value, _header) => setHeader(_value, _header, _rewrite));
 
-    if (utils.isPlainObject(header) || header instanceof this.constructor) {
+    if (utils$1.isPlainObject(header) || header instanceof this.constructor) {
       setHeaders(header, valueOrRewrite);
-    } else if(utils.isString(header) && (header = header.trim()) && !isValidHeaderName(header)) {
+    } else if(utils$1.isString(header) && (header = header.trim()) && !isValidHeaderName(header)) {
       setHeaders(parseHeaders(header), valueOrRewrite);
+    } else if (utils$1.isObject(header) && utils$1.isIterable(header)) {
+      let obj = {}, dest, key;
+      for (const entry of header) {
+        if (!utils$1.isArray(entry)) {
+          throw TypeError('Object iterator must return a key-value pair');
+        }
+
+        obj[key = entry[0]] = (dest = obj[key]) ?
+          (utils$1.isArray(dest) ? [...dest, entry[1]] : [dest, entry[1]]) : entry[1];
+      }
+
+      setHeaders(obj, valueOrRewrite);
     } else {
       header != null && setHeader(valueOrRewrite, header, rewrite);
     }
@@ -194027,7 +202255,7 @@ class AxiosHeaders {
     header = normalizeHeader(header);
 
     if (header) {
-      const key = utils.findKey(this, header);
+      const key = utils$1.findKey(this, header);
 
       if (key) {
         const value = this[key];
@@ -194040,11 +202268,11 @@ class AxiosHeaders {
           return parseTokens(value);
         }
 
-        if (utils.isFunction(parser)) {
+        if (utils$1.isFunction(parser)) {
           return parser.call(this, value, key);
         }
 
-        if (utils.isRegExp(parser)) {
+        if (utils$1.isRegExp(parser)) {
           return parser.exec(value);
         }
 
@@ -194057,7 +202285,7 @@ class AxiosHeaders {
     header = normalizeHeader(header);
 
     if (header) {
-      const key = utils.findKey(this, header);
+      const key = utils$1.findKey(this, header);
 
       return !!(key && this[key] !== undefined && (!matcher || matchHeaderValue(this, this[key], key, matcher)));
     }
@@ -194073,7 +202301,7 @@ class AxiosHeaders {
       _header = normalizeHeader(_header);
 
       if (_header) {
-        const key = utils.findKey(self, _header);
+        const key = utils$1.findKey(self, _header);
 
         if (key && (!matcher || matchHeaderValue(self, self[key], key, matcher))) {
           delete self[key];
@@ -194083,7 +202311,7 @@ class AxiosHeaders {
       }
     }
 
-    if (utils.isArray(header)) {
+    if (utils$1.isArray(header)) {
       header.forEach(deleteHeader);
     } else {
       deleteHeader(header);
@@ -194112,8 +202340,8 @@ class AxiosHeaders {
     const self = this;
     const headers = {};
 
-    utils.forEach(this, (value, header) => {
-      const key = utils.findKey(headers, header);
+    utils$1.forEach(this, (value, header) => {
+      const key = utils$1.findKey(headers, header);
 
       if (key) {
         self[key] = normalizeValue(value);
@@ -194142,8 +202370,8 @@ class AxiosHeaders {
   toJSON(asStrings) {
     const obj = Object.create(null);
 
-    utils.forEach(this, (value, header) => {
-      value != null && value !== false && (obj[header] = asStrings && utils.isArray(value) ? value.join(', ') : value);
+    utils$1.forEach(this, (value, header) => {
+      value != null && value !== false && (obj[header] = asStrings && utils$1.isArray(value) ? value.join(', ') : value);
     });
 
     return obj;
@@ -194155,6 +202383,10 @@ class AxiosHeaders {
 
   toString() {
     return Object.entries(this.toJSON()).map(([header, value]) => header + ': ' + value).join('\n');
+  }
+
+  getSetCookie() {
+    return this.get("set-cookie") || [];
   }
 
   get [Symbol.toStringTag]() {
@@ -194190,7 +202422,7 @@ class AxiosHeaders {
       }
     }
 
-    utils.isArray(header) ? header.forEach(defineAccessor) : defineAccessor(header);
+    utils$1.isArray(header) ? header.forEach(defineAccessor) : defineAccessor(header);
 
     return this;
   }
@@ -194198,8 +202430,18 @@ class AxiosHeaders {
 
 AxiosHeaders.accessor(['Content-Type', 'Content-Length', 'Accept', 'Accept-Encoding', 'User-Agent', 'Authorization']);
 
-utils.freezeMethods(AxiosHeaders.prototype);
-utils.freezeMethods(AxiosHeaders);
+// reserved names hotfix
+utils$1.reduceDescriptors(AxiosHeaders.prototype, ({value}, key) => {
+  let mapped = key[0].toUpperCase() + key.slice(1); // map `set` => `Set`
+  return {
+    get: () => value,
+    set(headerValue) {
+      this[mapped] = headerValue;
+    }
+  }
+});
+
+utils$1.freezeMethods(AxiosHeaders);
 
 const AxiosHeaders$1 = AxiosHeaders;
 
@@ -194217,7 +202459,7 @@ function transformData(fns, response) {
   const headers = AxiosHeaders$1.from(context.headers);
   let data = context.data;
 
-  utils.forEach(fns, function transform(fn) {
+  utils$1.forEach(fns, function transform(fn) {
     data = fn.call(config, data, headers.normalize(), response ? response.status : undefined);
   });
 
@@ -194245,7 +202487,7 @@ function CanceledError(message, config, request) {
   this.name = 'CanceledError';
 }
 
-utils.inherits(CanceledError, AxiosError, {
+utils$1.inherits(CanceledError, AxiosError, {
   __CANCEL__: true
 });
 
@@ -194297,7 +202539,7 @@ function isAbsoluteURL(url) {
  */
 function combineURLs(baseURL, relativeURL) {
   return relativeURL
-    ? baseURL.replace(/\/+$/, '') + '/' + relativeURL.replace(/^\/+/, '')
+    ? baseURL.replace(/\/?\/$/, '') + '/' + relativeURL.replace(/^\/+/, '')
     : baseURL;
 }
 
@@ -194311,14 +202553,15 @@ function combineURLs(baseURL, relativeURL) {
  *
  * @returns {string} The combined full path
  */
-function buildFullPath(baseURL, requestedURL) {
-  if (baseURL && !isAbsoluteURL(requestedURL)) {
+function buildFullPath(baseURL, requestedURL, allowAbsoluteUrls) {
+  let isRelativeUrl = !isAbsoluteURL(requestedURL);
+  if (baseURL && (isRelativeUrl || allowAbsoluteUrls == false)) {
     return combineURLs(baseURL, requestedURL);
   }
   return requestedURL;
 }
 
-const VERSION = "1.3.6";
+const VERSION = "1.9.0";
 
 function parseProtocol(url) {
   const match = /^([-+\w]{1,25})(:?\/\/|:)/.exec(url);
@@ -194373,93 +202616,11 @@ function fromDataURI(uri, asBlob, options) {
   throw new AxiosError('Unsupported protocol ' + protocol, AxiosError.ERR_NOT_SUPPORT);
 }
 
-/**
- * Throttle decorator
- * @param {Function} fn
- * @param {Number} freq
- * @return {Function}
- */
-function throttle(fn, freq) {
-  let timestamp = 0;
-  const threshold = 1000 / freq;
-  let timer = null;
-  return function throttled(force, args) {
-    const now = Date.now();
-    if (force || now - timestamp > threshold) {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      timestamp = now;
-      return fn.apply(null, args);
-    }
-    if (!timer) {
-      timer = setTimeout(() => {
-        timer = null;
-        timestamp = Date.now();
-        return fn.apply(null, args);
-      }, threshold - (now - timestamp));
-    }
-  };
-}
-
-/**
- * Calculate data maxRate
- * @param {Number} [samplesCount= 10]
- * @param {Number} [min= 1000]
- * @returns {Function}
- */
-function speedometer(samplesCount, min) {
-  samplesCount = samplesCount || 10;
-  const bytes = new Array(samplesCount);
-  const timestamps = new Array(samplesCount);
-  let head = 0;
-  let tail = 0;
-  let firstSampleTS;
-
-  min = min !== undefined ? min : 1000;
-
-  return function push(chunkLength) {
-    const now = Date.now();
-
-    const startedAt = timestamps[tail];
-
-    if (!firstSampleTS) {
-      firstSampleTS = now;
-    }
-
-    bytes[head] = chunkLength;
-    timestamps[head] = now;
-
-    let i = tail;
-    let bytesCount = 0;
-
-    while (i !== head) {
-      bytesCount += bytes[i++];
-      i = i % samplesCount;
-    }
-
-    head = (head + 1) % samplesCount;
-
-    if (head === tail) {
-      tail = (tail + 1) % samplesCount;
-    }
-
-    if (now - firstSampleTS < min) {
-      return;
-    }
-
-    const passed = startedAt && now - startedAt;
-
-    return passed ? Math.round(bytesCount * 1000 / passed) : undefined;
-  };
-}
-
 const kInternals = Symbol('internals');
 
 class AxiosTransformStream extends stream__default["default"].Transform{
   constructor(options) {
-    options = utils.toFlatObject(options, {
+    options = utils$1.toFlatObject(options, {
       maxRate: 0,
       chunkSize: 64 * 1024,
       minChunkSize: 100,
@@ -194467,19 +202628,15 @@ class AxiosTransformStream extends stream__default["default"].Transform{
       ticksRate: 2,
       samplesCount: 15
     }, null, (prop, source) => {
-      return !utils.isUndefined(source[prop]);
+      return !utils$1.isUndefined(source[prop]);
     });
 
     super({
       readableHighWaterMark: options.chunkSize
     });
 
-    const self = this;
-
     const internals = this[kInternals] = {
-      length: options.length,
       timeWindow: options.timeWindow,
-      ticksRate: options.ticksRate,
       chunkSize: options.chunkSize,
       maxRate: options.maxRate,
       minChunkSize: options.minChunkSize,
@@ -194491,8 +202648,6 @@ class AxiosTransformStream extends stream__default["default"].Transform{
       onReadCallback: null
     };
 
-    const _speedometer = speedometer(internals.ticksRate * options.samplesCount, internals.timeWindow);
-
     this.on('newListener', event => {
       if (event === 'progress') {
         if (!internals.isCaptured) {
@@ -194500,38 +202655,6 @@ class AxiosTransformStream extends stream__default["default"].Transform{
         }
       }
     });
-
-    let bytesNotified = 0;
-
-    internals.updateProgress = throttle(function throttledHandler() {
-      const totalBytes = internals.length;
-      const bytesTransferred = internals.bytesSeen;
-      const progressBytes = bytesTransferred - bytesNotified;
-      if (!progressBytes || self.destroyed) return;
-
-      const rate = _speedometer(progressBytes);
-
-      bytesNotified = bytesTransferred;
-
-      process.nextTick(() => {
-        self.emit('progress', {
-          'loaded': bytesTransferred,
-          'total': totalBytes,
-          'progress': totalBytes ? (bytesTransferred / totalBytes) : undefined,
-          'bytes': progressBytes,
-          'rate': rate ? rate : undefined,
-          'estimated': rate && totalBytes && bytesTransferred <= totalBytes ?
-            (totalBytes - bytesTransferred) / rate : undefined
-        });
-      });
-    }, internals.ticksRate);
-
-    const onFinish = () => {
-      internals.updateProgress(true);
-    };
-
-    this.once('end', onFinish);
-    this.once('error', onFinish);
   }
 
   _read(size) {
@@ -194545,7 +202668,6 @@ class AxiosTransformStream extends stream__default["default"].Transform{
   }
 
   _transform(chunk, encoding, callback) {
-    const self = this;
     const internals = this[kInternals];
     const maxRate = internals.maxRate;
 
@@ -194557,16 +202679,14 @@ class AxiosTransformStream extends stream__default["default"].Transform{
     const bytesThreshold = (maxRate / divider);
     const minChunkSize = internals.minChunkSize !== false ? Math.max(internals.minChunkSize, bytesThreshold * 0.01) : 0;
 
-    function pushChunk(_chunk, _callback) {
+    const pushChunk = (_chunk, _callback) => {
       const bytes = Buffer.byteLength(_chunk);
       internals.bytesSeen += bytes;
       internals.bytes += bytes;
 
-      if (internals.isCaptured) {
-        internals.updateProgress();
-      }
+      internals.isCaptured && this.emit('progress', internals.bytesSeen);
 
-      if (self.push(_chunk)) {
+      if (this.push(_chunk)) {
         process.nextTick(_callback);
       } else {
         internals.onReadCallback = () => {
@@ -194574,7 +202694,7 @@ class AxiosTransformStream extends stream__default["default"].Transform{
           process.nextTick(_callback);
         };
       }
-    }
+    };
 
     const transformChunk = (_chunk, _callback) => {
       const chunkSize = Buffer.byteLength(_chunk);
@@ -194631,11 +202751,6 @@ class AxiosTransformStream extends stream__default["default"].Transform{
       }
     });
   }
-
-  setLength(length) {
-    this[kInternals].length = +length;
-    return this;
-  }
 }
 
 const AxiosTransformStream$1 = AxiosTransformStream;
@@ -194656,9 +202771,9 @@ const readBlob = async function* (blob) {
 
 const readBlob$1 = readBlob;
 
-const BOUNDARY_ALPHABET = utils.ALPHABET.ALPHA_DIGIT + '-_';
+const BOUNDARY_ALPHABET = platform.ALPHABET.ALPHA_DIGIT + '-_';
 
-const textEncoder = new util.TextEncoder();
+const textEncoder = typeof TextEncoder === 'function' ? new TextEncoder() : new util__default["default"].TextEncoder();
 
 const CRLF = '\r\n';
 const CRLF_BYTES = textEncoder.encode(CRLF);
@@ -194667,7 +202782,7 @@ const CRLF_BYTES_COUNT = 2;
 class FormDataPart {
   constructor(name, value) {
     const {escapeName} = this.constructor;
-    const isStringValue = utils.isString(value);
+    const isStringValue = utils$1.isString(value);
 
     let headers = `Content-Disposition: form-data; name="${escapeName(name)}"${
       !isStringValue && value.name ? `; filename="${escapeName(value.name)}"` : ''
@@ -194694,7 +202809,7 @@ class FormDataPart {
 
     const {value} = this;
 
-    if(utils.isTypedArray(value)) {
+    if(utils$1.isTypedArray(value)) {
       yield value;
     } else {
       yield* readBlob$1(value);
@@ -194716,10 +202831,10 @@ const formDataToStream = (form, headersHandler, options) => {
   const {
     tag = 'form-data-boundary',
     size = 25,
-    boundary = tag + '-' + utils.generateString(size, BOUNDARY_ALPHABET)
+    boundary = tag + '-' + platform.generateString(size, BOUNDARY_ALPHABET)
   } = options || {};
 
-  if(!utils.isFormData(form)) {
+  if(!utils$1.isFormData(form)) {
     throw TypeError('FormData instance required');
   }
 
@@ -194728,7 +202843,7 @@ const formDataToStream = (form, headersHandler, options) => {
   }
 
   const boundaryBytes = textEncoder.encode('--' + boundary + CRLF);
-  const footerBytes = textEncoder.encode('--' + boundary + '--' + CRLF + CRLF);
+  const footerBytes = textEncoder.encode('--' + boundary + '--' + CRLF);
   let contentLength = footerBytes.byteLength;
 
   const parts = Array.from(form.entries()).map(([name, value]) => {
@@ -194739,7 +202854,7 @@ const formDataToStream = (form, headersHandler, options) => {
 
   contentLength += boundaryBytes.byteLength * parts.length;
 
-  contentLength = utils.toFiniteNumber(contentLength);
+  contentLength = utils$1.toFiniteNumber(contentLength);
 
   const computedHeaders = {
     'Content-Type': `multipart/form-data; boundary=${boundary}`
@@ -194788,6 +202903,157 @@ class ZlibHeaderTransformStream extends stream__default["default"].Transform {
 
 const ZlibHeaderTransformStream$1 = ZlibHeaderTransformStream;
 
+const callbackify = (fn, reducer) => {
+  return utils$1.isAsyncFn(fn) ? function (...args) {
+    const cb = args.pop();
+    fn.apply(this, args).then((value) => {
+      try {
+        reducer ? cb(null, ...reducer(value)) : cb(null, value);
+      } catch (err) {
+        cb(err);
+      }
+    }, cb);
+  } : fn;
+};
+
+const callbackify$1 = callbackify;
+
+/**
+ * Calculate data maxRate
+ * @param {Number} [samplesCount= 10]
+ * @param {Number} [min= 1000]
+ * @returns {Function}
+ */
+function speedometer(samplesCount, min) {
+  samplesCount = samplesCount || 10;
+  const bytes = new Array(samplesCount);
+  const timestamps = new Array(samplesCount);
+  let head = 0;
+  let tail = 0;
+  let firstSampleTS;
+
+  min = min !== undefined ? min : 1000;
+
+  return function push(chunkLength) {
+    const now = Date.now();
+
+    const startedAt = timestamps[tail];
+
+    if (!firstSampleTS) {
+      firstSampleTS = now;
+    }
+
+    bytes[head] = chunkLength;
+    timestamps[head] = now;
+
+    let i = tail;
+    let bytesCount = 0;
+
+    while (i !== head) {
+      bytesCount += bytes[i++];
+      i = i % samplesCount;
+    }
+
+    head = (head + 1) % samplesCount;
+
+    if (head === tail) {
+      tail = (tail + 1) % samplesCount;
+    }
+
+    if (now - firstSampleTS < min) {
+      return;
+    }
+
+    const passed = startedAt && now - startedAt;
+
+    return passed ? Math.round(bytesCount * 1000 / passed) : undefined;
+  };
+}
+
+/**
+ * Throttle decorator
+ * @param {Function} fn
+ * @param {Number} freq
+ * @return {Function}
+ */
+function throttle(fn, freq) {
+  let timestamp = 0;
+  let threshold = 1000 / freq;
+  let lastArgs;
+  let timer;
+
+  const invoke = (args, now = Date.now()) => {
+    timestamp = now;
+    lastArgs = null;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    fn.apply(null, args);
+  };
+
+  const throttled = (...args) => {
+    const now = Date.now();
+    const passed = now - timestamp;
+    if ( passed >= threshold) {
+      invoke(args, now);
+    } else {
+      lastArgs = args;
+      if (!timer) {
+        timer = setTimeout(() => {
+          timer = null;
+          invoke(lastArgs);
+        }, threshold - passed);
+      }
+    }
+  };
+
+  const flush = () => lastArgs && invoke(lastArgs);
+
+  return [throttled, flush];
+}
+
+const progressEventReducer = (listener, isDownloadStream, freq = 3) => {
+  let bytesNotified = 0;
+  const _speedometer = speedometer(50, 250);
+
+  return throttle(e => {
+    const loaded = e.loaded;
+    const total = e.lengthComputable ? e.total : undefined;
+    const progressBytes = loaded - bytesNotified;
+    const rate = _speedometer(progressBytes);
+    const inRange = loaded <= total;
+
+    bytesNotified = loaded;
+
+    const data = {
+      loaded,
+      total,
+      progress: total ? (loaded / total) : undefined,
+      bytes: progressBytes,
+      rate: rate ? rate : undefined,
+      estimated: rate && total && inRange ? (total - loaded) / rate : undefined,
+      event: e,
+      lengthComputable: total != null,
+      [isDownloadStream ? 'download' : 'upload']: true
+    };
+
+    listener(data);
+  }, freq);
+};
+
+const progressEventDecorator = (total, throttled) => {
+  const lengthComputable = total != null;
+
+  return [(loaded) => throttled[0]({
+    lengthComputable,
+    total,
+    loaded
+  }), throttled[1]];
+};
+
+const asyncDecorator = (fn) => (...args) => utils$1.asap(() => fn(...args));
+
 const zlibOptions = {
   flush: zlib__default["default"].constants.Z_SYNC_FLUSH,
   finishFlush: zlib__default["default"].constants.Z_SYNC_FLUSH
@@ -194798,7 +203064,7 @@ const brotliOptions = {
   finishFlush: zlib__default["default"].constants.BROTLI_OPERATION_FLUSH
 };
 
-const isBrotliSupported = utils.isFunction(zlib__default["default"].createBrotliDecompress);
+const isBrotliSupported = utils$1.isFunction(zlib__default["default"].createBrotliDecompress);
 
 const {http: httpFollow, https: httpsFollow} = followRedirects__default["default"];
 
@@ -194808,6 +203074,14 @@ const supportedProtocols = platform.protocols.map(protocol => {
   return protocol + ':';
 });
 
+const flushOnFinish = (stream, [throttled, flush]) => {
+  stream
+    .on('end', flush)
+    .on('error', flush);
+
+  return throttled;
+};
+
 /**
  * If the proxy or config beforeRedirects functions are defined, call them with the options
  * object.
@@ -194816,12 +203090,12 @@ const supportedProtocols = platform.protocols.map(protocol => {
  *
  * @returns {Object<string, any>}
  */
-function dispatchBeforeRedirect(options) {
+function dispatchBeforeRedirect(options, responseDetails) {
   if (options.beforeRedirects.proxy) {
     options.beforeRedirects.proxy(options);
   }
   if (options.beforeRedirects.config) {
-    options.beforeRedirects.config(options);
+    options.beforeRedirects.config(options, responseDetails);
   }
 }
 
@@ -194837,7 +203111,7 @@ function dispatchBeforeRedirect(options) {
 function setProxy(options, configProxy, location) {
   let proxy = configProxy;
   if (!proxy && proxy !== false) {
-    const proxyUrl = proxyFromEnv.getProxyForUrl(location);
+    const proxyUrl = proxyFromEnv__default["default"].getProxyForUrl(location);
     if (proxyUrl) {
       proxy = new URL(proxyUrl);
     }
@@ -194878,7 +203152,7 @@ function setProxy(options, configProxy, location) {
   };
 }
 
-const isHttpAdapterSupported = typeof process !== 'undefined' && utils.kindOf(process) === 'process';
+const isHttpAdapterSupported = typeof process !== 'undefined' && utils$1.kindOf(process) === 'process';
 
 // temporary hotfix
 
@@ -194907,18 +203181,46 @@ const wrapAsync = (asyncExecutor) => {
   })
 };
 
+const resolveFamily = ({address, family}) => {
+  if (!utils$1.isString(address)) {
+    throw TypeError('address must be a string');
+  }
+  return ({
+    address,
+    family: family || (address.indexOf('.') < 0 ? 6 : 4)
+  });
+};
+
+const buildAddressEntry = (address, family) => resolveFamily(utils$1.isObject(address) ? address : {address, family});
+
 /*eslint consistent-return:0*/
 const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
   return wrapAsync(async function dispatchHttpRequest(resolve, reject, onDone) {
-    let {data} = config;
+    let {data, lookup, family} = config;
     const {responseType, responseEncoding} = config;
     const method = config.method.toUpperCase();
     let isDone;
     let rejected = false;
     let req;
 
+    if (lookup) {
+      const _lookup = callbackify$1(lookup, (value) => utils$1.isArray(value) ? value : [value]);
+      // hotfix to support opt.all option which is required for node 20.x
+      lookup = (hostname, opt, cb) => {
+        _lookup(hostname, opt, (err, arg0, arg1) => {
+          if (err) {
+            return cb(err);
+          }
+
+          const addresses = utils$1.isArray(arg0) ? arg0.map(addr => buildAddressEntry(addr)) : [buildAddressEntry(arg0, arg1)];
+
+          opt.all ? cb(err, addresses) : cb(err, addresses[0].address, addresses[0].family);
+        });
+      };
+    }
+
     // temporary internal emitter until the AxiosRequest class will be implemented
-    const emitter = new EventEmitter__default["default"]();
+    const emitter = new events.EventEmitter();
 
     const onFinished = () => {
       if (config.cancelToken) {
@@ -194954,8 +203256,8 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
     }
 
     // Parse url
-    const fullPath = buildFullPath(config.baseURL, config.url);
-    const parsed = new URL(fullPath, 'http://localhost');
+    const fullPath = buildFullPath(config.baseURL, config.url, config.allowAbsoluteUrls);
+    const parsed = new URL(fullPath, platform.hasBrowserEnv ? platform.origin : undefined);
     const protocol = parsed.protocol || supportedProtocols[0];
 
     if (protocol === 'data:') {
@@ -194982,7 +203284,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
         convertedData = convertedData.toString(responseEncoding);
 
         if (!responseEncoding || responseEncoding === 'utf8') {
-          convertedData = utils.stripBOM(convertedData);
+          convertedData = utils$1.stripBOM(convertedData);
         }
       } else if (responseType === 'stream') {
         convertedData = stream__default["default"].Readable.from(convertedData);
@@ -195013,14 +203315,13 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
     // Only set header if it hasn't been set in config
     headers.set('User-Agent', 'axios/' + VERSION, false);
 
-    const onDownloadProgress = config.onDownloadProgress;
-    const onUploadProgress = config.onUploadProgress;
+    const {onUploadProgress, onDownloadProgress} = config;
     const maxRate = config.maxRate;
     let maxUploadRate = undefined;
     let maxDownloadRate = undefined;
 
     // support for spec compliant FormData objects
-    if (utils.isSpecCompliantForm(data)) {
+    if (utils$1.isSpecCompliantForm(data)) {
       const userBoundary = headers.getContentType(/boundary=([-_\w\d]{10,70})/i);
 
       data = formDataToStream$1(data, (formHeaders) => {
@@ -195030,7 +203331,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
         boundary: userBoundary && userBoundary[1] || undefined
       });
       // support for https://www.npmjs.com/package/form-data api
-    } else if (utils.isFormData(data) && utils.isFunction(data.getHeaders)) {
+    } else if (utils$1.isFormData(data) && utils$1.isFunction(data.getHeaders)) {
       headers.set(data.getHeaders());
 
       if (!headers.hasContentLength()) {
@@ -195041,14 +203342,14 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
         } catch (e) {
         }
       }
-    } else if (utils.isBlob(data)) {
+    } else if (utils$1.isBlob(data) || utils$1.isFile(data)) {
       data.size && headers.setContentType(data.type || 'application/octet-stream');
       headers.setContentLength(data.size || 0);
       data = stream__default["default"].Readable.from(readBlob$1(data));
-    } else if (data && !utils.isStream(data)) {
-      if (Buffer.isBuffer(data)) ; else if (utils.isArrayBuffer(data)) {
+    } else if (data && !utils$1.isStream(data)) {
+      if (Buffer.isBuffer(data)) ; else if (utils$1.isArrayBuffer(data)) {
         data = Buffer.from(new Uint8Array(data));
-      } else if (utils.isString(data)) {
+      } else if (utils$1.isString(data)) {
         data = Buffer.from(data, 'utf-8');
       } else {
         return reject(new AxiosError(
@@ -195070,9 +203371,9 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
       }
     }
 
-    const contentLength = utils.toFiniteNumber(headers.getContentLength());
+    const contentLength = utils$1.toFiniteNumber(headers.getContentLength());
 
-    if (utils.isArray(maxRate)) {
+    if (utils$1.isArray(maxRate)) {
       maxUploadRate = maxRate[0];
       maxDownloadRate = maxRate[1];
     } else {
@@ -195080,20 +203381,21 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
     }
 
     if (data && (onUploadProgress || maxUploadRate)) {
-      if (!utils.isStream(data)) {
+      if (!utils$1.isStream(data)) {
         data = stream__default["default"].Readable.from(data, {objectMode: false});
       }
 
       data = stream__default["default"].pipeline([data, new AxiosTransformStream$1({
-        length: contentLength,
-        maxRate: utils.toFiniteNumber(maxUploadRate)
-      })], utils.noop);
+        maxRate: utils$1.toFiniteNumber(maxUploadRate)
+      })], utils$1.noop);
 
-      onUploadProgress && data.on('progress', progress => {
-        onUploadProgress(Object.assign(progress, {
-          upload: true
-        }));
-      });
+      onUploadProgress && data.on('progress', flushOnFinish(
+        data,
+        progressEventDecorator(
+          contentLength,
+          progressEventReducer(asyncDecorator(onUploadProgress), false, 3)
+        )
+      ));
     }
 
     // HTTP basic authentication
@@ -195140,14 +203442,18 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
       agents: { http: config.httpAgent, https: config.httpsAgent },
       auth,
       protocol,
+      family,
       beforeRedirect: dispatchBeforeRedirect,
       beforeRedirects: {}
     };
 
+    // cacheable-lookup integration hotfix
+    !utils$1.isUndefined(lookup) && (options.lookup = lookup);
+
     if (config.socketPath) {
       options.socketPath = config.socketPath;
     } else {
-      options.hostname = parsed.hostname;
+      options.hostname = parsed.hostname.startsWith("[") ? parsed.hostname.slice(1, -1) : parsed.hostname;
       options.port = parsed.port;
       setProxy(options, config.proxy, protocol + '//' + parsed.hostname + (parsed.port ? ':' + parsed.port : '') + options.path);
     }
@@ -195188,17 +203494,18 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
 
       const responseLength = +res.headers['content-length'];
 
-      if (onDownloadProgress) {
+      if (onDownloadProgress || maxDownloadRate) {
         const transformStream = new AxiosTransformStream$1({
-          length: utils.toFiniteNumber(responseLength),
-          maxRate: utils.toFiniteNumber(maxDownloadRate)
+          maxRate: utils$1.toFiniteNumber(maxDownloadRate)
         });
 
-        onDownloadProgress && transformStream.on('progress', progress => {
-          onDownloadProgress(Object.assign(progress, {
-            download: true
-          }));
-        });
+        onDownloadProgress && transformStream.on('progress', flushOnFinish(
+          transformStream,
+          progressEventDecorator(
+            responseLength,
+            progressEventReducer(asyncDecorator(onDownloadProgress), true, 3)
+          )
+        ));
 
         streams.push(transformStream);
       }
@@ -195217,7 +203524,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
           delete res.headers['content-encoding'];
         }
 
-        switch (res.headers['content-encoding']) {
+        switch ((res.headers['content-encoding'] || '').toLowerCase()) {
         /*eslint default-case:0*/
         case 'gzip':
         case 'x-gzip':
@@ -195246,7 +203553,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
         }
       }
 
-      responseStream = streams.length > 1 ? stream__default["default"].pipeline(streams, utils.noop) : streams[0];
+      responseStream = streams.length > 1 ? stream__default["default"].pipeline(streams, utils$1.noop) : streams[0];
 
       const offListeners = stream__default["default"].finished(responseStream, () => {
         offListeners();
@@ -195288,7 +203595,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
           }
 
           const err = new AxiosError(
-            'maxContentLength size of ' + config.maxContentLength + ' exceeded',
+            'stream has been aborted',
             AxiosError.ERR_BAD_RESPONSE,
             config,
             lastRequest
@@ -195308,12 +203615,12 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
             if (responseType !== 'arraybuffer') {
               responseData = responseData.toString(responseEncoding);
               if (!responseEncoding || responseEncoding === 'utf8') {
-                responseData = utils.stripBOM(responseData);
+                responseData = utils$1.stripBOM(responseData);
               }
             }
             response.data = responseData;
           } catch (err) {
-            reject(AxiosError.from(err, null, config, response.request, response));
+            return reject(AxiosError.from(err, null, config, response.request, response));
           }
           settle(resolve, reject, response);
         });
@@ -195350,7 +203657,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
       // This is forcing a int timeout to avoid problems if the `req` interface doesn't handle other types.
       const timeout = parseInt(config.timeout, 10);
 
-      if (isNaN(timeout)) {
+      if (Number.isNaN(timeout)) {
         reject(new AxiosError(
           'error trying to parse `config.timeout` to int',
           AxiosError.ERR_BAD_OPTION_VALUE,
@@ -195385,7 +203692,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
 
 
     // Send the request
-    if (utils.isStream(data)) {
+    if (utils$1.isStream(data)) {
       let ended = false;
       let errored = false;
 
@@ -195411,183 +203718,235 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
   });
 };
 
-const cookies = platform.isStandardBrowserEnv ?
+const isURLSameOrigin = platform.hasStandardBrowserEnv ? ((origin, isMSIE) => (url) => {
+  url = new URL(url, platform.origin);
 
-// Standard browser envs support document.cookie
-  (function standardBrowserEnv() {
-    return {
-      write: function write(name, value, expires, path, domain, secure) {
-        const cookie = [];
-        cookie.push(name + '=' + encodeURIComponent(value));
+  return (
+    origin.protocol === url.protocol &&
+    origin.host === url.host &&
+    (isMSIE || origin.port === url.port)
+  );
+})(
+  new URL(platform.origin),
+  platform.navigator && /(msie|trident)/i.test(platform.navigator.userAgent)
+) : () => true;
 
-        if (utils.isNumber(expires)) {
-          cookie.push('expires=' + new Date(expires).toGMTString());
-        }
+const cookies = platform.hasStandardBrowserEnv ?
 
-        if (utils.isString(path)) {
-          cookie.push('path=' + path);
-        }
+  // Standard browser envs support document.cookie
+  {
+    write(name, value, expires, path, domain, secure) {
+      const cookie = [name + '=' + encodeURIComponent(value)];
 
-        if (utils.isString(domain)) {
-          cookie.push('domain=' + domain);
-        }
+      utils$1.isNumber(expires) && cookie.push('expires=' + new Date(expires).toGMTString());
 
-        if (secure === true) {
-          cookie.push('secure');
-        }
+      utils$1.isString(path) && cookie.push('path=' + path);
 
-        document.cookie = cookie.join('; ');
-      },
+      utils$1.isString(domain) && cookie.push('domain=' + domain);
 
-      read: function read(name) {
-        const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
-        return (match ? decodeURIComponent(match[3]) : null);
-      },
+      secure === true && cookie.push('secure');
 
-      remove: function remove(name) {
-        this.write(name, '', Date.now() - 86400000);
-      }
-    };
-  })() :
+      document.cookie = cookie.join('; ');
+    },
 
-// Non standard browser env (web workers, react-native) lack needed support.
-  (function nonStandardBrowserEnv() {
-    return {
-      write: function write() {},
-      read: function read() { return null; },
-      remove: function remove() {}
-    };
-  })();
+    read(name) {
+      const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+      return (match ? decodeURIComponent(match[3]) : null);
+    },
 
-const isURLSameOrigin = platform.isStandardBrowserEnv ?
-
-// Standard browser envs have full support of the APIs needed to test
-// whether the request URL is of the same origin as current location.
-  (function standardBrowserEnv() {
-    const msie = /(msie|trident)/i.test(navigator.userAgent);
-    const urlParsingNode = document.createElement('a');
-    let originURL;
-
-    /**
-    * Parse a URL to discover it's components
-    *
-    * @param {String} url The URL to be parsed
-    * @returns {Object}
-    */
-    function resolveURL(url) {
-      let href = url;
-
-      if (msie) {
-        // IE needs attribute set twice to normalize properties
-        urlParsingNode.setAttribute('href', href);
-        href = urlParsingNode.href;
-      }
-
-      urlParsingNode.setAttribute('href', href);
-
-      // urlParsingNode provides the UrlUtils interface - http://url.spec.whatwg.org/#urlutils
-      return {
-        href: urlParsingNode.href,
-        protocol: urlParsingNode.protocol ? urlParsingNode.protocol.replace(/:$/, '') : '',
-        host: urlParsingNode.host,
-        search: urlParsingNode.search ? urlParsingNode.search.replace(/^\?/, '') : '',
-        hash: urlParsingNode.hash ? urlParsingNode.hash.replace(/^#/, '') : '',
-        hostname: urlParsingNode.hostname,
-        port: urlParsingNode.port,
-        pathname: (urlParsingNode.pathname.charAt(0) === '/') ?
-          urlParsingNode.pathname :
-          '/' + urlParsingNode.pathname
-      };
+    remove(name) {
+      this.write(name, '', Date.now() - 86400000);
     }
+  }
 
-    originURL = resolveURL(window.location.href);
+  :
 
-    /**
-    * Determine if a URL shares the same origin as the current location
-    *
-    * @param {String} requestURL The URL to test
-    * @returns {boolean} True if URL shares the same origin, otherwise false
-    */
-    return function isURLSameOrigin(requestURL) {
-      const parsed = (utils.isString(requestURL)) ? resolveURL(requestURL) : requestURL;
-      return (parsed.protocol === originURL.protocol &&
-          parsed.host === originURL.host);
-    };
-  })() :
-
-  // Non standard browser envs (web workers, react-native) lack needed support.
-  (function nonStandardBrowserEnv() {
-    return function isURLSameOrigin() {
-      return true;
-    };
-  })();
-
-function progressEventReducer(listener, isDownloadStream) {
-  let bytesNotified = 0;
-  const _speedometer = speedometer(50, 250);
-
-  return e => {
-    const loaded = e.loaded;
-    const total = e.lengthComputable ? e.total : undefined;
-    const progressBytes = loaded - bytesNotified;
-    const rate = _speedometer(progressBytes);
-    const inRange = loaded <= total;
-
-    bytesNotified = loaded;
-
-    const data = {
-      loaded,
-      total,
-      progress: total ? (loaded / total) : undefined,
-      bytes: progressBytes,
-      rate: rate ? rate : undefined,
-      estimated: rate && total && inRange ? (total - loaded) / rate : undefined,
-      event: e
-    };
-
-    data[isDownloadStream ? 'download' : 'upload'] = true;
-
-    listener(data);
+  // Non-standard browser env (web workers, react-native) lack needed support.
+  {
+    write() {},
+    read() {
+      return null;
+    },
+    remove() {}
   };
+
+const headersToObject = (thing) => thing instanceof AxiosHeaders$1 ? { ...thing } : thing;
+
+/**
+ * Config-specific merge-function which creates a new config-object
+ * by merging two configuration objects together.
+ *
+ * @param {Object} config1
+ * @param {Object} config2
+ *
+ * @returns {Object} New object resulting from merging config2 to config1
+ */
+function mergeConfig(config1, config2) {
+  // eslint-disable-next-line no-param-reassign
+  config2 = config2 || {};
+  const config = {};
+
+  function getMergedValue(target, source, prop, caseless) {
+    if (utils$1.isPlainObject(target) && utils$1.isPlainObject(source)) {
+      return utils$1.merge.call({caseless}, target, source);
+    } else if (utils$1.isPlainObject(source)) {
+      return utils$1.merge({}, source);
+    } else if (utils$1.isArray(source)) {
+      return source.slice();
+    }
+    return source;
+  }
+
+  // eslint-disable-next-line consistent-return
+  function mergeDeepProperties(a, b, prop , caseless) {
+    if (!utils$1.isUndefined(b)) {
+      return getMergedValue(a, b, prop , caseless);
+    } else if (!utils$1.isUndefined(a)) {
+      return getMergedValue(undefined, a, prop , caseless);
+    }
+  }
+
+  // eslint-disable-next-line consistent-return
+  function valueFromConfig2(a, b) {
+    if (!utils$1.isUndefined(b)) {
+      return getMergedValue(undefined, b);
+    }
+  }
+
+  // eslint-disable-next-line consistent-return
+  function defaultToConfig2(a, b) {
+    if (!utils$1.isUndefined(b)) {
+      return getMergedValue(undefined, b);
+    } else if (!utils$1.isUndefined(a)) {
+      return getMergedValue(undefined, a);
+    }
+  }
+
+  // eslint-disable-next-line consistent-return
+  function mergeDirectKeys(a, b, prop) {
+    if (prop in config2) {
+      return getMergedValue(a, b);
+    } else if (prop in config1) {
+      return getMergedValue(undefined, a);
+    }
+  }
+
+  const mergeMap = {
+    url: valueFromConfig2,
+    method: valueFromConfig2,
+    data: valueFromConfig2,
+    baseURL: defaultToConfig2,
+    transformRequest: defaultToConfig2,
+    transformResponse: defaultToConfig2,
+    paramsSerializer: defaultToConfig2,
+    timeout: defaultToConfig2,
+    timeoutMessage: defaultToConfig2,
+    withCredentials: defaultToConfig2,
+    withXSRFToken: defaultToConfig2,
+    adapter: defaultToConfig2,
+    responseType: defaultToConfig2,
+    xsrfCookieName: defaultToConfig2,
+    xsrfHeaderName: defaultToConfig2,
+    onUploadProgress: defaultToConfig2,
+    onDownloadProgress: defaultToConfig2,
+    decompress: defaultToConfig2,
+    maxContentLength: defaultToConfig2,
+    maxBodyLength: defaultToConfig2,
+    beforeRedirect: defaultToConfig2,
+    transport: defaultToConfig2,
+    httpAgent: defaultToConfig2,
+    httpsAgent: defaultToConfig2,
+    cancelToken: defaultToConfig2,
+    socketPath: defaultToConfig2,
+    responseEncoding: defaultToConfig2,
+    validateStatus: mergeDirectKeys,
+    headers: (a, b , prop) => mergeDeepProperties(headersToObject(a), headersToObject(b),prop, true)
+  };
+
+  utils$1.forEach(Object.keys(Object.assign({}, config1, config2)), function computeConfigValue(prop) {
+    const merge = mergeMap[prop] || mergeDeepProperties;
+    const configValue = merge(config1[prop], config2[prop], prop);
+    (utils$1.isUndefined(configValue) && merge !== mergeDirectKeys) || (config[prop] = configValue);
+  });
+
+  return config;
 }
+
+const resolveConfig = (config) => {
+  const newConfig = mergeConfig({}, config);
+
+  let {data, withXSRFToken, xsrfHeaderName, xsrfCookieName, headers, auth} = newConfig;
+
+  newConfig.headers = headers = AxiosHeaders$1.from(headers);
+
+  newConfig.url = buildURL(buildFullPath(newConfig.baseURL, newConfig.url, newConfig.allowAbsoluteUrls), config.params, config.paramsSerializer);
+
+  // HTTP basic authentication
+  if (auth) {
+    headers.set('Authorization', 'Basic ' +
+      btoa((auth.username || '') + ':' + (auth.password ? unescape(encodeURIComponent(auth.password)) : ''))
+    );
+  }
+
+  let contentType;
+
+  if (utils$1.isFormData(data)) {
+    if (platform.hasStandardBrowserEnv || platform.hasStandardBrowserWebWorkerEnv) {
+      headers.setContentType(undefined); // Let the browser set it
+    } else if ((contentType = headers.getContentType()) !== false) {
+      // fix semicolon duplication issue for ReactNative FormData implementation
+      const [type, ...tokens] = contentType ? contentType.split(';').map(token => token.trim()).filter(Boolean) : [];
+      headers.setContentType([type || 'multipart/form-data', ...tokens].join('; '));
+    }
+  }
+
+  // Add xsrf header
+  // This is only done if running in a standard browser environment.
+  // Specifically not if we're in a web worker, or react-native.
+
+  if (platform.hasStandardBrowserEnv) {
+    withXSRFToken && utils$1.isFunction(withXSRFToken) && (withXSRFToken = withXSRFToken(newConfig));
+
+    if (withXSRFToken || (withXSRFToken !== false && isURLSameOrigin(newConfig.url))) {
+      // Add xsrf header
+      const xsrfValue = xsrfHeaderName && xsrfCookieName && cookies.read(xsrfCookieName);
+
+      if (xsrfValue) {
+        headers.set(xsrfHeaderName, xsrfValue);
+      }
+    }
+  }
+
+  return newConfig;
+};
 
 const isXHRAdapterSupported = typeof XMLHttpRequest !== 'undefined';
 
 const xhrAdapter = isXHRAdapterSupported && function (config) {
   return new Promise(function dispatchXhrRequest(resolve, reject) {
-    let requestData = config.data;
-    const requestHeaders = AxiosHeaders$1.from(config.headers).normalize();
-    const responseType = config.responseType;
+    const _config = resolveConfig(config);
+    let requestData = _config.data;
+    const requestHeaders = AxiosHeaders$1.from(_config.headers).normalize();
+    let {responseType, onUploadProgress, onDownloadProgress} = _config;
     let onCanceled;
+    let uploadThrottled, downloadThrottled;
+    let flushUpload, flushDownload;
+
     function done() {
-      if (config.cancelToken) {
-        config.cancelToken.unsubscribe(onCanceled);
-      }
+      flushUpload && flushUpload(); // flush events
+      flushDownload && flushDownload(); // flush events
 
-      if (config.signal) {
-        config.signal.removeEventListener('abort', onCanceled);
-      }
-    }
+      _config.cancelToken && _config.cancelToken.unsubscribe(onCanceled);
 
-    if (utils.isFormData(requestData) && (platform.isStandardBrowserEnv || platform.isStandardBrowserWebWorkerEnv)) {
-      requestHeaders.setContentType(false); // Let the browser set it
+      _config.signal && _config.signal.removeEventListener('abort', onCanceled);
     }
 
     let request = new XMLHttpRequest();
 
-    // HTTP basic authentication
-    if (config.auth) {
-      const username = config.auth.username || '';
-      const password = config.auth.password ? unescape(encodeURIComponent(config.auth.password)) : '';
-      requestHeaders.set('Authorization', 'Basic ' + btoa(username + ':' + password));
-    }
-
-    const fullPath = buildFullPath(config.baseURL, config.url);
-
-    request.open(config.method.toUpperCase(), buildURL(fullPath, config.params, config.paramsSerializer), true);
+    request.open(_config.method.toUpperCase(), _config.url, true);
 
     // Set the request timeout in MS
-    request.timeout = config.timeout;
+    request.timeout = _config.timeout;
 
     function onloadend() {
       if (!request) {
@@ -195667,10 +204026,10 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
 
     // Handle timeout
     request.ontimeout = function handleTimeout() {
-      let timeoutErrorMessage = config.timeout ? 'timeout of ' + config.timeout + 'ms exceeded' : 'timeout exceeded';
-      const transitional = config.transitional || transitionalDefaults;
-      if (config.timeoutErrorMessage) {
-        timeoutErrorMessage = config.timeoutErrorMessage;
+      let timeoutErrorMessage = _config.timeout ? 'timeout of ' + _config.timeout + 'ms exceeded' : 'timeout exceeded';
+      const transitional = _config.transitional || transitionalDefaults;
+      if (_config.timeoutErrorMessage) {
+        timeoutErrorMessage = _config.timeoutErrorMessage;
       }
       reject(new AxiosError(
         timeoutErrorMessage,
@@ -195682,50 +204041,42 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
       request = null;
     };
 
-    // Add xsrf header
-    // This is only done if running in a standard browser environment.
-    // Specifically not if we're in a web worker, or react-native.
-    if (platform.isStandardBrowserEnv) {
-      // Add xsrf header
-      const xsrfValue = (config.withCredentials || isURLSameOrigin(fullPath))
-        && config.xsrfCookieName && cookies.read(config.xsrfCookieName);
-
-      if (xsrfValue) {
-        requestHeaders.set(config.xsrfHeaderName, xsrfValue);
-      }
-    }
-
     // Remove Content-Type if data is undefined
     requestData === undefined && requestHeaders.setContentType(null);
 
     // Add headers to the request
     if ('setRequestHeader' in request) {
-      utils.forEach(requestHeaders.toJSON(), function setRequestHeader(val, key) {
+      utils$1.forEach(requestHeaders.toJSON(), function setRequestHeader(val, key) {
         request.setRequestHeader(key, val);
       });
     }
 
     // Add withCredentials to request if needed
-    if (!utils.isUndefined(config.withCredentials)) {
-      request.withCredentials = !!config.withCredentials;
+    if (!utils$1.isUndefined(_config.withCredentials)) {
+      request.withCredentials = !!_config.withCredentials;
     }
 
     // Add responseType to request if needed
     if (responseType && responseType !== 'json') {
-      request.responseType = config.responseType;
+      request.responseType = _config.responseType;
     }
 
     // Handle progress if needed
-    if (typeof config.onDownloadProgress === 'function') {
-      request.addEventListener('progress', progressEventReducer(config.onDownloadProgress, true));
+    if (onDownloadProgress) {
+      ([downloadThrottled, flushDownload] = progressEventReducer(onDownloadProgress, true));
+      request.addEventListener('progress', downloadThrottled);
     }
 
     // Not all browsers support upload events
-    if (typeof config.onUploadProgress === 'function' && request.upload) {
-      request.upload.addEventListener('progress', progressEventReducer(config.onUploadProgress));
+    if (onUploadProgress && request.upload) {
+      ([uploadThrottled, flushUpload] = progressEventReducer(onUploadProgress));
+
+      request.upload.addEventListener('progress', uploadThrottled);
+
+      request.upload.addEventListener('loadend', flushUpload);
     }
 
-    if (config.cancelToken || config.signal) {
+    if (_config.cancelToken || _config.signal) {
       // Handle cancellation
       // eslint-disable-next-line func-names
       onCanceled = cancel => {
@@ -195737,13 +204088,13 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
         request = null;
       };
 
-      config.cancelToken && config.cancelToken.subscribe(onCanceled);
-      if (config.signal) {
-        config.signal.aborted ? onCanceled() : config.signal.addEventListener('abort', onCanceled);
+      _config.cancelToken && _config.cancelToken.subscribe(onCanceled);
+      if (_config.signal) {
+        _config.signal.aborted ? onCanceled() : _config.signal.addEventListener('abort', onCanceled);
       }
     }
 
-    const protocol = parseProtocol(fullPath);
+    const protocol = parseProtocol(_config.url);
 
     if (protocol && platform.protocols.indexOf(protocol) === -1) {
       reject(new AxiosError('Unsupported protocol ' + protocol + ':', AxiosError.ERR_BAD_REQUEST, config));
@@ -195756,13 +204107,364 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
   });
 };
 
-const knownAdapters = {
-  http: httpAdapter,
-  xhr: xhrAdapter
+const composeSignals = (signals, timeout) => {
+  const {length} = (signals = signals ? signals.filter(Boolean) : []);
+
+  if (timeout || length) {
+    let controller = new AbortController();
+
+    let aborted;
+
+    const onabort = function (reason) {
+      if (!aborted) {
+        aborted = true;
+        unsubscribe();
+        const err = reason instanceof Error ? reason : this.reason;
+        controller.abort(err instanceof AxiosError ? err : new CanceledError(err instanceof Error ? err.message : err));
+      }
+    };
+
+    let timer = timeout && setTimeout(() => {
+      timer = null;
+      onabort(new AxiosError(`timeout ${timeout} of ms exceeded`, AxiosError.ETIMEDOUT));
+    }, timeout);
+
+    const unsubscribe = () => {
+      if (signals) {
+        timer && clearTimeout(timer);
+        timer = null;
+        signals.forEach(signal => {
+          signal.unsubscribe ? signal.unsubscribe(onabort) : signal.removeEventListener('abort', onabort);
+        });
+        signals = null;
+      }
+    };
+
+    signals.forEach((signal) => signal.addEventListener('abort', onabort));
+
+    const {signal} = controller;
+
+    signal.unsubscribe = () => utils$1.asap(unsubscribe);
+
+    return signal;
+  }
 };
 
-utils.forEach(knownAdapters, (fn, value) => {
-  if(fn) {
+const composeSignals$1 = composeSignals;
+
+const streamChunk = function* (chunk, chunkSize) {
+  let len = chunk.byteLength;
+
+  if (!chunkSize || len < chunkSize) {
+    yield chunk;
+    return;
+  }
+
+  let pos = 0;
+  let end;
+
+  while (pos < len) {
+    end = pos + chunkSize;
+    yield chunk.slice(pos, end);
+    pos = end;
+  }
+};
+
+const readBytes = async function* (iterable, chunkSize) {
+  for await (const chunk of readStream(iterable)) {
+    yield* streamChunk(chunk, chunkSize);
+  }
+};
+
+const readStream = async function* (stream) {
+  if (stream[Symbol.asyncIterator]) {
+    yield* stream;
+    return;
+  }
+
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const {done, value} = await reader.read();
+      if (done) {
+        break;
+      }
+      yield value;
+    }
+  } finally {
+    await reader.cancel();
+  }
+};
+
+const trackStream = (stream, chunkSize, onProgress, onFinish) => {
+  const iterator = readBytes(stream, chunkSize);
+
+  let bytes = 0;
+  let done;
+  let _onFinish = (e) => {
+    if (!done) {
+      done = true;
+      onFinish && onFinish(e);
+    }
+  };
+
+  return new ReadableStream({
+    async pull(controller) {
+      try {
+        const {done, value} = await iterator.next();
+
+        if (done) {
+         _onFinish();
+          controller.close();
+          return;
+        }
+
+        let len = value.byteLength;
+        if (onProgress) {
+          let loadedBytes = bytes += len;
+          onProgress(loadedBytes);
+        }
+        controller.enqueue(new Uint8Array(value));
+      } catch (err) {
+        _onFinish(err);
+        throw err;
+      }
+    },
+    cancel(reason) {
+      _onFinish(reason);
+      return iterator.return();
+    }
+  }, {
+    highWaterMark: 2
+  })
+};
+
+const isFetchSupported = typeof fetch === 'function' && typeof Request === 'function' && typeof Response === 'function';
+const isReadableStreamSupported = isFetchSupported && typeof ReadableStream === 'function';
+
+// used only inside the fetch adapter
+const encodeText = isFetchSupported && (typeof TextEncoder === 'function' ?
+    ((encoder) => (str) => encoder.encode(str))(new TextEncoder()) :
+    async (str) => new Uint8Array(await new Response(str).arrayBuffer())
+);
+
+const test = (fn, ...args) => {
+  try {
+    return !!fn(...args);
+  } catch (e) {
+    return false
+  }
+};
+
+const supportsRequestStream = isReadableStreamSupported && test(() => {
+  let duplexAccessed = false;
+
+  const hasContentType = new Request(platform.origin, {
+    body: new ReadableStream(),
+    method: 'POST',
+    get duplex() {
+      duplexAccessed = true;
+      return 'half';
+    },
+  }).headers.has('Content-Type');
+
+  return duplexAccessed && !hasContentType;
+});
+
+const DEFAULT_CHUNK_SIZE = 64 * 1024;
+
+const supportsResponseStream = isReadableStreamSupported &&
+  test(() => utils$1.isReadableStream(new Response('').body));
+
+
+const resolvers = {
+  stream: supportsResponseStream && ((res) => res.body)
+};
+
+isFetchSupported && (((res) => {
+  ['text', 'arrayBuffer', 'blob', 'formData', 'stream'].forEach(type => {
+    !resolvers[type] && (resolvers[type] = utils$1.isFunction(res[type]) ? (res) => res[type]() :
+      (_, config) => {
+        throw new AxiosError(`Response type '${type}' is not supported`, AxiosError.ERR_NOT_SUPPORT, config);
+      });
+  });
+})(new Response));
+
+const getBodyLength = async (body) => {
+  if (body == null) {
+    return 0;
+  }
+
+  if(utils$1.isBlob(body)) {
+    return body.size;
+  }
+
+  if(utils$1.isSpecCompliantForm(body)) {
+    const _request = new Request(platform.origin, {
+      method: 'POST',
+      body,
+    });
+    return (await _request.arrayBuffer()).byteLength;
+  }
+
+  if(utils$1.isArrayBufferView(body) || utils$1.isArrayBuffer(body)) {
+    return body.byteLength;
+  }
+
+  if(utils$1.isURLSearchParams(body)) {
+    body = body + '';
+  }
+
+  if(utils$1.isString(body)) {
+    return (await encodeText(body)).byteLength;
+  }
+};
+
+const resolveBodyLength = async (headers, body) => {
+  const length = utils$1.toFiniteNumber(headers.getContentLength());
+
+  return length == null ? getBodyLength(body) : length;
+};
+
+const fetchAdapter = isFetchSupported && (async (config) => {
+  let {
+    url,
+    method,
+    data,
+    signal,
+    cancelToken,
+    timeout,
+    onDownloadProgress,
+    onUploadProgress,
+    responseType,
+    headers,
+    withCredentials = 'same-origin',
+    fetchOptions
+  } = resolveConfig(config);
+
+  responseType = responseType ? (responseType + '').toLowerCase() : 'text';
+
+  let composedSignal = composeSignals$1([signal, cancelToken && cancelToken.toAbortSignal()], timeout);
+
+  let request;
+
+  const unsubscribe = composedSignal && composedSignal.unsubscribe && (() => {
+      composedSignal.unsubscribe();
+  });
+
+  let requestContentLength;
+
+  try {
+    if (
+      onUploadProgress && supportsRequestStream && method !== 'get' && method !== 'head' &&
+      (requestContentLength = await resolveBodyLength(headers, data)) !== 0
+    ) {
+      let _request = new Request(url, {
+        method: 'POST',
+        body: data,
+        duplex: "half"
+      });
+
+      let contentTypeHeader;
+
+      if (utils$1.isFormData(data) && (contentTypeHeader = _request.headers.get('content-type'))) {
+        headers.setContentType(contentTypeHeader);
+      }
+
+      if (_request.body) {
+        const [onProgress, flush] = progressEventDecorator(
+          requestContentLength,
+          progressEventReducer(asyncDecorator(onUploadProgress))
+        );
+
+        data = trackStream(_request.body, DEFAULT_CHUNK_SIZE, onProgress, flush);
+      }
+    }
+
+    if (!utils$1.isString(withCredentials)) {
+      withCredentials = withCredentials ? 'include' : 'omit';
+    }
+
+    // Cloudflare Workers throws when credentials are defined
+    // see https://github.com/cloudflare/workerd/issues/902
+    const isCredentialsSupported = "credentials" in Request.prototype;
+    request = new Request(url, {
+      ...fetchOptions,
+      signal: composedSignal,
+      method: method.toUpperCase(),
+      headers: headers.normalize().toJSON(),
+      body: data,
+      duplex: "half",
+      credentials: isCredentialsSupported ? withCredentials : undefined
+    });
+
+    let response = await fetch(request);
+
+    const isStreamResponse = supportsResponseStream && (responseType === 'stream' || responseType === 'response');
+
+    if (supportsResponseStream && (onDownloadProgress || (isStreamResponse && unsubscribe))) {
+      const options = {};
+
+      ['status', 'statusText', 'headers'].forEach(prop => {
+        options[prop] = response[prop];
+      });
+
+      const responseContentLength = utils$1.toFiniteNumber(response.headers.get('content-length'));
+
+      const [onProgress, flush] = onDownloadProgress && progressEventDecorator(
+        responseContentLength,
+        progressEventReducer(asyncDecorator(onDownloadProgress), true)
+      ) || [];
+
+      response = new Response(
+        trackStream(response.body, DEFAULT_CHUNK_SIZE, onProgress, () => {
+          flush && flush();
+          unsubscribe && unsubscribe();
+        }),
+        options
+      );
+    }
+
+    responseType = responseType || 'text';
+
+    let responseData = await resolvers[utils$1.findKey(resolvers, responseType) || 'text'](response, config);
+
+    !isStreamResponse && unsubscribe && unsubscribe();
+
+    return await new Promise((resolve, reject) => {
+      settle(resolve, reject, {
+        data: responseData,
+        headers: AxiosHeaders$1.from(response.headers),
+        status: response.status,
+        statusText: response.statusText,
+        config,
+        request
+      });
+    })
+  } catch (err) {
+    unsubscribe && unsubscribe();
+
+    if (err && err.name === 'TypeError' && /Load failed|fetch/i.test(err.message)) {
+      throw Object.assign(
+        new AxiosError('Network Error', AxiosError.ERR_NETWORK, config, request),
+        {
+          cause: err.cause || err
+        }
+      )
+    }
+
+    throw AxiosError.from(err, err && err.code, config, request);
+  }
+});
+
+const knownAdapters = {
+  http: httpAdapter,
+  xhr: xhrAdapter,
+  fetch: fetchAdapter
+};
+
+utils$1.forEach(knownAdapters, (fn, value) => {
+  if (fn) {
     try {
       Object.defineProperty(fn, 'name', {value});
     } catch (e) {
@@ -195772,38 +204474,56 @@ utils.forEach(knownAdapters, (fn, value) => {
   }
 });
 
+const renderReason = (reason) => `- ${reason}`;
+
+const isResolvedHandle = (adapter) => utils$1.isFunction(adapter) || adapter === null || adapter === false;
+
 const adapters = {
   getAdapter: (adapters) => {
-    adapters = utils.isArray(adapters) ? adapters : [adapters];
+    adapters = utils$1.isArray(adapters) ? adapters : [adapters];
 
     const {length} = adapters;
     let nameOrAdapter;
     let adapter;
 
+    const rejectedReasons = {};
+
     for (let i = 0; i < length; i++) {
       nameOrAdapter = adapters[i];
-      if((adapter = utils.isString(nameOrAdapter) ? knownAdapters[nameOrAdapter.toLowerCase()] : nameOrAdapter)) {
+      let id;
+
+      adapter = nameOrAdapter;
+
+      if (!isResolvedHandle(nameOrAdapter)) {
+        adapter = knownAdapters[(id = String(nameOrAdapter)).toLowerCase()];
+
+        if (adapter === undefined) {
+          throw new AxiosError(`Unknown adapter '${id}'`);
+        }
+      }
+
+      if (adapter) {
         break;
       }
+
+      rejectedReasons[id || '#' + i] = adapter;
     }
 
     if (!adapter) {
-      if (adapter === false) {
-        throw new AxiosError(
-          `Adapter ${nameOrAdapter} is not supported by the environment`,
-          'ERR_NOT_SUPPORT'
+
+      const reasons = Object.entries(rejectedReasons)
+        .map(([id, state]) => `adapter ${id} ` +
+          (state === false ? 'is not supported by the environment' : 'is not available in the build')
         );
-      }
 
-      throw new Error(
-        utils.hasOwnProp(knownAdapters, nameOrAdapter) ?
-          `Adapter '${nameOrAdapter}' is not available in the build` :
-          `Unknown adapter '${nameOrAdapter}'`
+      let s = length ?
+        (reasons.length > 1 ? 'since :\n' + reasons.map(renderReason).join('\n') : ' ' + renderReason(reasons[0])) :
+        'as no adapter specified';
+
+      throw new AxiosError(
+        `There is no suitable adapter to dispatch the request ` + s,
+        'ERR_NOT_SUPPORT'
       );
-    }
-
-    if (!utils.isFunction(adapter)) {
-      throw new TypeError('adapter is not a function');
     }
 
     return adapter;
@@ -195884,107 +204604,6 @@ function dispatchRequest(config) {
   });
 }
 
-const headersToObject = (thing) => thing instanceof AxiosHeaders$1 ? thing.toJSON() : thing;
-
-/**
- * Config-specific merge-function which creates a new config-object
- * by merging two configuration objects together.
- *
- * @param {Object} config1
- * @param {Object} config2
- *
- * @returns {Object} New object resulting from merging config2 to config1
- */
-function mergeConfig(config1, config2) {
-  // eslint-disable-next-line no-param-reassign
-  config2 = config2 || {};
-  const config = {};
-
-  function getMergedValue(target, source, caseless) {
-    if (utils.isPlainObject(target) && utils.isPlainObject(source)) {
-      return utils.merge.call({caseless}, target, source);
-    } else if (utils.isPlainObject(source)) {
-      return utils.merge({}, source);
-    } else if (utils.isArray(source)) {
-      return source.slice();
-    }
-    return source;
-  }
-
-  // eslint-disable-next-line consistent-return
-  function mergeDeepProperties(a, b, caseless) {
-    if (!utils.isUndefined(b)) {
-      return getMergedValue(a, b, caseless);
-    } else if (!utils.isUndefined(a)) {
-      return getMergedValue(undefined, a, caseless);
-    }
-  }
-
-  // eslint-disable-next-line consistent-return
-  function valueFromConfig2(a, b) {
-    if (!utils.isUndefined(b)) {
-      return getMergedValue(undefined, b);
-    }
-  }
-
-  // eslint-disable-next-line consistent-return
-  function defaultToConfig2(a, b) {
-    if (!utils.isUndefined(b)) {
-      return getMergedValue(undefined, b);
-    } else if (!utils.isUndefined(a)) {
-      return getMergedValue(undefined, a);
-    }
-  }
-
-  // eslint-disable-next-line consistent-return
-  function mergeDirectKeys(a, b, prop) {
-    if (prop in config2) {
-      return getMergedValue(a, b);
-    } else if (prop in config1) {
-      return getMergedValue(undefined, a);
-    }
-  }
-
-  const mergeMap = {
-    url: valueFromConfig2,
-    method: valueFromConfig2,
-    data: valueFromConfig2,
-    baseURL: defaultToConfig2,
-    transformRequest: defaultToConfig2,
-    transformResponse: defaultToConfig2,
-    paramsSerializer: defaultToConfig2,
-    timeout: defaultToConfig2,
-    timeoutMessage: defaultToConfig2,
-    withCredentials: defaultToConfig2,
-    adapter: defaultToConfig2,
-    responseType: defaultToConfig2,
-    xsrfCookieName: defaultToConfig2,
-    xsrfHeaderName: defaultToConfig2,
-    onUploadProgress: defaultToConfig2,
-    onDownloadProgress: defaultToConfig2,
-    decompress: defaultToConfig2,
-    maxContentLength: defaultToConfig2,
-    maxBodyLength: defaultToConfig2,
-    beforeRedirect: defaultToConfig2,
-    transport: defaultToConfig2,
-    httpAgent: defaultToConfig2,
-    httpsAgent: defaultToConfig2,
-    cancelToken: defaultToConfig2,
-    socketPath: defaultToConfig2,
-    responseEncoding: defaultToConfig2,
-    validateStatus: mergeDirectKeys,
-    headers: (a, b) => mergeDeepProperties(headersToObject(a), headersToObject(b), true)
-  };
-
-  utils.forEach(Object.keys(config1).concat(Object.keys(config2)), function computeConfigValue(prop) {
-    const merge = mergeMap[prop] || mergeDeepProperties;
-    const configValue = merge(config1[prop], config2[prop], prop);
-    (utils.isUndefined(configValue) && merge !== mergeDirectKeys) || (config[prop] = configValue);
-  });
-
-  return config;
-}
-
 const validators$1 = {};
 
 // eslint-disable-next-line func-names
@@ -196032,6 +204651,14 @@ validators$1.transitional = function transitional(validator, version, message) {
 
     return validator ? validator(value, opt, opts) : true;
   };
+};
+
+validators$1.spelling = function spelling(correctSpelling) {
+  return (value, opt) => {
+    // eslint-disable-next-line no-console
+    console.warn(`${opt} is likely a misspelling of ${correctSpelling}`);
+    return true;
+  }
 };
 
 /**
@@ -196083,7 +204710,7 @@ const validators = validator.validators;
  */
 class Axios {
   constructor(instanceConfig) {
-    this.defaults = instanceConfig;
+    this.defaults = instanceConfig || {};
     this.interceptors = {
       request: new InterceptorManager$1(),
       response: new InterceptorManager$1()
@@ -196098,7 +204725,34 @@ class Axios {
    *
    * @returns {Promise} The Promise to be fulfilled
    */
-  request(configOrUrl, config) {
+  async request(configOrUrl, config) {
+    try {
+      return await this._request(configOrUrl, config);
+    } catch (err) {
+      if (err instanceof Error) {
+        let dummy = {};
+
+        Error.captureStackTrace ? Error.captureStackTrace(dummy) : (dummy = new Error());
+
+        // slice off the Error: ... line
+        const stack = dummy.stack ? dummy.stack.replace(/^.+\n/, '') : '';
+        try {
+          if (!err.stack) {
+            err.stack = stack;
+            // match without the 2 top stack lines
+          } else if (stack && !String(err.stack).endsWith(stack.replace(/^.+\n.+\n/, ''))) {
+            err.stack += '\n' + stack;
+          }
+        } catch (e) {
+          // ignore the case where "stack" is an un-writable property
+        }
+      }
+
+      throw err;
+    }
+  }
+
+  _request(configOrUrl, config) {
     /*eslint no-param-reassign:0*/
     // Allow for axios('example/url'[, config]) a la fetch API
     if (typeof configOrUrl === 'string') {
@@ -196121,7 +204775,7 @@ class Axios {
     }
 
     if (paramsSerializer != null) {
-      if (utils.isFunction(paramsSerializer)) {
+      if (utils$1.isFunction(paramsSerializer)) {
         config.paramsSerializer = {
           serialize: paramsSerializer
         };
@@ -196133,18 +204787,28 @@ class Axios {
       }
     }
 
+    // Set config.allowAbsoluteUrls
+    if (config.allowAbsoluteUrls !== undefined) ; else if (this.defaults.allowAbsoluteUrls !== undefined) {
+      config.allowAbsoluteUrls = this.defaults.allowAbsoluteUrls;
+    } else {
+      config.allowAbsoluteUrls = true;
+    }
+
+    validator.assertOptions(config, {
+      baseUrl: validators.spelling('baseURL'),
+      withXsrfToken: validators.spelling('withXSRFToken')
+    }, true);
+
     // Set config.method
     config.method = (config.method || this.defaults.method || 'get').toLowerCase();
 
-    let contextHeaders;
-
     // Flatten headers
-    contextHeaders = headers && utils.merge(
+    let contextHeaders = headers && utils$1.merge(
       headers.common,
       headers[config.method]
     );
 
-    contextHeaders && utils.forEach(
+    headers && utils$1.forEach(
       ['delete', 'get', 'head', 'post', 'put', 'patch', 'common'],
       (method) => {
         delete headers[method];
@@ -196225,13 +204889,13 @@ class Axios {
 
   getUri(config) {
     config = mergeConfig(this.defaults, config);
-    const fullPath = buildFullPath(config.baseURL, config.url);
+    const fullPath = buildFullPath(config.baseURL, config.url, config.allowAbsoluteUrls);
     return buildURL(fullPath, config.params, config.paramsSerializer);
   }
 }
 
 // Provide aliases for supported request methods
-utils.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData(method) {
+utils$1.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData(method) {
   /*eslint func-names:0*/
   Axios.prototype[method] = function(url, config) {
     return this.request(mergeConfig(config || {}, {
@@ -196242,7 +204906,7 @@ utils.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData
   };
 });
 
-utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
+utils$1.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
   /*eslint func-names:0*/
 
   function generateHTTPMethod(isForm) {
@@ -196365,6 +205029,20 @@ class CancelToken {
     }
   }
 
+  toAbortSignal() {
+    const controller = new AbortController();
+
+    const abort = (err) => {
+      controller.abort(err);
+    };
+
+    this.subscribe(abort);
+
+    controller.signal.unsubscribe = () => this.unsubscribe(abort);
+
+    return controller.signal;
+  }
+
   /**
    * Returns an object that contains a new `CancelToken` and a function that, when called,
    * cancels the `CancelToken`.
@@ -196418,7 +205096,7 @@ function spread(callback) {
  * @returns {boolean} True if the payload is an error thrown by Axios, otherwise false
  */
 function isAxiosError(payload) {
-  return utils.isObject(payload) && (payload.isAxiosError === true);
+  return utils$1.isObject(payload) && (payload.isAxiosError === true);
 }
 
 const HttpStatusCode = {
@@ -196505,10 +205183,10 @@ function createInstance(defaultConfig) {
   const instance = bind(Axios$1.prototype.request, context);
 
   // Copy axios.prototype to instance
-  utils.extend(instance, Axios$1.prototype, context, {allOwnKeys: true});
+  utils$1.extend(instance, Axios$1.prototype, context, {allOwnKeys: true});
 
   // Copy context to instance
-  utils.extend(instance, context, null, {allOwnKeys: true});
+  utils$1.extend(instance, context, null, {allOwnKeys: true});
 
   // Factory for creating new instances
   instance.create = function create(instanceConfig) {
@@ -196552,7 +205230,9 @@ axios.mergeConfig = mergeConfig;
 
 axios.AxiosHeaders = AxiosHeaders$1;
 
-axios.formToJSON = thing => formDataToJSON(utils.isHTMLForm(thing) ? new FormData(thing) : thing);
+axios.formToJSON = thing => formDataToJSON(utils$1.isHTMLForm(thing) ? new FormData(thing) : thing);
+
+axios.getAdapter = adapters.getAdapter;
 
 axios.HttpStatusCode = HttpStatusCode$1;
 
@@ -199413,6 +208093,86 @@ function fixResponseChunkedTransferBadEnding(request, errorCallback) {
 	});
 }
 
+
+/***/ }),
+
+/***/ 56671:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["的","一","是","在","不","了","有","和","人","这","中","大","为","上","个","国","我","以","要","他","时","来","用","们","生","到","作","地","于","出","就","分","对","成","会","可","主","发","年","动","同","工","也","能","下","过","子","说","产","种","面","而","方","后","多","定","行","学","法","所","民","得","经","十","三","之","进","着","等","部","度","家","电","力","里","如","水","化","高","自","二","理","起","小","物","现","实","加","量","都","两","体","制","机","当","使","点","从","业","本","去","把","性","好","应","开","它","合","还","因","由","其","些","然","前","外","天","政","四","日","那","社","义","事","平","形","相","全","表","间","样","与","关","各","重","新","线","内","数","正","心","反","你","明","看","原","又","么","利","比","或","但","质","气","第","向","道","命","此","变","条","只","没","结","解","问","意","建","月","公","无","系","军","很","情","者","最","立","代","想","已","通","并","提","直","题","党","程","展","五","果","料","象","员","革","位","入","常","文","总","次","品","式","活","设","及","管","特","件","长","求","老","头","基","资","边","流","路","级","少","图","山","统","接","知","较","将","组","见","计","别","她","手","角","期","根","论","运","农","指","几","九","区","强","放","决","西","被","干","做","必","战","先","回","则","任","取","据","处","队","南","给","色","光","门","即","保","治","北","造","百","规","热","领","七","海","口","东","导","器","压","志","世","金","增","争","济","阶","油","思","术","极","交","受","联","什","认","六","共","权","收","证","改","清","美","再","采","转","更","单","风","切","打","白","教","速","花","带","安","场","身","车","例","真","务","具","万","每","目","至","达","走","积","示","议","声","报","斗","完","类","八","离","华","名","确","才","科","张","信","马","节","话","米","整","空","元","况","今","集","温","传","土","许","步","群","广","石","记","需","段","研","界","拉","林","律","叫","且","究","观","越","织","装","影","算","低","持","音","众","书","布","复","容","儿","须","际","商","非","验","连","断","深","难","近","矿","千","周","委","素","技","备","半","办","青","省","列","习","响","约","支","般","史","感","劳","便","团","往","酸","历","市","克","何","除","消","构","府","称","太","准","精","值","号","率","族","维","划","选","标","写","存","候","毛","亲","快","效","斯","院","查","江","型","眼","王","按","格","养","易","置","派","层","片","始","却","专","状","育","厂","京","识","适","属","圆","包","火","住","调","满","县","局","照","参","红","细","引","听","该","铁","价","严","首","底","液","官","德","随","病","苏","失","尔","死","讲","配","女","黄","推","显","谈","罪","神","艺","呢","席","含","企","望","密","批","营","项","防","举","球","英","氧","势","告","李","台","落","木","帮","轮","破","亚","师","围","注","远","字","材","排","供","河","态","封","另","施","减","树","溶","怎","止","案","言","士","均","武","固","叶","鱼","波","视","仅","费","紧","爱","左","章","早","朝","害","续","轻","服","试","食","充","兵","源","判","护","司","足","某","练","差","致","板","田","降","黑","犯","负","击","范","继","兴","似","余","坚","曲","输","修","故","城","夫","够","送","笔","船","占","右","财","吃","富","春","职","觉","汉","画","功","巴","跟","虽","杂","飞","检","吸","助","升","阳","互","初","创","抗","考","投","坏","策","古","径","换","未","跑","留","钢","曾","端","责","站","简","述","钱","副","尽","帝","射","草","冲","承","独","令","限","阿","宣","环","双","请","超","微","让","控","州","良","轴","找","否","纪","益","依","优","顶","础","载","倒","房","突","坐","粉","敌","略","客","袁","冷","胜","绝","析","块","剂","测","丝","协","诉","念","陈","仍","罗","盐","友","洋","错","苦","夜","刑","移","频","逐","靠","混","母","短","皮","终","聚","汽","村","云","哪","既","距","卫","停","烈","央","察","烧","迅","境","若","印","洲","刻","括","激","孔","搞","甚","室","待","核","校","散","侵","吧","甲","游","久","菜","味","旧","模","湖","货","损","预","阻","毫","普","稳","乙","妈","植","息","扩","银","语","挥","酒","守","拿","序","纸","医","缺","雨","吗","针","刘","啊","急","唱","误","训","愿","审","附","获","茶","鲜","粮","斤","孩","脱","硫","肥","善","龙","演","父","渐","血","欢","械","掌","歌","沙","刚","攻","谓","盾","讨","晚","粒","乱","燃","矛","乎","杀","药","宁","鲁","贵","钟","煤","读","班","伯","香","介","迫","句","丰","培","握","兰","担","弦","蛋","沉","假","穿","执","答","乐","谁","顺","烟","缩","征","脸","喜","松","脚","困","异","免","背","星","福","买","染","井","概","慢","怕","磁","倍","祖","皇","促","静","补","评","翻","肉","践","尼","衣","宽","扬","棉","希","伤","操","垂","秋","宜","氢","套","督","振","架","亮","末","宪","庆","编","牛","触","映","雷","销","诗","座","居","抓","裂","胞","呼","娘","景","威","绿","晶","厚","盟","衡","鸡","孙","延","危","胶","屋","乡","临","陆","顾","掉","呀","灯","岁","措","束","耐","剧","玉","赵","跳","哥","季","课","凯","胡","额","款","绍","卷","齐","伟","蒸","殖","永","宗","苗","川","炉","岩","弱","零","杨","奏","沿","露","杆","探","滑","镇","饭","浓","航","怀","赶","库","夺","伊","灵","税","途","灭","赛","归","召","鼓","播","盘","裁","险","康","唯","录","菌","纯","借","糖","盖","横","符","私","努","堂","域","枪","润","幅","哈","竟","熟","虫","泽","脑","壤","碳","欧","遍","侧","寨","敢","彻","虑","斜","薄","庭","纳","弹","饲","伸","折","麦","湿","暗","荷","瓦","塞","床","筑","恶","户","访","塔","奇","透","梁","刀","旋","迹","卡","氯","遇","份","毒","泥","退","洗","摆","灰","彩","卖","耗","夏","择","忙","铜","献","硬","予","繁","圈","雪","函","亦","抽","篇","阵","阴","丁","尺","追","堆","雄","迎","泛","爸","楼","避","谋","吨","野","猪","旗","累","偏","典","馆","索","秦","脂","潮","爷","豆","忽","托","惊","塑","遗","愈","朱","替","纤","粗","倾","尚","痛","楚","谢","奋","购","磨","君","池","旁","碎","骨","监","捕","弟","暴","割","贯","殊","释","词","亡","壁","顿","宝","午","尘","闻","揭","炮","残","冬","桥","妇","警","综","招","吴","付","浮","遭","徐","您","摇","谷","赞","箱","隔","订","男","吹","园","纷","唐","败","宋","玻","巨","耕","坦","荣","闭","湾","键","凡","驻","锅","救","恩","剥","凝","碱","齿","截","炼","麻","纺","禁","废","盛","版","缓","净","睛","昌","婚","涉","筒","嘴","插","岸","朗","庄","街","藏","姑","贸","腐","奴","啦","惯","乘","伙","恢","匀","纱","扎","辩","耳","彪","臣","亿","璃","抵","脉","秀","萨","俄","网","舞","店","喷","纵","寸","汗","挂","洪","贺","闪","柬","爆","烯","津","稻","墙","软","勇","像","滚","厘","蒙","芳","肯","坡","柱","荡","腿","仪","旅","尾","轧","冰","贡","登","黎","削","钻","勒","逃","障","氨","郭","峰","币","港","伏","轨","亩","毕","擦","莫","刺","浪","秘","援","株","健","售","股","岛","甘","泡","睡","童","铸","汤","阀","休","汇","舍","牧","绕","炸","哲","磷","绩","朋","淡","尖","启","陷","柴","呈","徒","颜","泪","稍","忘","泵","蓝","拖","洞","授","镜","辛","壮","锋","贫","虚","弯","摩","泰","幼","廷","尊","窗","纲","弄","隶","疑","氏","宫","姐","震","瑞","怪","尤","琴","循","描","膜","违","夹","腰","缘","珠","穷","森","枝","竹","沟","催","绳","忆","邦","剩","幸","浆","栏","拥","牙","贮","礼","滤","钠","纹","罢","拍","咱","喊","袖","埃","勤","罚","焦","潜","伍","墨","欲","缝","姓","刊","饱","仿","奖","铝","鬼","丽","跨","默","挖","链","扫","喝","袋","炭","污","幕","诸","弧","励","梅","奶","洁","灾","舟","鉴","苯","讼","抱","毁","懂","寒","智","埔","寄","届","跃","渡","挑","丹","艰","贝","碰","拔","爹","戴","码","梦","芽","熔","赤","渔","哭","敬","颗","奔","铅","仲","虎","稀","妹","乏","珍","申","桌","遵","允","隆","螺","仓","魏","锐","晓","氮","兼","隐","碍","赫","拨","忠","肃","缸","牵","抢","博","巧","壳","兄","杜","讯","诚","碧","祥","柯","页","巡","矩","悲","灌","龄","伦","票","寻","桂","铺","圣","恐","恰","郑","趣","抬","荒","腾","贴","柔","滴","猛","阔","辆","妻","填","撤","储","签","闹","扰","紫","砂","递","戏","吊","陶","伐","喂","疗","瓶","婆","抚","臂","摸","忍","虾","蜡","邻","胸","巩","挤","偶","弃","槽","劲","乳","邓","吉","仁","烂","砖","租","乌","舰","伴","瓜","浅","丙","暂","燥","橡","柳","迷","暖","牌","秧","胆","详","簧","踏","瓷","谱","呆","宾","糊","洛","辉","愤","竞","隙","怒","粘","乃","绪","肩","籍","敏","涂","熙","皆","侦","悬","掘","享","纠","醒","狂","锁","淀","恨","牲","霸","爬","赏","逆","玩","陵","祝","秒","浙","貌","役","彼","悉","鸭","趋","凤","晨","畜","辈","秩","卵","署","梯","炎","滩","棋","驱","筛","峡","冒","啥","寿","译","浸","泉","帽","迟","硅","疆","贷","漏","稿","冠","嫩","胁","芯","牢","叛","蚀","奥","鸣","岭","羊","凭","串","塘","绘","酵","融","盆","锡","庙","筹","冻","辅","摄","袭","筋","拒","僚","旱","钾","鸟","漆","沈","眉","疏","添","棒","穗","硝","韩","逼","扭","侨","凉","挺","碗","栽","炒","杯","患","馏","劝","豪","辽","勃","鸿","旦","吏","拜","狗","埋","辊","掩","饮","搬","骂","辞","勾","扣","估","蒋","绒","雾","丈","朵","姆","拟","宇","辑","陕","雕","偿","蓄","崇","剪","倡","厅","咬","驶","薯","刷","斥","番","赋","奉","佛","浇","漫","曼","扇","钙","桃","扶","仔","返","俗","亏","腔","鞋","棱","覆","框","悄","叔","撞","骗","勘","旺","沸","孤","吐","孟","渠","屈","疾","妙","惜","仰","狠","胀","谐","抛","霉","桑","岗","嘛","衰","盗","渗","脏","赖","涌","甜","曹","阅","肌","哩","厉","烃","纬","毅","昨","伪","症","煮","叹","钉","搭","茎","笼","酷","偷","弓","锥","恒","杰","坑","鼻","翼","纶","叙","狱","逮","罐","络","棚","抑","膨","蔬","寺","骤","穆","冶","枯","册","尸","凸","绅","坯","牺","焰","轰","欣","晋","瘦","御","锭","锦","丧","旬","锻","垄","搜","扑","邀","亭","酯","迈","舒","脆","酶","闲","忧","酚","顽","羽","涨","卸","仗","陪","辟","惩","杭","姚","肚","捉","飘","漂","昆","欺","吾","郎","烷","汁","呵","饰","萧","雅","邮","迁","燕","撒","姻","赴","宴","烦","债","帐","斑","铃","旨","醇","董","饼","雏","姿","拌","傅","腹","妥","揉","贤","拆","歪","葡","胺","丢","浩","徽","昂","垫","挡","览","贪","慰","缴","汪","慌","冯","诺","姜","谊","凶","劣","诬","耀","昏","躺","盈","骑","乔","溪","丛","卢","抹","闷","咨","刮","驾","缆","悟","摘","铒","掷","颇","幻","柄","惠","惨","佳","仇","腊","窝","涤","剑","瞧","堡","泼","葱","罩","霍","捞","胎","苍","滨","俩","捅","湘","砍","霞","邵","萄","疯","淮","遂","熊","粪","烘","宿","档","戈","驳","嫂","裕","徙","箭","捐","肠","撑","晒","辨","殿","莲","摊","搅","酱","屏","疫","哀","蔡","堵","沫","皱","畅","叠","阁","莱","敲","辖","钩","痕","坝","巷","饿","祸","丘","玄","溜","曰","逻","彭","尝","卿","妨","艇","吞","韦","怨","矮","歇"]');
+
+/***/ }),
+
+/***/ 86963:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["的","一","是","在","不","了","有","和","人","這","中","大","為","上","個","國","我","以","要","他","時","來","用","們","生","到","作","地","於","出","就","分","對","成","會","可","主","發","年","動","同","工","也","能","下","過","子","說","產","種","面","而","方","後","多","定","行","學","法","所","民","得","經","十","三","之","進","著","等","部","度","家","電","力","裡","如","水","化","高","自","二","理","起","小","物","現","實","加","量","都","兩","體","制","機","當","使","點","從","業","本","去","把","性","好","應","開","它","合","還","因","由","其","些","然","前","外","天","政","四","日","那","社","義","事","平","形","相","全","表","間","樣","與","關","各","重","新","線","內","數","正","心","反","你","明","看","原","又","麼","利","比","或","但","質","氣","第","向","道","命","此","變","條","只","沒","結","解","問","意","建","月","公","無","系","軍","很","情","者","最","立","代","想","已","通","並","提","直","題","黨","程","展","五","果","料","象","員","革","位","入","常","文","總","次","品","式","活","設","及","管","特","件","長","求","老","頭","基","資","邊","流","路","級","少","圖","山","統","接","知","較","將","組","見","計","別","她","手","角","期","根","論","運","農","指","幾","九","區","強","放","決","西","被","幹","做","必","戰","先","回","則","任","取","據","處","隊","南","給","色","光","門","即","保","治","北","造","百","規","熱","領","七","海","口","東","導","器","壓","志","世","金","增","爭","濟","階","油","思","術","極","交","受","聯","什","認","六","共","權","收","證","改","清","美","再","採","轉","更","單","風","切","打","白","教","速","花","帶","安","場","身","車","例","真","務","具","萬","每","目","至","達","走","積","示","議","聲","報","鬥","完","類","八","離","華","名","確","才","科","張","信","馬","節","話","米","整","空","元","況","今","集","溫","傳","土","許","步","群","廣","石","記","需","段","研","界","拉","林","律","叫","且","究","觀","越","織","裝","影","算","低","持","音","眾","書","布","复","容","兒","須","際","商","非","驗","連","斷","深","難","近","礦","千","週","委","素","技","備","半","辦","青","省","列","習","響","約","支","般","史","感","勞","便","團","往","酸","歷","市","克","何","除","消","構","府","稱","太","準","精","值","號","率","族","維","劃","選","標","寫","存","候","毛","親","快","效","斯","院","查","江","型","眼","王","按","格","養","易","置","派","層","片","始","卻","專","狀","育","廠","京","識","適","屬","圓","包","火","住","調","滿","縣","局","照","參","紅","細","引","聽","該","鐵","價","嚴","首","底","液","官","德","隨","病","蘇","失","爾","死","講","配","女","黃","推","顯","談","罪","神","藝","呢","席","含","企","望","密","批","營","項","防","舉","球","英","氧","勢","告","李","台","落","木","幫","輪","破","亞","師","圍","注","遠","字","材","排","供","河","態","封","另","施","減","樹","溶","怎","止","案","言","士","均","武","固","葉","魚","波","視","僅","費","緊","愛","左","章","早","朝","害","續","輕","服","試","食","充","兵","源","判","護","司","足","某","練","差","致","板","田","降","黑","犯","負","擊","范","繼","興","似","餘","堅","曲","輸","修","故","城","夫","夠","送","筆","船","佔","右","財","吃","富","春","職","覺","漢","畫","功","巴","跟","雖","雜","飛","檢","吸","助","昇","陽","互","初","創","抗","考","投","壞","策","古","徑","換","未","跑","留","鋼","曾","端","責","站","簡","述","錢","副","盡","帝","射","草","衝","承","獨","令","限","阿","宣","環","雙","請","超","微","讓","控","州","良","軸","找","否","紀","益","依","優","頂","礎","載","倒","房","突","坐","粉","敵","略","客","袁","冷","勝","絕","析","塊","劑","測","絲","協","訴","念","陳","仍","羅","鹽","友","洋","錯","苦","夜","刑","移","頻","逐","靠","混","母","短","皮","終","聚","汽","村","雲","哪","既","距","衛","停","烈","央","察","燒","迅","境","若","印","洲","刻","括","激","孔","搞","甚","室","待","核","校","散","侵","吧","甲","遊","久","菜","味","舊","模","湖","貨","損","預","阻","毫","普","穩","乙","媽","植","息","擴","銀","語","揮","酒","守","拿","序","紙","醫","缺","雨","嗎","針","劉","啊","急","唱","誤","訓","願","審","附","獲","茶","鮮","糧","斤","孩","脫","硫","肥","善","龍","演","父","漸","血","歡","械","掌","歌","沙","剛","攻","謂","盾","討","晚","粒","亂","燃","矛","乎","殺","藥","寧","魯","貴","鐘","煤","讀","班","伯","香","介","迫","句","豐","培","握","蘭","擔","弦","蛋","沉","假","穿","執","答","樂","誰","順","煙","縮","徵","臉","喜","松","腳","困","異","免","背","星","福","買","染","井","概","慢","怕","磁","倍","祖","皇","促","靜","補","評","翻","肉","踐","尼","衣","寬","揚","棉","希","傷","操","垂","秋","宜","氫","套","督","振","架","亮","末","憲","慶","編","牛","觸","映","雷","銷","詩","座","居","抓","裂","胞","呼","娘","景","威","綠","晶","厚","盟","衡","雞","孫","延","危","膠","屋","鄉","臨","陸","顧","掉","呀","燈","歲","措","束","耐","劇","玉","趙","跳","哥","季","課","凱","胡","額","款","紹","卷","齊","偉","蒸","殖","永","宗","苗","川","爐","岩","弱","零","楊","奏","沿","露","桿","探","滑","鎮","飯","濃","航","懷","趕","庫","奪","伊","靈","稅","途","滅","賽","歸","召","鼓","播","盤","裁","險","康","唯","錄","菌","純","借","糖","蓋","橫","符","私","努","堂","域","槍","潤","幅","哈","竟","熟","蟲","澤","腦","壤","碳","歐","遍","側","寨","敢","徹","慮","斜","薄","庭","納","彈","飼","伸","折","麥","濕","暗","荷","瓦","塞","床","築","惡","戶","訪","塔","奇","透","梁","刀","旋","跡","卡","氯","遇","份","毒","泥","退","洗","擺","灰","彩","賣","耗","夏","擇","忙","銅","獻","硬","予","繁","圈","雪","函","亦","抽","篇","陣","陰","丁","尺","追","堆","雄","迎","泛","爸","樓","避","謀","噸","野","豬","旗","累","偏","典","館","索","秦","脂","潮","爺","豆","忽","托","驚","塑","遺","愈","朱","替","纖","粗","傾","尚","痛","楚","謝","奮","購","磨","君","池","旁","碎","骨","監","捕","弟","暴","割","貫","殊","釋","詞","亡","壁","頓","寶","午","塵","聞","揭","炮","殘","冬","橋","婦","警","綜","招","吳","付","浮","遭","徐","您","搖","谷","贊","箱","隔","訂","男","吹","園","紛","唐","敗","宋","玻","巨","耕","坦","榮","閉","灣","鍵","凡","駐","鍋","救","恩","剝","凝","鹼","齒","截","煉","麻","紡","禁","廢","盛","版","緩","淨","睛","昌","婚","涉","筒","嘴","插","岸","朗","莊","街","藏","姑","貿","腐","奴","啦","慣","乘","夥","恢","勻","紗","扎","辯","耳","彪","臣","億","璃","抵","脈","秀","薩","俄","網","舞","店","噴","縱","寸","汗","掛","洪","賀","閃","柬","爆","烯","津","稻","牆","軟","勇","像","滾","厘","蒙","芳","肯","坡","柱","盪","腿","儀","旅","尾","軋","冰","貢","登","黎","削","鑽","勒","逃","障","氨","郭","峰","幣","港","伏","軌","畝","畢","擦","莫","刺","浪","秘","援","株","健","售","股","島","甘","泡","睡","童","鑄","湯","閥","休","匯","舍","牧","繞","炸","哲","磷","績","朋","淡","尖","啟","陷","柴","呈","徒","顏","淚","稍","忘","泵","藍","拖","洞","授","鏡","辛","壯","鋒","貧","虛","彎","摩","泰","幼","廷","尊","窗","綱","弄","隸","疑","氏","宮","姐","震","瑞","怪","尤","琴","循","描","膜","違","夾","腰","緣","珠","窮","森","枝","竹","溝","催","繩","憶","邦","剩","幸","漿","欄","擁","牙","貯","禮","濾","鈉","紋","罷","拍","咱","喊","袖","埃","勤","罰","焦","潛","伍","墨","欲","縫","姓","刊","飽","仿","獎","鋁","鬼","麗","跨","默","挖","鏈","掃","喝","袋","炭","污","幕","諸","弧","勵","梅","奶","潔","災","舟","鑑","苯","訟","抱","毀","懂","寒","智","埔","寄","屆","躍","渡","挑","丹","艱","貝","碰","拔","爹","戴","碼","夢","芽","熔","赤","漁","哭","敬","顆","奔","鉛","仲","虎","稀","妹","乏","珍","申","桌","遵","允","隆","螺","倉","魏","銳","曉","氮","兼","隱","礙","赫","撥","忠","肅","缸","牽","搶","博","巧","殼","兄","杜","訊","誠","碧","祥","柯","頁","巡","矩","悲","灌","齡","倫","票","尋","桂","鋪","聖","恐","恰","鄭","趣","抬","荒","騰","貼","柔","滴","猛","闊","輛","妻","填","撤","儲","簽","鬧","擾","紫","砂","遞","戲","吊","陶","伐","餵","療","瓶","婆","撫","臂","摸","忍","蝦","蠟","鄰","胸","鞏","擠","偶","棄","槽","勁","乳","鄧","吉","仁","爛","磚","租","烏","艦","伴","瓜","淺","丙","暫","燥","橡","柳","迷","暖","牌","秧","膽","詳","簧","踏","瓷","譜","呆","賓","糊","洛","輝","憤","競","隙","怒","粘","乃","緒","肩","籍","敏","塗","熙","皆","偵","懸","掘","享","糾","醒","狂","鎖","淀","恨","牲","霸","爬","賞","逆","玩","陵","祝","秒","浙","貌","役","彼","悉","鴨","趨","鳳","晨","畜","輩","秩","卵","署","梯","炎","灘","棋","驅","篩","峽","冒","啥","壽","譯","浸","泉","帽","遲","矽","疆","貸","漏","稿","冠","嫩","脅","芯","牢","叛","蝕","奧","鳴","嶺","羊","憑","串","塘","繪","酵","融","盆","錫","廟","籌","凍","輔","攝","襲","筋","拒","僚","旱","鉀","鳥","漆","沈","眉","疏","添","棒","穗","硝","韓","逼","扭","僑","涼","挺","碗","栽","炒","杯","患","餾","勸","豪","遼","勃","鴻","旦","吏","拜","狗","埋","輥","掩","飲","搬","罵","辭","勾","扣","估","蔣","絨","霧","丈","朵","姆","擬","宇","輯","陝","雕","償","蓄","崇","剪","倡","廳","咬","駛","薯","刷","斥","番","賦","奉","佛","澆","漫","曼","扇","鈣","桃","扶","仔","返","俗","虧","腔","鞋","棱","覆","框","悄","叔","撞","騙","勘","旺","沸","孤","吐","孟","渠","屈","疾","妙","惜","仰","狠","脹","諧","拋","黴","桑","崗","嘛","衰","盜","滲","臟","賴","湧","甜","曹","閱","肌","哩","厲","烴","緯","毅","昨","偽","症","煮","嘆","釘","搭","莖","籠","酷","偷","弓","錐","恆","傑","坑","鼻","翼","綸","敘","獄","逮","罐","絡","棚","抑","膨","蔬","寺","驟","穆","冶","枯","冊","屍","凸","紳","坯","犧","焰","轟","欣","晉","瘦","禦","錠","錦","喪","旬","鍛","壟","搜","撲","邀","亭","酯","邁","舒","脆","酶","閒","憂","酚","頑","羽","漲","卸","仗","陪","闢","懲","杭","姚","肚","捉","飄","漂","昆","欺","吾","郎","烷","汁","呵","飾","蕭","雅","郵","遷","燕","撒","姻","赴","宴","煩","債","帳","斑","鈴","旨","醇","董","餅","雛","姿","拌","傅","腹","妥","揉","賢","拆","歪","葡","胺","丟","浩","徽","昂","墊","擋","覽","貪","慰","繳","汪","慌","馮","諾","姜","誼","兇","劣","誣","耀","昏","躺","盈","騎","喬","溪","叢","盧","抹","悶","諮","刮","駕","纜","悟","摘","鉺","擲","頗","幻","柄","惠","慘","佳","仇","臘","窩","滌","劍","瞧","堡","潑","蔥","罩","霍","撈","胎","蒼","濱","倆","捅","湘","砍","霞","邵","萄","瘋","淮","遂","熊","糞","烘","宿","檔","戈","駁","嫂","裕","徙","箭","捐","腸","撐","曬","辨","殿","蓮","攤","攪","醬","屏","疫","哀","蔡","堵","沫","皺","暢","疊","閣","萊","敲","轄","鉤","痕","壩","巷","餓","禍","丘","玄","溜","曰","邏","彭","嘗","卿","妨","艇","吞","韋","怨","矮","歇"]');
+
+/***/ }),
+
+/***/ 46906:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["abdikace","abeceda","adresa","agrese","akce","aktovka","alej","alkohol","amputace","ananas","andulka","anekdota","anketa","antika","anulovat","archa","arogance","asfalt","asistent","aspirace","astma","astronom","atlas","atletika","atol","autobus","azyl","babka","bachor","bacil","baculka","badatel","bageta","bagr","bahno","bakterie","balada","baletka","balkon","balonek","balvan","balza","bambus","bankomat","barbar","baret","barman","baroko","barva","baterka","batoh","bavlna","bazalka","bazilika","bazuka","bedna","beran","beseda","bestie","beton","bezinka","bezmoc","beztak","bicykl","bidlo","biftek","bikiny","bilance","biograf","biolog","bitva","bizon","blahobyt","blatouch","blecha","bledule","blesk","blikat","blizna","blokovat","bloudit","blud","bobek","bobr","bodlina","bodnout","bohatost","bojkot","bojovat","bokorys","bolest","borec","borovice","bota","boubel","bouchat","bouda","boule","bourat","boxer","bradavka","brambora","branka","bratr","brepta","briketa","brko","brloh","bronz","broskev","brunetka","brusinka","brzda","brzy","bublina","bubnovat","buchta","buditel","budka","budova","bufet","bujarost","bukvice","buldok","bulva","bunda","bunkr","burza","butik","buvol","buzola","bydlet","bylina","bytovka","bzukot","capart","carevna","cedr","cedule","cejch","cejn","cela","celer","celkem","celnice","cenina","cennost","cenovka","centrum","cenzor","cestopis","cetka","chalupa","chapadlo","charita","chata","chechtat","chemie","chichot","chirurg","chlad","chleba","chlubit","chmel","chmura","chobot","chochol","chodba","cholera","chomout","chopit","choroba","chov","chrapot","chrlit","chrt","chrup","chtivost","chudina","chutnat","chvat","chvilka","chvost","chyba","chystat","chytit","cibule","cigareta","cihelna","cihla","cinkot","cirkus","cisterna","citace","citrus","cizinec","cizost","clona","cokoliv","couvat","ctitel","ctnost","cudnost","cuketa","cukr","cupot","cvaknout","cval","cvik","cvrkot","cyklista","daleko","dareba","datel","datum","dcera","debata","dechovka","decibel","deficit","deflace","dekl","dekret","demokrat","deprese","derby","deska","detektiv","dikobraz","diktovat","dioda","diplom","disk","displej","divadlo","divoch","dlaha","dlouho","dluhopis","dnes","dobro","dobytek","docent","dochutit","dodnes","dohled","dohoda","dohra","dojem","dojnice","doklad","dokola","doktor","dokument","dolar","doleva","dolina","doma","dominant","domluvit","domov","donutit","dopad","dopis","doplnit","doposud","doprovod","dopustit","dorazit","dorost","dort","dosah","doslov","dostatek","dosud","dosyta","dotaz","dotek","dotknout","doufat","doutnat","dovozce","dozadu","doznat","dozorce","drahota","drak","dramatik","dravec","draze","drdol","drobnost","drogerie","drozd","drsnost","drtit","drzost","duben","duchovno","dudek","duha","duhovka","dusit","dusno","dutost","dvojice","dvorec","dynamit","ekolog","ekonomie","elektron","elipsa","email","emise","emoce","empatie","epizoda","epocha","epopej","epos","esej","esence","eskorta","eskymo","etiketa","euforie","evoluce","exekuce","exkurze","expedice","exploze","export","extrakt","facka","fajfka","fakulta","fanatik","fantazie","farmacie","favorit","fazole","federace","fejeton","fenka","fialka","figurant","filozof","filtr","finance","finta","fixace","fjord","flanel","flirt","flotila","fond","fosfor","fotbal","fotka","foton","frakce","freska","fronta","fukar","funkce","fyzika","galeje","garant","genetika","geolog","gilotina","glazura","glejt","golem","golfista","gotika","graf","gramofon","granule","grep","gril","grog","groteska","guma","hadice","hadr","hala","halenka","hanba","hanopis","harfa","harpuna","havran","hebkost","hejkal","hejno","hejtman","hektar","helma","hematom","herec","herna","heslo","hezky","historik","hladovka","hlasivky","hlava","hledat","hlen","hlodavec","hloh","hloupost","hltat","hlubina","hluchota","hmat","hmota","hmyz","hnis","hnojivo","hnout","hoblina","hoboj","hoch","hodiny","hodlat","hodnota","hodovat","hojnost","hokej","holinka","holka","holub","homole","honitba","honorace","horal","horda","horizont","horko","horlivec","hormon","hornina","horoskop","horstvo","hospoda","hostina","hotovost","houba","houf","houpat","houska","hovor","hradba","hranice","hravost","hrazda","hrbolek","hrdina","hrdlo","hrdost","hrnek","hrobka","hromada","hrot","hrouda","hrozen","hrstka","hrubost","hryzat","hubenost","hubnout","hudba","hukot","humr","husita","hustota","hvozd","hybnost","hydrant","hygiena","hymna","hysterik","idylka","ihned","ikona","iluze","imunita","infekce","inflace","inkaso","inovace","inspekce","internet","invalida","investor","inzerce","ironie","jablko","jachta","jahoda","jakmile","jakost","jalovec","jantar","jarmark","jaro","jasan","jasno","jatka","javor","jazyk","jedinec","jedle","jednatel","jehlan","jekot","jelen","jelito","jemnost","jenom","jepice","jeseter","jevit","jezdec","jezero","jinak","jindy","jinoch","jiskra","jistota","jitrnice","jizva","jmenovat","jogurt","jurta","kabaret","kabel","kabinet","kachna","kadet","kadidlo","kahan","kajak","kajuta","kakao","kaktus","kalamita","kalhoty","kalibr","kalnost","kamera","kamkoliv","kamna","kanibal","kanoe","kantor","kapalina","kapela","kapitola","kapka","kaple","kapota","kapr","kapusta","kapybara","karamel","karotka","karton","kasa","katalog","katedra","kauce","kauza","kavalec","kazajka","kazeta","kazivost","kdekoliv","kdesi","kedluben","kemp","keramika","kino","klacek","kladivo","klam","klapot","klasika","klaun","klec","klenba","klepat","klesnout","klid","klima","klisna","klobouk","klokan","klopa","kloub","klubovna","klusat","kluzkost","kmen","kmitat","kmotr","kniha","knot","koalice","koberec","kobka","kobliha","kobyla","kocour","kohout","kojenec","kokos","koktejl","kolaps","koleda","kolize","kolo","komando","kometa","komik","komnata","komora","kompas","komunita","konat","koncept","kondice","konec","konfese","kongres","konina","konkurs","kontakt","konzerva","kopanec","kopie","kopnout","koprovka","korbel","korektor","kormidlo","koroptev","korpus","koruna","koryto","korzet","kosatec","kostka","kotel","kotleta","kotoul","koukat","koupelna","kousek","kouzlo","kovboj","koza","kozoroh","krabice","krach","krajina","kralovat","krasopis","kravata","kredit","krejcar","kresba","kreveta","kriket","kritik","krize","krkavec","krmelec","krmivo","krocan","krok","kronika","kropit","kroupa","krovka","krtek","kruhadlo","krupice","krutost","krvinka","krychle","krypta","krystal","kryt","kudlanka","kufr","kujnost","kukla","kulajda","kulich","kulka","kulomet","kultura","kuna","kupodivu","kurt","kurzor","kutil","kvalita","kvasinka","kvestor","kynolog","kyselina","kytara","kytice","kytka","kytovec","kyvadlo","labrador","lachtan","ladnost","laik","lakomec","lamela","lampa","lanovka","lasice","laso","lastura","latinka","lavina","lebka","leckdy","leden","lednice","ledovka","ledvina","legenda","legie","legrace","lehce","lehkost","lehnout","lektvar","lenochod","lentilka","lepenka","lepidlo","letadlo","letec","letmo","letokruh","levhart","levitace","levobok","libra","lichotka","lidojed","lidskost","lihovina","lijavec","lilek","limetka","linie","linka","linoleum","listopad","litina","litovat","lobista","lodivod","logika","logoped","lokalita","loket","lomcovat","lopata","lopuch","lord","losos","lotr","loudal","louh","louka","louskat","lovec","lstivost","lucerna","lucifer","lump","lusk","lustrace","lvice","lyra","lyrika","lysina","madam","madlo","magistr","mahagon","majetek","majitel","majorita","makak","makovice","makrela","malba","malina","malovat","malvice","maminka","mandle","manko","marnost","masakr","maskot","masopust","matice","matrika","maturita","mazanec","mazivo","mazlit","mazurka","mdloba","mechanik","meditace","medovina","melasa","meloun","mentolka","metla","metoda","metr","mezera","migrace","mihnout","mihule","mikina","mikrofon","milenec","milimetr","milost","mimika","mincovna","minibar","minomet","minulost","miska","mistr","mixovat","mladost","mlha","mlhovina","mlok","mlsat","mluvit","mnich","mnohem","mobil","mocnost","modelka","modlitba","mohyla","mokro","molekula","momentka","monarcha","monokl","monstrum","montovat","monzun","mosaz","moskyt","most","motivace","motorka","motyka","moucha","moudrost","mozaika","mozek","mozol","mramor","mravenec","mrkev","mrtvola","mrzet","mrzutost","mstitel","mudrc","muflon","mulat","mumie","munice","muset","mutace","muzeum","muzikant","myslivec","mzda","nabourat","nachytat","nadace","nadbytek","nadhoz","nadobro","nadpis","nahlas","nahnat","nahodile","nahradit","naivita","najednou","najisto","najmout","naklonit","nakonec","nakrmit","nalevo","namazat","namluvit","nanometr","naoko","naopak","naostro","napadat","napevno","naplnit","napnout","naposled","naprosto","narodit","naruby","narychlo","nasadit","nasekat","naslepo","nastat","natolik","navenek","navrch","navzdory","nazvat","nebe","nechat","necky","nedaleko","nedbat","neduh","negace","nehet","nehoda","nejen","nejprve","neklid","nelibost","nemilost","nemoc","neochota","neonka","nepokoj","nerost","nerv","nesmysl","nesoulad","netvor","neuron","nevina","nezvykle","nicota","nijak","nikam","nikdy","nikl","nikterak","nitro","nocleh","nohavice","nominace","nora","norek","nositel","nosnost","nouze","noviny","novota","nozdra","nuda","nudle","nuget","nutit","nutnost","nutrie","nymfa","obal","obarvit","obava","obdiv","obec","obehnat","obejmout","obezita","obhajoba","obilnice","objasnit","objekt","obklopit","oblast","oblek","obliba","obloha","obluda","obnos","obohatit","obojek","obout","obrazec","obrna","obruba","obrys","obsah","obsluha","obstarat","obuv","obvaz","obvinit","obvod","obvykle","obyvatel","obzor","ocas","ocel","ocenit","ochladit","ochota","ochrana","ocitnout","odboj","odbyt","odchod","odcizit","odebrat","odeslat","odevzdat","odezva","odhadce","odhodit","odjet","odjinud","odkaz","odkoupit","odliv","odluka","odmlka","odolnost","odpad","odpis","odplout","odpor","odpustit","odpykat","odrazka","odsoudit","odstup","odsun","odtok","odtud","odvaha","odveta","odvolat","odvracet","odznak","ofina","ofsajd","ohlas","ohnisko","ohrada","ohrozit","ohryzek","okap","okenice","oklika","okno","okouzlit","okovy","okrasa","okres","okrsek","okruh","okupant","okurka","okusit","olejnina","olizovat","omak","omeleta","omezit","omladina","omlouvat","omluva","omyl","onehdy","opakovat","opasek","operace","opice","opilost","opisovat","opora","opozice","opravdu","oproti","orbital","orchestr","orgie","orlice","orloj","ortel","osada","oschnout","osika","osivo","oslava","oslepit","oslnit","oslovit","osnova","osoba","osolit","ospalec","osten","ostraha","ostuda","ostych","osvojit","oteplit","otisk","otop","otrhat","otrlost","otrok","otruby","otvor","ovanout","ovar","oves","ovlivnit","ovoce","oxid","ozdoba","pachatel","pacient","padouch","pahorek","pakt","palanda","palec","palivo","paluba","pamflet","pamlsek","panenka","panika","panna","panovat","panstvo","pantofle","paprika","parketa","parodie","parta","paruka","paryba","paseka","pasivita","pastelka","patent","patrona","pavouk","pazneht","pazourek","pecka","pedagog","pejsek","peklo","peloton","penalta","pendrek","penze","periskop","pero","pestrost","petarda","petice","petrolej","pevnina","pexeso","pianista","piha","pijavice","pikle","piknik","pilina","pilnost","pilulka","pinzeta","pipeta","pisatel","pistole","pitevna","pivnice","pivovar","placenta","plakat","plamen","planeta","plastika","platit","plavidlo","plaz","plech","plemeno","plenta","ples","pletivo","plevel","plivat","plnit","plno","plocha","plodina","plomba","plout","pluk","plyn","pobavit","pobyt","pochod","pocit","poctivec","podat","podcenit","podepsat","podhled","podivit","podklad","podmanit","podnik","podoba","podpora","podraz","podstata","podvod","podzim","poezie","pohanka","pohnutka","pohovor","pohroma","pohyb","pointa","pojistka","pojmout","pokazit","pokles","pokoj","pokrok","pokuta","pokyn","poledne","polibek","polknout","poloha","polynom","pomalu","pominout","pomlka","pomoc","pomsta","pomyslet","ponechat","ponorka","ponurost","popadat","popel","popisek","poplach","poprosit","popsat","popud","poradce","porce","porod","porucha","poryv","posadit","posed","posila","poskok","poslanec","posoudit","pospolu","postava","posudek","posyp","potah","potkan","potlesk","potomek","potrava","potupa","potvora","poukaz","pouto","pouzdro","povaha","povidla","povlak","povoz","povrch","povstat","povyk","povzdech","pozdrav","pozemek","poznatek","pozor","pozvat","pracovat","prahory","praktika","prales","praotec","praporek","prase","pravda","princip","prkno","probudit","procento","prodej","profese","prohra","projekt","prolomit","promile","pronikat","propad","prorok","prosba","proton","proutek","provaz","prskavka","prsten","prudkost","prut","prvek","prvohory","psanec","psovod","pstruh","ptactvo","puberta","puch","pudl","pukavec","puklina","pukrle","pult","pumpa","punc","pupen","pusa","pusinka","pustina","putovat","putyka","pyramida","pysk","pytel","racek","rachot","radiace","radnice","radon","raft","ragby","raketa","rakovina","rameno","rampouch","rande","rarach","rarita","rasovna","rastr","ratolest","razance","razidlo","reagovat","reakce","recept","redaktor","referent","reflex","rejnok","reklama","rekord","rekrut","rektor","reputace","revize","revma","revolver","rezerva","riskovat","riziko","robotika","rodokmen","rohovka","rokle","rokoko","romaneto","ropovod","ropucha","rorejs","rosol","rostlina","rotmistr","rotoped","rotunda","roubenka","roucho","roup","roura","rovina","rovnice","rozbor","rozchod","rozdat","rozeznat","rozhodce","rozinka","rozjezd","rozkaz","rozloha","rozmar","rozpad","rozruch","rozsah","roztok","rozum","rozvod","rubrika","ruchadlo","rukavice","rukopis","ryba","rybolov","rychlost","rydlo","rypadlo","rytina","ryzost","sadista","sahat","sako","samec","samizdat","samota","sanitka","sardinka","sasanka","satelit","sazba","sazenice","sbor","schovat","sebranka","secese","sedadlo","sediment","sedlo","sehnat","sejmout","sekera","sekta","sekunda","sekvoje","semeno","seno","servis","sesadit","seshora","seskok","seslat","sestra","sesuv","sesypat","setba","setina","setkat","setnout","setrvat","sever","seznam","shoda","shrnout","sifon","silnice","sirka","sirotek","sirup","situace","skafandr","skalisko","skanzen","skaut","skeptik","skica","skladba","sklenice","sklo","skluz","skoba","skokan","skoro","skripta","skrz","skupina","skvost","skvrna","slabika","sladidlo","slanina","slast","slavnost","sledovat","slepec","sleva","slezina","slib","slina","sliznice","slon","sloupek","slovo","sluch","sluha","slunce","slupka","slza","smaragd","smetana","smilstvo","smlouva","smog","smrad","smrk","smrtka","smutek","smysl","snad","snaha","snob","sobota","socha","sodovka","sokol","sopka","sotva","souboj","soucit","soudce","souhlas","soulad","soumrak","souprava","soused","soutok","souviset","spalovna","spasitel","spis","splav","spodek","spojenec","spolu","sponzor","spornost","spousta","sprcha","spustit","sranda","sraz","srdce","srna","srnec","srovnat","srpen","srst","srub","stanice","starosta","statika","stavba","stehno","stezka","stodola","stolek","stopa","storno","stoupat","strach","stres","strhnout","strom","struna","studna","stupnice","stvol","styk","subjekt","subtropy","suchar","sudost","sukno","sundat","sunout","surikata","surovina","svah","svalstvo","svetr","svatba","svazek","svisle","svitek","svoboda","svodidlo","svorka","svrab","sykavka","sykot","synek","synovec","sypat","sypkost","syrovost","sysel","sytost","tabletka","tabule","tahoun","tajemno","tajfun","tajga","tajit","tajnost","taktika","tamhle","tampon","tancovat","tanec","tanker","tapeta","tavenina","tazatel","technika","tehdy","tekutina","telefon","temnota","tendence","tenista","tenor","teplota","tepna","teprve","terapie","termoska","textil","ticho","tiskopis","titulek","tkadlec","tkanina","tlapka","tleskat","tlukot","tlupa","tmel","toaleta","topinka","topol","torzo","touha","toulec","tradice","traktor","tramp","trasa","traverza","trefit","trest","trezor","trhavina","trhlina","trochu","trojice","troska","trouba","trpce","trpitel","trpkost","trubec","truchlit","truhlice","trus","trvat","tudy","tuhnout","tuhost","tundra","turista","turnaj","tuzemsko","tvaroh","tvorba","tvrdost","tvrz","tygr","tykev","ubohost","uboze","ubrat","ubrousek","ubrus","ubytovna","ucho","uctivost","udivit","uhradit","ujednat","ujistit","ujmout","ukazatel","uklidnit","uklonit","ukotvit","ukrojit","ulice","ulita","ulovit","umyvadlo","unavit","uniforma","uniknout","upadnout","uplatnit","uplynout","upoutat","upravit","uran","urazit","usednout","usilovat","usmrtit","usnadnit","usnout","usoudit","ustlat","ustrnout","utahovat","utkat","utlumit","utonout","utopenec","utrousit","uvalit","uvolnit","uvozovka","uzdravit","uzel","uzenina","uzlina","uznat","vagon","valcha","valoun","vana","vandal","vanilka","varan","varhany","varovat","vcelku","vchod","vdova","vedro","vegetace","vejce","velbloud","veletrh","velitel","velmoc","velryba","venkov","veranda","verze","veselka","veskrze","vesnice","vespodu","vesta","veterina","veverka","vibrace","vichr","videohra","vidina","vidle","vila","vinice","viset","vitalita","vize","vizitka","vjezd","vklad","vkus","vlajka","vlak","vlasec","vlevo","vlhkost","vliv","vlnovka","vloupat","vnucovat","vnuk","voda","vodivost","vodoznak","vodstvo","vojensky","vojna","vojsko","volant","volba","volit","volno","voskovka","vozidlo","vozovna","vpravo","vrabec","vracet","vrah","vrata","vrba","vrcholek","vrhat","vrstva","vrtule","vsadit","vstoupit","vstup","vtip","vybavit","vybrat","vychovat","vydat","vydra","vyfotit","vyhledat","vyhnout","vyhodit","vyhradit","vyhubit","vyjasnit","vyjet","vyjmout","vyklopit","vykonat","vylekat","vymazat","vymezit","vymizet","vymyslet","vynechat","vynikat","vynutit","vypadat","vyplatit","vypravit","vypustit","vyrazit","vyrovnat","vyrvat","vyslovit","vysoko","vystavit","vysunout","vysypat","vytasit","vytesat","vytratit","vyvinout","vyvolat","vyvrhel","vyzdobit","vyznat","vzadu","vzbudit","vzchopit","vzdor","vzduch","vzdychat","vzestup","vzhledem","vzkaz","vzlykat","vznik","vzorek","vzpoura","vztah","vztek","xylofon","zabrat","zabydlet","zachovat","zadarmo","zadusit","zafoukat","zahltit","zahodit","zahrada","zahynout","zajatec","zajet","zajistit","zaklepat","zakoupit","zalepit","zamezit","zamotat","zamyslet","zanechat","zanikat","zaplatit","zapojit","zapsat","zarazit","zastavit","zasunout","zatajit","zatemnit","zatknout","zaujmout","zavalit","zavelet","zavinit","zavolat","zavrtat","zazvonit","zbavit","zbrusu","zbudovat","zbytek","zdaleka","zdarma","zdatnost","zdivo","zdobit","zdroj","zdvih","zdymadlo","zelenina","zeman","zemina","zeptat","zezadu","zezdola","zhatit","zhltnout","zhluboka","zhotovit","zhruba","zima","zimnice","zjemnit","zklamat","zkoumat","zkratka","zkumavka","zlato","zlehka","zloba","zlom","zlost","zlozvyk","zmapovat","zmar","zmatek","zmije","zmizet","zmocnit","zmodrat","zmrzlina","zmutovat","znak","znalost","znamenat","znovu","zobrazit","zotavit","zoubek","zoufale","zplodit","zpomalit","zprava","zprostit","zprudka","zprvu","zrada","zranit","zrcadlo","zrnitost","zrno","zrovna","zrychlit","zrzavost","zticha","ztratit","zubovina","zubr","zvednout","zvenku","zvesela","zvon","zvrat","zvukovod","zvyk"]');
+
+/***/ }),
+
+/***/ 36888:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["abandon","ability","able","about","above","absent","absorb","abstract","absurd","abuse","access","accident","account","accuse","achieve","acid","acoustic","acquire","across","act","action","actor","actress","actual","adapt","add","addict","address","adjust","admit","adult","advance","advice","aerobic","affair","afford","afraid","again","age","agent","agree","ahead","aim","air","airport","aisle","alarm","album","alcohol","alert","alien","all","alley","allow","almost","alone","alpha","already","also","alter","always","amateur","amazing","among","amount","amused","analyst","anchor","ancient","anger","angle","angry","animal","ankle","announce","annual","another","answer","antenna","antique","anxiety","any","apart","apology","appear","apple","approve","april","arch","arctic","area","arena","argue","arm","armed","armor","army","around","arrange","arrest","arrive","arrow","art","artefact","artist","artwork","ask","aspect","assault","asset","assist","assume","asthma","athlete","atom","attack","attend","attitude","attract","auction","audit","august","aunt","author","auto","autumn","average","avocado","avoid","awake","aware","away","awesome","awful","awkward","axis","baby","bachelor","bacon","badge","bag","balance","balcony","ball","bamboo","banana","banner","bar","barely","bargain","barrel","base","basic","basket","battle","beach","bean","beauty","because","become","beef","before","begin","behave","behind","believe","below","belt","bench","benefit","best","betray","better","between","beyond","bicycle","bid","bike","bind","biology","bird","birth","bitter","black","blade","blame","blanket","blast","bleak","bless","blind","blood","blossom","blouse","blue","blur","blush","board","boat","body","boil","bomb","bone","bonus","book","boost","border","boring","borrow","boss","bottom","bounce","box","boy","bracket","brain","brand","brass","brave","bread","breeze","brick","bridge","brief","bright","bring","brisk","broccoli","broken","bronze","broom","brother","brown","brush","bubble","buddy","budget","buffalo","build","bulb","bulk","bullet","bundle","bunker","burden","burger","burst","bus","business","busy","butter","buyer","buzz","cabbage","cabin","cable","cactus","cage","cake","call","calm","camera","camp","can","canal","cancel","candy","cannon","canoe","canvas","canyon","capable","capital","captain","car","carbon","card","cargo","carpet","carry","cart","case","cash","casino","castle","casual","cat","catalog","catch","category","cattle","caught","cause","caution","cave","ceiling","celery","cement","census","century","cereal","certain","chair","chalk","champion","change","chaos","chapter","charge","chase","chat","cheap","check","cheese","chef","cherry","chest","chicken","chief","child","chimney","choice","choose","chronic","chuckle","chunk","churn","cigar","cinnamon","circle","citizen","city","civil","claim","clap","clarify","claw","clay","clean","clerk","clever","click","client","cliff","climb","clinic","clip","clock","clog","close","cloth","cloud","clown","club","clump","cluster","clutch","coach","coast","coconut","code","coffee","coil","coin","collect","color","column","combine","come","comfort","comic","common","company","concert","conduct","confirm","congress","connect","consider","control","convince","cook","cool","copper","copy","coral","core","corn","correct","cost","cotton","couch","country","couple","course","cousin","cover","coyote","crack","cradle","craft","cram","crane","crash","crater","crawl","crazy","cream","credit","creek","crew","cricket","crime","crisp","critic","crop","cross","crouch","crowd","crucial","cruel","cruise","crumble","crunch","crush","cry","crystal","cube","culture","cup","cupboard","curious","current","curtain","curve","cushion","custom","cute","cycle","dad","damage","damp","dance","danger","daring","dash","daughter","dawn","day","deal","debate","debris","decade","december","decide","decline","decorate","decrease","deer","defense","define","defy","degree","delay","deliver","demand","demise","denial","dentist","deny","depart","depend","deposit","depth","deputy","derive","describe","desert","design","desk","despair","destroy","detail","detect","develop","device","devote","diagram","dial","diamond","diary","dice","diesel","diet","differ","digital","dignity","dilemma","dinner","dinosaur","direct","dirt","disagree","discover","disease","dish","dismiss","disorder","display","distance","divert","divide","divorce","dizzy","doctor","document","dog","doll","dolphin","domain","donate","donkey","donor","door","dose","double","dove","draft","dragon","drama","drastic","draw","dream","dress","drift","drill","drink","drip","drive","drop","drum","dry","duck","dumb","dune","during","dust","dutch","duty","dwarf","dynamic","eager","eagle","early","earn","earth","easily","east","easy","echo","ecology","economy","edge","edit","educate","effort","egg","eight","either","elbow","elder","electric","elegant","element","elephant","elevator","elite","else","embark","embody","embrace","emerge","emotion","employ","empower","empty","enable","enact","end","endless","endorse","enemy","energy","enforce","engage","engine","enhance","enjoy","enlist","enough","enrich","enroll","ensure","enter","entire","entry","envelope","episode","equal","equip","era","erase","erode","erosion","error","erupt","escape","essay","essence","estate","eternal","ethics","evidence","evil","evoke","evolve","exact","example","excess","exchange","excite","exclude","excuse","execute","exercise","exhaust","exhibit","exile","exist","exit","exotic","expand","expect","expire","explain","expose","express","extend","extra","eye","eyebrow","fabric","face","faculty","fade","faint","faith","fall","false","fame","family","famous","fan","fancy","fantasy","farm","fashion","fat","fatal","father","fatigue","fault","favorite","feature","february","federal","fee","feed","feel","female","fence","festival","fetch","fever","few","fiber","fiction","field","figure","file","film","filter","final","find","fine","finger","finish","fire","firm","first","fiscal","fish","fit","fitness","fix","flag","flame","flash","flat","flavor","flee","flight","flip","float","flock","floor","flower","fluid","flush","fly","foam","focus","fog","foil","fold","follow","food","foot","force","forest","forget","fork","fortune","forum","forward","fossil","foster","found","fox","fragile","frame","frequent","fresh","friend","fringe","frog","front","frost","frown","frozen","fruit","fuel","fun","funny","furnace","fury","future","gadget","gain","galaxy","gallery","game","gap","garage","garbage","garden","garlic","garment","gas","gasp","gate","gather","gauge","gaze","general","genius","genre","gentle","genuine","gesture","ghost","giant","gift","giggle","ginger","giraffe","girl","give","glad","glance","glare","glass","glide","glimpse","globe","gloom","glory","glove","glow","glue","goat","goddess","gold","good","goose","gorilla","gospel","gossip","govern","gown","grab","grace","grain","grant","grape","grass","gravity","great","green","grid","grief","grit","grocery","group","grow","grunt","guard","guess","guide","guilt","guitar","gun","gym","habit","hair","half","hammer","hamster","hand","happy","harbor","hard","harsh","harvest","hat","have","hawk","hazard","head","health","heart","heavy","hedgehog","height","hello","helmet","help","hen","hero","hidden","high","hill","hint","hip","hire","history","hobby","hockey","hold","hole","holiday","hollow","home","honey","hood","hope","horn","horror","horse","hospital","host","hotel","hour","hover","hub","huge","human","humble","humor","hundred","hungry","hunt","hurdle","hurry","hurt","husband","hybrid","ice","icon","idea","identify","idle","ignore","ill","illegal","illness","image","imitate","immense","immune","impact","impose","improve","impulse","inch","include","income","increase","index","indicate","indoor","industry","infant","inflict","inform","inhale","inherit","initial","inject","injury","inmate","inner","innocent","input","inquiry","insane","insect","inside","inspire","install","intact","interest","into","invest","invite","involve","iron","island","isolate","issue","item","ivory","jacket","jaguar","jar","jazz","jealous","jeans","jelly","jewel","job","join","joke","journey","joy","judge","juice","jump","jungle","junior","junk","just","kangaroo","keen","keep","ketchup","key","kick","kid","kidney","kind","kingdom","kiss","kit","kitchen","kite","kitten","kiwi","knee","knife","knock","know","lab","label","labor","ladder","lady","lake","lamp","language","laptop","large","later","latin","laugh","laundry","lava","law","lawn","lawsuit","layer","lazy","leader","leaf","learn","leave","lecture","left","leg","legal","legend","leisure","lemon","lend","length","lens","leopard","lesson","letter","level","liar","liberty","library","license","life","lift","light","like","limb","limit","link","lion","liquid","list","little","live","lizard","load","loan","lobster","local","lock","logic","lonely","long","loop","lottery","loud","lounge","love","loyal","lucky","luggage","lumber","lunar","lunch","luxury","lyrics","machine","mad","magic","magnet","maid","mail","main","major","make","mammal","man","manage","mandate","mango","mansion","manual","maple","marble","march","margin","marine","market","marriage","mask","mass","master","match","material","math","matrix","matter","maximum","maze","meadow","mean","measure","meat","mechanic","medal","media","melody","melt","member","memory","mention","menu","mercy","merge","merit","merry","mesh","message","metal","method","middle","midnight","milk","million","mimic","mind","minimum","minor","minute","miracle","mirror","misery","miss","mistake","mix","mixed","mixture","mobile","model","modify","mom","moment","monitor","monkey","monster","month","moon","moral","more","morning","mosquito","mother","motion","motor","mountain","mouse","move","movie","much","muffin","mule","multiply","muscle","museum","mushroom","music","must","mutual","myself","mystery","myth","naive","name","napkin","narrow","nasty","nation","nature","near","neck","need","negative","neglect","neither","nephew","nerve","nest","net","network","neutral","never","news","next","nice","night","noble","noise","nominee","noodle","normal","north","nose","notable","note","nothing","notice","novel","now","nuclear","number","nurse","nut","oak","obey","object","oblige","obscure","observe","obtain","obvious","occur","ocean","october","odor","off","offer","office","often","oil","okay","old","olive","olympic","omit","once","one","onion","online","only","open","opera","opinion","oppose","option","orange","orbit","orchard","order","ordinary","organ","orient","original","orphan","ostrich","other","outdoor","outer","output","outside","oval","oven","over","own","owner","oxygen","oyster","ozone","pact","paddle","page","pair","palace","palm","panda","panel","panic","panther","paper","parade","parent","park","parrot","party","pass","patch","path","patient","patrol","pattern","pause","pave","payment","peace","peanut","pear","peasant","pelican","pen","penalty","pencil","people","pepper","perfect","permit","person","pet","phone","photo","phrase","physical","piano","picnic","picture","piece","pig","pigeon","pill","pilot","pink","pioneer","pipe","pistol","pitch","pizza","place","planet","plastic","plate","play","please","pledge","pluck","plug","plunge","poem","poet","point","polar","pole","police","pond","pony","pool","popular","portion","position","possible","post","potato","pottery","poverty","powder","power","practice","praise","predict","prefer","prepare","present","pretty","prevent","price","pride","primary","print","priority","prison","private","prize","problem","process","produce","profit","program","project","promote","proof","property","prosper","protect","proud","provide","public","pudding","pull","pulp","pulse","pumpkin","punch","pupil","puppy","purchase","purity","purpose","purse","push","put","puzzle","pyramid","quality","quantum","quarter","question","quick","quit","quiz","quote","rabbit","raccoon","race","rack","radar","radio","rail","rain","raise","rally","ramp","ranch","random","range","rapid","rare","rate","rather","raven","raw","razor","ready","real","reason","rebel","rebuild","recall","receive","recipe","record","recycle","reduce","reflect","reform","refuse","region","regret","regular","reject","relax","release","relief","rely","remain","remember","remind","remove","render","renew","rent","reopen","repair","repeat","replace","report","require","rescue","resemble","resist","resource","response","result","retire","retreat","return","reunion","reveal","review","reward","rhythm","rib","ribbon","rice","rich","ride","ridge","rifle","right","rigid","ring","riot","ripple","risk","ritual","rival","river","road","roast","robot","robust","rocket","romance","roof","rookie","room","rose","rotate","rough","round","route","royal","rubber","rude","rug","rule","run","runway","rural","sad","saddle","sadness","safe","sail","salad","salmon","salon","salt","salute","same","sample","sand","satisfy","satoshi","sauce","sausage","save","say","scale","scan","scare","scatter","scene","scheme","school","science","scissors","scorpion","scout","scrap","screen","script","scrub","sea","search","season","seat","second","secret","section","security","seed","seek","segment","select","sell","seminar","senior","sense","sentence","series","service","session","settle","setup","seven","shadow","shaft","shallow","share","shed","shell","sheriff","shield","shift","shine","ship","shiver","shock","shoe","shoot","shop","short","shoulder","shove","shrimp","shrug","shuffle","shy","sibling","sick","side","siege","sight","sign","silent","silk","silly","silver","similar","simple","since","sing","siren","sister","situate","six","size","skate","sketch","ski","skill","skin","skirt","skull","slab","slam","sleep","slender","slice","slide","slight","slim","slogan","slot","slow","slush","small","smart","smile","smoke","smooth","snack","snake","snap","sniff","snow","soap","soccer","social","sock","soda","soft","solar","soldier","solid","solution","solve","someone","song","soon","sorry","sort","soul","sound","soup","source","south","space","spare","spatial","spawn","speak","special","speed","spell","spend","sphere","spice","spider","spike","spin","spirit","split","spoil","sponsor","spoon","sport","spot","spray","spread","spring","spy","square","squeeze","squirrel","stable","stadium","staff","stage","stairs","stamp","stand","start","state","stay","steak","steel","stem","step","stereo","stick","still","sting","stock","stomach","stone","stool","story","stove","strategy","street","strike","strong","struggle","student","stuff","stumble","style","subject","submit","subway","success","such","sudden","suffer","sugar","suggest","suit","summer","sun","sunny","sunset","super","supply","supreme","sure","surface","surge","surprise","surround","survey","suspect","sustain","swallow","swamp","swap","swarm","swear","sweet","swift","swim","swing","switch","sword","symbol","symptom","syrup","system","table","tackle","tag","tail","talent","talk","tank","tape","target","task","taste","tattoo","taxi","teach","team","tell","ten","tenant","tennis","tent","term","test","text","thank","that","theme","then","theory","there","they","thing","this","thought","three","thrive","throw","thumb","thunder","ticket","tide","tiger","tilt","timber","time","tiny","tip","tired","tissue","title","toast","tobacco","today","toddler","toe","together","toilet","token","tomato","tomorrow","tone","tongue","tonight","tool","tooth","top","topic","topple","torch","tornado","tortoise","toss","total","tourist","toward","tower","town","toy","track","trade","traffic","tragic","train","transfer","trap","trash","travel","tray","treat","tree","trend","trial","tribe","trick","trigger","trim","trip","trophy","trouble","truck","true","truly","trumpet","trust","truth","try","tube","tuition","tumble","tuna","tunnel","turkey","turn","turtle","twelve","twenty","twice","twin","twist","two","type","typical","ugly","umbrella","unable","unaware","uncle","uncover","under","undo","unfair","unfold","unhappy","uniform","unique","unit","universe","unknown","unlock","until","unusual","unveil","update","upgrade","uphold","upon","upper","upset","urban","urge","usage","use","used","useful","useless","usual","utility","vacant","vacuum","vague","valid","valley","valve","van","vanish","vapor","various","vast","vault","vehicle","velvet","vendor","venture","venue","verb","verify","version","very","vessel","veteran","viable","vibrant","vicious","victory","video","view","village","vintage","violin","virtual","virus","visa","visit","visual","vital","vivid","vocal","voice","void","volcano","volume","vote","voyage","wage","wagon","wait","walk","wall","walnut","want","warfare","warm","warrior","wash","wasp","waste","water","wave","way","wealth","weapon","wear","weasel","weather","web","wedding","weekend","weird","welcome","west","wet","whale","what","wheat","wheel","when","where","whip","whisper","wide","width","wife","wild","will","win","window","wine","wing","wink","winner","winter","wire","wisdom","wise","wish","witness","wolf","woman","wonder","wood","wool","word","work","world","worry","worth","wrap","wreck","wrestle","wrist","write","wrong","yard","year","yellow","you","young","youth","zebra","zero","zone","zoo"]');
+
+/***/ }),
+
+/***/ 41565:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["abaisser","abandon","abdiquer","abeille","abolir","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger","abrupt","absence","absolu","absurde","abusif","abyssal","académie","acajou","acarien","accabler","accepter","acclamer","accolade","accroche","accuser","acerbe","achat","acheter","aciduler","acier","acompte","acquérir","acronyme","acteur","actif","actuel","adepte","adéquat","adhésif","adjectif","adjuger","admettre","admirer","adopter","adorer","adoucir","adresse","adroit","adulte","adverbe","aérer","aéronef","affaire","affecter","affiche","affreux","affubler","agacer","agencer","agile","agiter","agrafer","agréable","agrume","aider","aiguille","ailier","aimable","aisance","ajouter","ajuster","alarmer","alchimie","alerte","algèbre","algue","aliéner","aliment","alléger","alliage","allouer","allumer","alourdir","alpaga","altesse","alvéole","amateur","ambigu","ambre","aménager","amertume","amidon","amiral","amorcer","amour","amovible","amphibie","ampleur","amusant","analyse","anaphore","anarchie","anatomie","ancien","anéantir","angle","angoisse","anguleux","animal","annexer","annonce","annuel","anodin","anomalie","anonyme","anormal","antenne","antidote","anxieux","apaiser","apéritif","aplanir","apologie","appareil","appeler","apporter","appuyer","aquarium","aqueduc","arbitre","arbuste","ardeur","ardoise","argent","arlequin","armature","armement","armoire","armure","arpenter","arracher","arriver","arroser","arsenic","artériel","article","aspect","asphalte","aspirer","assaut","asservir","assiette","associer","assurer","asticot","astre","astuce","atelier","atome","atrium","atroce","attaque","attentif","attirer","attraper","aubaine","auberge","audace","audible","augurer","aurore","automne","autruche","avaler","avancer","avarice","avenir","averse","aveugle","aviateur","avide","avion","aviser","avoine","avouer","avril","axial","axiome","badge","bafouer","bagage","baguette","baignade","balancer","balcon","baleine","balisage","bambin","bancaire","bandage","banlieue","bannière","banquier","barbier","baril","baron","barque","barrage","bassin","bastion","bataille","bateau","batterie","baudrier","bavarder","belette","bélier","belote","bénéfice","berceau","berger","berline","bermuda","besace","besogne","bétail","beurre","biberon","bicycle","bidule","bijou","bilan","bilingue","billard","binaire","biologie","biopsie","biotype","biscuit","bison","bistouri","bitume","bizarre","blafard","blague","blanchir","blessant","blinder","blond","bloquer","blouson","bobard","bobine","boire","boiser","bolide","bonbon","bondir","bonheur","bonifier","bonus","bordure","borne","botte","boucle","boueux","bougie","boulon","bouquin","bourse","boussole","boutique","boxeur","branche","brasier","brave","brebis","brèche","breuvage","bricoler","brigade","brillant","brioche","brique","brochure","broder","bronzer","brousse","broyeur","brume","brusque","brutal","bruyant","buffle","buisson","bulletin","bureau","burin","bustier","butiner","butoir","buvable","buvette","cabanon","cabine","cachette","cadeau","cadre","caféine","caillou","caisson","calculer","calepin","calibre","calmer","calomnie","calvaire","camarade","caméra","camion","campagne","canal","caneton","canon","cantine","canular","capable","caporal","caprice","capsule","capter","capuche","carabine","carbone","caresser","caribou","carnage","carotte","carreau","carton","cascade","casier","casque","cassure","causer","caution","cavalier","caverne","caviar","cédille","ceinture","céleste","cellule","cendrier","censurer","central","cercle","cérébral","cerise","cerner","cerveau","cesser","chagrin","chaise","chaleur","chambre","chance","chapitre","charbon","chasseur","chaton","chausson","chavirer","chemise","chenille","chéquier","chercher","cheval","chien","chiffre","chignon","chimère","chiot","chlorure","chocolat","choisir","chose","chouette","chrome","chute","cigare","cigogne","cimenter","cinéma","cintrer","circuler","cirer","cirque","citerne","citoyen","citron","civil","clairon","clameur","claquer","classe","clavier","client","cligner","climat","clivage","cloche","clonage","cloporte","cobalt","cobra","cocasse","cocotier","coder","codifier","coffre","cogner","cohésion","coiffer","coincer","colère","colibri","colline","colmater","colonel","combat","comédie","commande","compact","concert","conduire","confier","congeler","connoter","consonne","contact","convexe","copain","copie","corail","corbeau","cordage","corniche","corpus","correct","cortège","cosmique","costume","coton","coude","coupure","courage","couteau","couvrir","coyote","crabe","crainte","cravate","crayon","créature","créditer","crémeux","creuser","crevette","cribler","crier","cristal","critère","croire","croquer","crotale","crucial","cruel","crypter","cubique","cueillir","cuillère","cuisine","cuivre","culminer","cultiver","cumuler","cupide","curatif","curseur","cyanure","cycle","cylindre","cynique","daigner","damier","danger","danseur","dauphin","débattre","débiter","déborder","débrider","débutant","décaler","décembre","déchirer","décider","déclarer","décorer","décrire","décupler","dédale","déductif","déesse","défensif","défiler","défrayer","dégager","dégivrer","déglutir","dégrafer","déjeuner","délice","déloger","demander","demeurer","démolir","dénicher","dénouer","dentelle","dénuder","départ","dépenser","déphaser","déplacer","déposer","déranger","dérober","désastre","descente","désert","désigner","désobéir","dessiner","destrier","détacher","détester","détourer","détresse","devancer","devenir","deviner","devoir","diable","dialogue","diamant","dicter","différer","digérer","digital","digne","diluer","dimanche","diminuer","dioxyde","directif","diriger","discuter","disposer","dissiper","distance","divertir","diviser","docile","docteur","dogme","doigt","domaine","domicile","dompter","donateur","donjon","donner","dopamine","dortoir","dorure","dosage","doseur","dossier","dotation","douanier","double","douceur","douter","doyen","dragon","draper","dresser","dribbler","droiture","duperie","duplexe","durable","durcir","dynastie","éblouir","écarter","écharpe","échelle","éclairer","éclipse","éclore","écluse","école","économie","écorce","écouter","écraser","écrémer","écrivain","écrou","écume","écureuil","édifier","éduquer","effacer","effectif","effigie","effort","effrayer","effusion","égaliser","égarer","éjecter","élaborer","élargir","électron","élégant","éléphant","élève","éligible","élitisme","éloge","élucider","éluder","emballer","embellir","embryon","émeraude","émission","emmener","émotion","émouvoir","empereur","employer","emporter","emprise","émulsion","encadrer","enchère","enclave","encoche","endiguer","endosser","endroit","enduire","énergie","enfance","enfermer","enfouir","engager","engin","englober","énigme","enjamber","enjeu","enlever","ennemi","ennuyeux","enrichir","enrobage","enseigne","entasser","entendre","entier","entourer","entraver","énumérer","envahir","enviable","envoyer","enzyme","éolien","épaissir","épargne","épatant","épaule","épicerie","épidémie","épier","épilogue","épine","épisode","épitaphe","époque","épreuve","éprouver","épuisant","équerre","équipe","ériger","érosion","erreur","éruption","escalier","espadon","espèce","espiègle","espoir","esprit","esquiver","essayer","essence","essieu","essorer","estime","estomac","estrade","étagère","étaler","étanche","étatique","éteindre","étendoir","éternel","éthanol","éthique","ethnie","étirer","étoffer","étoile","étonnant","étourdir","étrange","étroit","étude","euphorie","évaluer","évasion","éventail","évidence","éviter","évolutif","évoquer","exact","exagérer","exaucer","exceller","excitant","exclusif","excuse","exécuter","exemple","exercer","exhaler","exhorter","exigence","exiler","exister","exotique","expédier","explorer","exposer","exprimer","exquis","extensif","extraire","exulter","fable","fabuleux","facette","facile","facture","faiblir","falaise","fameux","famille","farceur","farfelu","farine","farouche","fasciner","fatal","fatigue","faucon","fautif","faveur","favori","fébrile","féconder","fédérer","félin","femme","fémur","fendoir","féodal","fermer","féroce","ferveur","festival","feuille","feutre","février","fiasco","ficeler","fictif","fidèle","figure","filature","filetage","filière","filleul","filmer","filou","filtrer","financer","finir","fiole","firme","fissure","fixer","flairer","flamme","flasque","flatteur","fléau","flèche","fleur","flexion","flocon","flore","fluctuer","fluide","fluvial","folie","fonderie","fongible","fontaine","forcer","forgeron","formuler","fortune","fossile","foudre","fougère","fouiller","foulure","fourmi","fragile","fraise","franchir","frapper","frayeur","frégate","freiner","frelon","frémir","frénésie","frère","friable","friction","frisson","frivole","froid","fromage","frontal","frotter","fruit","fugitif","fuite","fureur","furieux","furtif","fusion","futur","gagner","galaxie","galerie","gambader","garantir","gardien","garnir","garrigue","gazelle","gazon","géant","gélatine","gélule","gendarme","général","génie","genou","gentil","géologie","géomètre","géranium","germe","gestuel","geyser","gibier","gicler","girafe","givre","glace","glaive","glisser","globe","gloire","glorieux","golfeur","gomme","gonfler","gorge","gorille","goudron","gouffre","goulot","goupille","gourmand","goutte","graduel","graffiti","graine","grand","grappin","gratuit","gravir","grenat","griffure","griller","grimper","grogner","gronder","grotte","groupe","gruger","grutier","gruyère","guépard","guerrier","guide","guimauve","guitare","gustatif","gymnaste","gyrostat","habitude","hachoir","halte","hameau","hangar","hanneton","haricot","harmonie","harpon","hasard","hélium","hématome","herbe","hérisson","hermine","héron","hésiter","heureux","hiberner","hibou","hilarant","histoire","hiver","homard","hommage","homogène","honneur","honorer","honteux","horde","horizon","horloge","hormone","horrible","houleux","housse","hublot","huileux","humain","humble","humide","humour","hurler","hydromel","hygiène","hymne","hypnose","idylle","ignorer","iguane","illicite","illusion","image","imbiber","imiter","immense","immobile","immuable","impact","impérial","implorer","imposer","imprimer","imputer","incarner","incendie","incident","incliner","incolore","indexer","indice","inductif","inédit","ineptie","inexact","infini","infliger","informer","infusion","ingérer","inhaler","inhiber","injecter","injure","innocent","inoculer","inonder","inscrire","insecte","insigne","insolite","inspirer","instinct","insulter","intact","intense","intime","intrigue","intuitif","inutile","invasion","inventer","inviter","invoquer","ironique","irradier","irréel","irriter","isoler","ivoire","ivresse","jaguar","jaillir","jambe","janvier","jardin","jauger","jaune","javelot","jetable","jeton","jeudi","jeunesse","joindre","joncher","jongler","joueur","jouissif","journal","jovial","joyau","joyeux","jubiler","jugement","junior","jupon","juriste","justice","juteux","juvénile","kayak","kimono","kiosque","label","labial","labourer","lacérer","lactose","lagune","laine","laisser","laitier","lambeau","lamelle","lampe","lanceur","langage","lanterne","lapin","largeur","larme","laurier","lavabo","lavoir","lecture","légal","léger","légume","lessive","lettre","levier","lexique","lézard","liasse","libérer","libre","licence","licorne","liège","lièvre","ligature","ligoter","ligue","limer","limite","limonade","limpide","linéaire","lingot","lionceau","liquide","lisière","lister","lithium","litige","littoral","livreur","logique","lointain","loisir","lombric","loterie","louer","lourd","loutre","louve","loyal","lubie","lucide","lucratif","lueur","lugubre","luisant","lumière","lunaire","lundi","luron","lutter","luxueux","machine","magasin","magenta","magique","maigre","maillon","maintien","mairie","maison","majorer","malaxer","maléfice","malheur","malice","mallette","mammouth","mandater","maniable","manquant","manteau","manuel","marathon","marbre","marchand","mardi","maritime","marqueur","marron","marteler","mascotte","massif","matériel","matière","matraque","maudire","maussade","mauve","maximal","méchant","méconnu","médaille","médecin","méditer","méduse","meilleur","mélange","mélodie","membre","mémoire","menacer","mener","menhir","mensonge","mentor","mercredi","mérite","merle","messager","mesure","métal","météore","méthode","métier","meuble","miauler","microbe","miette","mignon","migrer","milieu","million","mimique","mince","minéral","minimal","minorer","minute","miracle","miroiter","missile","mixte","mobile","moderne","moelleux","mondial","moniteur","monnaie","monotone","monstre","montagne","monument","moqueur","morceau","morsure","mortier","moteur","motif","mouche","moufle","moulin","mousson","mouton","mouvant","multiple","munition","muraille","murène","murmure","muscle","muséum","musicien","mutation","muter","mutuel","myriade","myrtille","mystère","mythique","nageur","nappe","narquois","narrer","natation","nation","nature","naufrage","nautique","navire","nébuleux","nectar","néfaste","négation","négliger","négocier","neige","nerveux","nettoyer","neurone","neutron","neveu","niche","nickel","nitrate","niveau","noble","nocif","nocturne","noirceur","noisette","nomade","nombreux","nommer","normatif","notable","notifier","notoire","nourrir","nouveau","novateur","novembre","novice","nuage","nuancer","nuire","nuisible","numéro","nuptial","nuque","nutritif","obéir","objectif","obliger","obscur","observer","obstacle","obtenir","obturer","occasion","occuper","océan","octobre","octroyer","octupler","oculaire","odeur","odorant","offenser","officier","offrir","ogive","oiseau","oisillon","olfactif","olivier","ombrage","omettre","onctueux","onduler","onéreux","onirique","opale","opaque","opérer","opinion","opportun","opprimer","opter","optique","orageux","orange","orbite","ordonner","oreille","organe","orgueil","orifice","ornement","orque","ortie","osciller","osmose","ossature","otarie","ouragan","ourson","outil","outrager","ouvrage","ovation","oxyde","oxygène","ozone","paisible","palace","palmarès","palourde","palper","panache","panda","pangolin","paniquer","panneau","panorama","pantalon","papaye","papier","papoter","papyrus","paradoxe","parcelle","paresse","parfumer","parler","parole","parrain","parsemer","partager","parure","parvenir","passion","pastèque","paternel","patience","patron","pavillon","pavoiser","payer","paysage","peigne","peintre","pelage","pélican","pelle","pelouse","peluche","pendule","pénétrer","pénible","pensif","pénurie","pépite","péplum","perdrix","perforer","période","permuter","perplexe","persil","perte","peser","pétale","petit","pétrir","peuple","pharaon","phobie","phoque","photon","phrase","physique","piano","pictural","pièce","pierre","pieuvre","pilote","pinceau","pipette","piquer","pirogue","piscine","piston","pivoter","pixel","pizza","placard","plafond","plaisir","planer","plaque","plastron","plateau","pleurer","plexus","pliage","plomb","plonger","pluie","plumage","pochette","poésie","poète","pointe","poirier","poisson","poivre","polaire","policier","pollen","polygone","pommade","pompier","ponctuel","pondérer","poney","portique","position","posséder","posture","potager","poteau","potion","pouce","poulain","poumon","pourpre","poussin","pouvoir","prairie","pratique","précieux","prédire","préfixe","prélude","prénom","présence","prétexte","prévoir","primitif","prince","prison","priver","problème","procéder","prodige","profond","progrès","proie","projeter","prologue","promener","propre","prospère","protéger","prouesse","proverbe","prudence","pruneau","psychose","public","puceron","puiser","pulpe","pulsar","punaise","punitif","pupitre","purifier","puzzle","pyramide","quasar","querelle","question","quiétude","quitter","quotient","racine","raconter","radieux","ragondin","raideur","raisin","ralentir","rallonge","ramasser","rapide","rasage","ratisser","ravager","ravin","rayonner","réactif","réagir","réaliser","réanimer","recevoir","réciter","réclamer","récolter","recruter","reculer","recycler","rédiger","redouter","refaire","réflexe","réformer","refrain","refuge","régalien","région","réglage","régulier","réitérer","rejeter","rejouer","relatif","relever","relief","remarque","remède","remise","remonter","remplir","remuer","renard","renfort","renifler","renoncer","rentrer","renvoi","replier","reporter","reprise","reptile","requin","réserve","résineux","résoudre","respect","rester","résultat","rétablir","retenir","réticule","retomber","retracer","réunion","réussir","revanche","revivre","révolte","révulsif","richesse","rideau","rieur","rigide","rigoler","rincer","riposter","risible","risque","rituel","rival","rivière","rocheux","romance","rompre","ronce","rondin","roseau","rosier","rotatif","rotor","rotule","rouge","rouille","rouleau","routine","royaume","ruban","rubis","ruche","ruelle","rugueux","ruiner","ruisseau","ruser","rustique","rythme","sabler","saboter","sabre","sacoche","safari","sagesse","saisir","salade","salive","salon","saluer","samedi","sanction","sanglier","sarcasme","sardine","saturer","saugrenu","saumon","sauter","sauvage","savant","savonner","scalpel","scandale","scélérat","scénario","sceptre","schéma","science","scinder","score","scrutin","sculpter","séance","sécable","sécher","secouer","sécréter","sédatif","séduire","seigneur","séjour","sélectif","semaine","sembler","semence","séminal","sénateur","sensible","sentence","séparer","séquence","serein","sergent","sérieux","serrure","sérum","service","sésame","sévir","sevrage","sextuple","sidéral","siècle","siéger","siffler","sigle","signal","silence","silicium","simple","sincère","sinistre","siphon","sirop","sismique","situer","skier","social","socle","sodium","soigneux","soldat","soleil","solitude","soluble","sombre","sommeil","somnoler","sonde","songeur","sonnette","sonore","sorcier","sortir","sosie","sottise","soucieux","soudure","souffle","soulever","soupape","source","soutirer","souvenir","spacieux","spatial","spécial","sphère","spiral","stable","station","sternum","stimulus","stipuler","strict","studieux","stupeur","styliste","sublime","substrat","subtil","subvenir","succès","sucre","suffixe","suggérer","suiveur","sulfate","superbe","supplier","surface","suricate","surmener","surprise","sursaut","survie","suspect","syllabe","symbole","symétrie","synapse","syntaxe","système","tabac","tablier","tactile","tailler","talent","talisman","talonner","tambour","tamiser","tangible","tapis","taquiner","tarder","tarif","tartine","tasse","tatami","tatouage","taupe","taureau","taxer","témoin","temporel","tenaille","tendre","teneur","tenir","tension","terminer","terne","terrible","tétine","texte","thème","théorie","thérapie","thorax","tibia","tiède","timide","tirelire","tiroir","tissu","titane","titre","tituber","toboggan","tolérant","tomate","tonique","tonneau","toponyme","torche","tordre","tornade","torpille","torrent","torse","tortue","totem","toucher","tournage","tousser","toxine","traction","trafic","tragique","trahir","train","trancher","travail","trèfle","tremper","trésor","treuil","triage","tribunal","tricoter","trilogie","triomphe","tripler","triturer","trivial","trombone","tronc","tropical","troupeau","tuile","tulipe","tumulte","tunnel","turbine","tuteur","tutoyer","tuyau","tympan","typhon","typique","tyran","ubuesque","ultime","ultrason","unanime","unifier","union","unique","unitaire","univers","uranium","urbain","urticant","usage","usine","usuel","usure","utile","utopie","vacarme","vaccin","vagabond","vague","vaillant","vaincre","vaisseau","valable","valise","vallon","valve","vampire","vanille","vapeur","varier","vaseux","vassal","vaste","vecteur","vedette","végétal","véhicule","veinard","véloce","vendredi","vénérer","venger","venimeux","ventouse","verdure","vérin","vernir","verrou","verser","vertu","veston","vétéran","vétuste","vexant","vexer","viaduc","viande","victoire","vidange","vidéo","vignette","vigueur","vilain","village","vinaigre","violon","vipère","virement","virtuose","virus","visage","viseur","vision","visqueux","visuel","vital","vitesse","viticole","vitrine","vivace","vivipare","vocation","voguer","voile","voisin","voiture","volaille","volcan","voltiger","volume","vorace","vortex","voter","vouloir","voyage","voyelle","wagon","xénon","yacht","zèbre","zénith","zeste","zoologie"]');
+
+/***/ }),
+
+/***/ 31776:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["abaco","abbaglio","abbinato","abete","abisso","abolire","abrasivo","abrogato","accadere","accenno","accusato","acetone","achille","acido","acqua","acre","acrilico","acrobata","acuto","adagio","addebito","addome","adeguato","aderire","adipe","adottare","adulare","affabile","affetto","affisso","affranto","aforisma","afoso","africano","agave","agente","agevole","aggancio","agire","agitare","agonismo","agricolo","agrumeto","aguzzo","alabarda","alato","albatro","alberato","albo","albume","alce","alcolico","alettone","alfa","algebra","aliante","alibi","alimento","allagato","allegro","allievo","allodola","allusivo","almeno","alogeno","alpaca","alpestre","altalena","alterno","alticcio","altrove","alunno","alveolo","alzare","amalgama","amanita","amarena","ambito","ambrato","ameba","america","ametista","amico","ammasso","ammenda","ammirare","ammonito","amore","ampio","ampliare","amuleto","anacardo","anagrafe","analista","anarchia","anatra","anca","ancella","ancora","andare","andrea","anello","angelo","angolare","angusto","anima","annegare","annidato","anno","annuncio","anonimo","anticipo","anzi","apatico","apertura","apode","apparire","appetito","appoggio","approdo","appunto","aprile","arabica","arachide","aragosta","araldica","arancio","aratura","arazzo","arbitro","archivio","ardito","arenile","argento","argine","arguto","aria","armonia","arnese","arredato","arringa","arrosto","arsenico","arso","artefice","arzillo","asciutto","ascolto","asepsi","asettico","asfalto","asino","asola","aspirato","aspro","assaggio","asse","assoluto","assurdo","asta","astenuto","astice","astratto","atavico","ateismo","atomico","atono","attesa","attivare","attorno","attrito","attuale","ausilio","austria","autista","autonomo","autunno","avanzato","avere","avvenire","avviso","avvolgere","azione","azoto","azzimo","azzurro","babele","baccano","bacino","baco","badessa","badilata","bagnato","baita","balcone","baldo","balena","ballata","balzano","bambino","bandire","baraonda","barbaro","barca","baritono","barlume","barocco","basilico","basso","batosta","battuto","baule","bava","bavosa","becco","beffa","belgio","belva","benda","benevole","benigno","benzina","bere","berlina","beta","bibita","bici","bidone","bifido","biga","bilancia","bimbo","binocolo","biologo","bipede","bipolare","birbante","birra","biscotto","bisesto","bisnonno","bisonte","bisturi","bizzarro","blando","blatta","bollito","bonifico","bordo","bosco","botanico","bottino","bozzolo","braccio","bradipo","brama","branca","bravura","bretella","brevetto","brezza","briglia","brillante","brindare","broccolo","brodo","bronzina","brullo","bruno","bubbone","buca","budino","buffone","buio","bulbo","buono","burlone","burrasca","bussola","busta","cadetto","caduco","calamaro","calcolo","calesse","calibro","calmo","caloria","cambusa","camerata","camicia","cammino","camola","campale","canapa","candela","cane","canino","canotto","cantina","capace","capello","capitolo","capogiro","cappero","capra","capsula","carapace","carcassa","cardo","carisma","carovana","carretto","cartolina","casaccio","cascata","caserma","caso","cassone","castello","casuale","catasta","catena","catrame","cauto","cavillo","cedibile","cedrata","cefalo","celebre","cellulare","cena","cenone","centesimo","ceramica","cercare","certo","cerume","cervello","cesoia","cespo","ceto","chela","chiaro","chicca","chiedere","chimera","china","chirurgo","chitarra","ciao","ciclismo","cifrare","cigno","cilindro","ciottolo","circa","cirrosi","citrico","cittadino","ciuffo","civetta","civile","classico","clinica","cloro","cocco","codardo","codice","coerente","cognome","collare","colmato","colore","colposo","coltivato","colza","coma","cometa","commando","comodo","computer","comune","conciso","condurre","conferma","congelare","coniuge","connesso","conoscere","consumo","continuo","convegno","coperto","copione","coppia","copricapo","corazza","cordata","coricato","cornice","corolla","corpo","corredo","corsia","cortese","cosmico","costante","cottura","covato","cratere","cravatta","creato","credere","cremoso","crescita","creta","criceto","crinale","crisi","critico","croce","cronaca","crostata","cruciale","crusca","cucire","cuculo","cugino","cullato","cupola","curatore","cursore","curvo","cuscino","custode","dado","daino","dalmata","damerino","daniela","dannoso","danzare","datato","davanti","davvero","debutto","decennio","deciso","declino","decollo","decreto","dedicato","definito","deforme","degno","delegare","delfino","delirio","delta","demenza","denotato","dentro","deposito","derapata","derivare","deroga","descritto","deserto","desiderio","desumere","detersivo","devoto","diametro","dicembre","diedro","difeso","diffuso","digerire","digitale","diluvio","dinamico","dinnanzi","dipinto","diploma","dipolo","diradare","dire","dirotto","dirupo","disagio","discreto","disfare","disgelo","disposto","distanza","disumano","dito","divano","divelto","dividere","divorato","doblone","docente","doganale","dogma","dolce","domato","domenica","dominare","dondolo","dono","dormire","dote","dottore","dovuto","dozzina","drago","druido","dubbio","dubitare","ducale","duna","duomo","duplice","duraturo","ebano","eccesso","ecco","eclissi","economia","edera","edicola","edile","editoria","educare","egemonia","egli","egoismo","egregio","elaborato","elargire","elegante","elencato","eletto","elevare","elfico","elica","elmo","elsa","eluso","emanato","emblema","emesso","emiro","emotivo","emozione","empirico","emulo","endemico","enduro","energia","enfasi","enoteca","entrare","enzima","epatite","epilogo","episodio","epocale","eppure","equatore","erario","erba","erboso","erede","eremita","erigere","ermetico","eroe","erosivo","errante","esagono","esame","esanime","esaudire","esca","esempio","esercito","esibito","esigente","esistere","esito","esofago","esortato","esoso","espanso","espresso","essenza","esso","esteso","estimare","estonia","estroso","esultare","etilico","etnico","etrusco","etto","euclideo","europa","evaso","evidenza","evitato","evoluto","evviva","fabbrica","faccenda","fachiro","falco","famiglia","fanale","fanfara","fango","fantasma","fare","farfalla","farinoso","farmaco","fascia","fastoso","fasullo","faticare","fato","favoloso","febbre","fecola","fede","fegato","felpa","feltro","femmina","fendere","fenomeno","fermento","ferro","fertile","fessura","festivo","fetta","feudo","fiaba","fiducia","fifa","figurato","filo","finanza","finestra","finire","fiore","fiscale","fisico","fiume","flacone","flamenco","flebo","flemma","florido","fluente","fluoro","fobico","focaccia","focoso","foderato","foglio","folata","folclore","folgore","fondente","fonetico","fonia","fontana","forbito","forchetta","foresta","formica","fornaio","foro","fortezza","forzare","fosfato","fosso","fracasso","frana","frassino","fratello","freccetta","frenata","fresco","frigo","frollino","fronde","frugale","frutta","fucilata","fucsia","fuggente","fulmine","fulvo","fumante","fumetto","fumoso","fune","funzione","fuoco","furbo","furgone","furore","fuso","futile","gabbiano","gaffe","galateo","gallina","galoppo","gambero","gamma","garanzia","garbo","garofano","garzone","gasdotto","gasolio","gastrico","gatto","gaudio","gazebo","gazzella","geco","gelatina","gelso","gemello","gemmato","gene","genitore","gennaio","genotipo","gergo","ghepardo","ghiaccio","ghisa","giallo","gilda","ginepro","giocare","gioiello","giorno","giove","girato","girone","gittata","giudizio","giurato","giusto","globulo","glutine","gnomo","gobba","golf","gomito","gommone","gonfio","gonna","governo","gracile","grado","grafico","grammo","grande","grattare","gravoso","grazia","greca","gregge","grifone","grigio","grinza","grotta","gruppo","guadagno","guaio","guanto","guardare","gufo","guidare","ibernato","icona","identico","idillio","idolo","idra","idrico","idrogeno","igiene","ignaro","ignorato","ilare","illeso","illogico","illudere","imballo","imbevuto","imbocco","imbuto","immane","immerso","immolato","impacco","impeto","impiego","importo","impronta","inalare","inarcare","inattivo","incanto","incendio","inchino","incisivo","incluso","incontro","incrocio","incubo","indagine","india","indole","inedito","infatti","infilare","inflitto","ingaggio","ingegno","inglese","ingordo","ingrosso","innesco","inodore","inoltrare","inondato","insano","insetto","insieme","insonnia","insulina","intasato","intero","intonaco","intuito","inumidire","invalido","invece","invito","iperbole","ipnotico","ipotesi","ippica","iride","irlanda","ironico","irrigato","irrorare","isolato","isotopo","isterico","istituto","istrice","italia","iterare","labbro","labirinto","lacca","lacerato","lacrima","lacuna","laddove","lago","lampo","lancetta","lanterna","lardoso","larga","laringe","lastra","latenza","latino","lattuga","lavagna","lavoro","legale","leggero","lembo","lentezza","lenza","leone","lepre","lesivo","lessato","lesto","letterale","leva","levigato","libero","lido","lievito","lilla","limatura","limitare","limpido","lineare","lingua","liquido","lira","lirica","lisca","lite","litigio","livrea","locanda","lode","logica","lombare","londra","longevo","loquace","lorenzo","loto","lotteria","luce","lucidato","lumaca","luminoso","lungo","lupo","luppolo","lusinga","lusso","lutto","macabro","macchina","macero","macinato","madama","magico","maglia","magnete","magro","maiolica","malafede","malgrado","malinteso","malsano","malto","malumore","mana","mancia","mandorla","mangiare","manifesto","mannaro","manovra","mansarda","mantide","manubrio","mappa","maratona","marcire","maretta","marmo","marsupio","maschera","massaia","mastino","materasso","matricola","mattone","maturo","mazurca","meandro","meccanico","mecenate","medesimo","meditare","mega","melassa","melis","melodia","meninge","meno","mensola","mercurio","merenda","merlo","meschino","mese","messere","mestolo","metallo","metodo","mettere","miagolare","mica","micelio","michele","microbo","midollo","miele","migliore","milano","milite","mimosa","minerale","mini","minore","mirino","mirtillo","miscela","missiva","misto","misurare","mitezza","mitigare","mitra","mittente","mnemonico","modello","modifica","modulo","mogano","mogio","mole","molosso","monastero","monco","mondina","monetario","monile","monotono","monsone","montato","monviso","mora","mordere","morsicato","mostro","motivato","motosega","motto","movenza","movimento","mozzo","mucca","mucosa","muffa","mughetto","mugnaio","mulatto","mulinello","multiplo","mummia","munto","muovere","murale","musa","muscolo","musica","mutevole","muto","nababbo","nafta","nanometro","narciso","narice","narrato","nascere","nastrare","naturale","nautica","naviglio","nebulosa","necrosi","negativo","negozio","nemmeno","neofita","neretto","nervo","nessuno","nettuno","neutrale","neve","nevrotico","nicchia","ninfa","nitido","nobile","nocivo","nodo","nome","nomina","nordico","normale","norvegese","nostrano","notare","notizia","notturno","novella","nucleo","nulla","numero","nuovo","nutrire","nuvola","nuziale","oasi","obbedire","obbligo","obelisco","oblio","obolo","obsoleto","occasione","occhio","occidente","occorrere","occultare","ocra","oculato","odierno","odorare","offerta","offrire","offuscato","oggetto","oggi","ognuno","olandese","olfatto","oliato","oliva","ologramma","oltre","omaggio","ombelico","ombra","omega","omissione","ondoso","onere","onice","onnivoro","onorevole","onta","operato","opinione","opposto","oracolo","orafo","ordine","orecchino","orefice","orfano","organico","origine","orizzonte","orma","ormeggio","ornativo","orologio","orrendo","orribile","ortensia","ortica","orzata","orzo","osare","oscurare","osmosi","ospedale","ospite","ossa","ossidare","ostacolo","oste","otite","otre","ottagono","ottimo","ottobre","ovale","ovest","ovino","oviparo","ovocito","ovunque","ovviare","ozio","pacchetto","pace","pacifico","padella","padrone","paese","paga","pagina","palazzina","palesare","pallido","palo","palude","pandoro","pannello","paolo","paonazzo","paprica","parabola","parcella","parere","pargolo","pari","parlato","parola","partire","parvenza","parziale","passivo","pasticca","patacca","patologia","pattume","pavone","peccato","pedalare","pedonale","peggio","peloso","penare","pendice","penisola","pennuto","penombra","pensare","pentola","pepe","pepita","perbene","percorso","perdonato","perforare","pergamena","periodo","permesso","perno","perplesso","persuaso","pertugio","pervaso","pesatore","pesista","peso","pestifero","petalo","pettine","petulante","pezzo","piacere","pianta","piattino","piccino","picozza","piega","pietra","piffero","pigiama","pigolio","pigro","pila","pilifero","pillola","pilota","pimpante","pineta","pinna","pinolo","pioggia","piombo","piramide","piretico","pirite","pirolisi","pitone","pizzico","placebo","planare","plasma","platano","plenario","pochezza","poderoso","podismo","poesia","poggiare","polenta","poligono","pollice","polmonite","polpetta","polso","poltrona","polvere","pomice","pomodoro","ponte","popoloso","porfido","poroso","porpora","porre","portata","posa","positivo","possesso","postulato","potassio","potere","pranzo","prassi","pratica","precluso","predica","prefisso","pregiato","prelievo","premere","prenotare","preparato","presenza","pretesto","prevalso","prima","principe","privato","problema","procura","produrre","profumo","progetto","prolunga","promessa","pronome","proposta","proroga","proteso","prova","prudente","prugna","prurito","psiche","pubblico","pudica","pugilato","pugno","pulce","pulito","pulsante","puntare","pupazzo","pupilla","puro","quadro","qualcosa","quasi","querela","quota","raccolto","raddoppio","radicale","radunato","raffica","ragazzo","ragione","ragno","ramarro","ramingo","ramo","randagio","rantolare","rapato","rapina","rappreso","rasatura","raschiato","rasente","rassegna","rastrello","rata","ravveduto","reale","recepire","recinto","recluta","recondito","recupero","reddito","redimere","regalato","registro","regola","regresso","relazione","remare","remoto","renna","replica","reprimere","reputare","resa","residente","responso","restauro","rete","retina","retorica","rettifica","revocato","riassunto","ribadire","ribelle","ribrezzo","ricarica","ricco","ricevere","riciclato","ricordo","ricreduto","ridicolo","ridurre","rifasare","riflesso","riforma","rifugio","rigare","rigettato","righello","rilassato","rilevato","rimanere","rimbalzo","rimedio","rimorchio","rinascita","rincaro","rinforzo","rinnovo","rinomato","rinsavito","rintocco","rinuncia","rinvenire","riparato","ripetuto","ripieno","riportare","ripresa","ripulire","risata","rischio","riserva","risibile","riso","rispetto","ristoro","risultato","risvolto","ritardo","ritegno","ritmico","ritrovo","riunione","riva","riverso","rivincita","rivolto","rizoma","roba","robotico","robusto","roccia","roco","rodaggio","rodere","roditore","rogito","rollio","romantico","rompere","ronzio","rosolare","rospo","rotante","rotondo","rotula","rovescio","rubizzo","rubrica","ruga","rullino","rumine","rumoroso","ruolo","rupe","russare","rustico","sabato","sabbiare","sabotato","sagoma","salasso","saldatura","salgemma","salivare","salmone","salone","saltare","saluto","salvo","sapere","sapido","saporito","saraceno","sarcasmo","sarto","sassoso","satellite","satira","satollo","saturno","savana","savio","saziato","sbadiglio","sbalzo","sbancato","sbarra","sbattere","sbavare","sbendare","sbirciare","sbloccato","sbocciato","sbrinare","sbruffone","sbuffare","scabroso","scadenza","scala","scambiare","scandalo","scapola","scarso","scatenare","scavato","scelto","scenico","scettro","scheda","schiena","sciarpa","scienza","scindere","scippo","sciroppo","scivolo","sclerare","scodella","scolpito","scomparto","sconforto","scoprire","scorta","scossone","scozzese","scriba","scrollare","scrutinio","scuderia","scultore","scuola","scuro","scusare","sdebitare","sdoganare","seccatura","secondo","sedano","seggiola","segnalato","segregato","seguito","selciato","selettivo","sella","selvaggio","semaforo","sembrare","seme","seminato","sempre","senso","sentire","sepolto","sequenza","serata","serbato","sereno","serio","serpente","serraglio","servire","sestina","setola","settimana","sfacelo","sfaldare","sfamato","sfarzoso","sfaticato","sfera","sfida","sfilato","sfinge","sfocato","sfoderare","sfogo","sfoltire","sforzato","sfratto","sfruttato","sfuggito","sfumare","sfuso","sgabello","sgarbato","sgonfiare","sgorbio","sgrassato","sguardo","sibilo","siccome","sierra","sigla","signore","silenzio","sillaba","simbolo","simpatico","simulato","sinfonia","singolo","sinistro","sino","sintesi","sinusoide","sipario","sisma","sistole","situato","slitta","slogatura","sloveno","smarrito","smemorato","smentito","smeraldo","smilzo","smontare","smottato","smussato","snellire","snervato","snodo","sobbalzo","sobrio","soccorso","sociale","sodale","soffitto","sogno","soldato","solenne","solido","sollazzo","solo","solubile","solvente","somatico","somma","sonda","sonetto","sonnifero","sopire","soppeso","sopra","sorgere","sorpasso","sorriso","sorso","sorteggio","sorvolato","sospiro","sosta","sottile","spada","spalla","spargere","spatola","spavento","spazzola","specie","spedire","spegnere","spelatura","speranza","spessore","spettrale","spezzato","spia","spigoloso","spillato","spinoso","spirale","splendido","sportivo","sposo","spranga","sprecare","spronato","spruzzo","spuntino","squillo","sradicare","srotolato","stabile","stacco","staffa","stagnare","stampato","stantio","starnuto","stasera","statuto","stelo","steppa","sterzo","stiletto","stima","stirpe","stivale","stizzoso","stonato","storico","strappo","stregato","stridulo","strozzare","strutto","stuccare","stufo","stupendo","subentro","succoso","sudore","suggerito","sugo","sultano","suonare","superbo","supporto","surgelato","surrogato","sussurro","sutura","svagare","svedese","sveglio","svelare","svenuto","svezia","sviluppo","svista","svizzera","svolta","svuotare","tabacco","tabulato","tacciare","taciturno","tale","talismano","tampone","tannino","tara","tardivo","targato","tariffa","tarpare","tartaruga","tasto","tattico","taverna","tavolata","tazza","teca","tecnico","telefono","temerario","tempo","temuto","tendone","tenero","tensione","tentacolo","teorema","terme","terrazzo","terzetto","tesi","tesserato","testato","tetro","tettoia","tifare","tigella","timbro","tinto","tipico","tipografo","tiraggio","tiro","titanio","titolo","titubante","tizio","tizzone","toccare","tollerare","tolto","tombola","tomo","tonfo","tonsilla","topazio","topologia","toppa","torba","tornare","torrone","tortora","toscano","tossire","tostatura","totano","trabocco","trachea","trafila","tragedia","tralcio","tramonto","transito","trapano","trarre","trasloco","trattato","trave","treccia","tremolio","trespolo","tributo","tricheco","trifoglio","trillo","trincea","trio","tristezza","triturato","trivella","tromba","trono","troppo","trottola","trovare","truccato","tubatura","tuffato","tulipano","tumulto","tunisia","turbare","turchino","tuta","tutela","ubicato","uccello","uccisore","udire","uditivo","uffa","ufficio","uguale","ulisse","ultimato","umano","umile","umorismo","uncinetto","ungere","ungherese","unicorno","unificato","unisono","unitario","unte","uovo","upupa","uragano","urgenza","urlo","usanza","usato","uscito","usignolo","usuraio","utensile","utilizzo","utopia","vacante","vaccinato","vagabondo","vagliato","valanga","valgo","valico","valletta","valoroso","valutare","valvola","vampata","vangare","vanitoso","vano","vantaggio","vanvera","vapore","varano","varcato","variante","vasca","vedetta","vedova","veduto","vegetale","veicolo","velcro","velina","velluto","veloce","venato","vendemmia","vento","verace","verbale","vergogna","verifica","vero","verruca","verticale","vescica","vessillo","vestale","veterano","vetrina","vetusto","viandante","vibrante","vicenda","vichingo","vicinanza","vidimare","vigilia","vigneto","vigore","vile","villano","vimini","vincitore","viola","vipera","virgola","virologo","virulento","viscoso","visione","vispo","vissuto","visura","vita","vitello","vittima","vivanda","vivido","viziare","voce","voga","volatile","volere","volpe","voragine","vulcano","zampogna","zanna","zappato","zattera","zavorra","zefiro","zelante","zelo","zenzero","zerbino","zibetto","zinco","zircone","zitto","zolla","zotico","zucchero","zufolo","zulu","zuppa"]');
+
+/***/ }),
+
+/***/ 7537:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["あいこくしん","あいさつ","あいだ","あおぞら","あかちゃん","あきる","あけがた","あける","あこがれる","あさい","あさひ","あしあと","あじわう","あずかる","あずき","あそぶ","あたえる","あたためる","あたりまえ","あたる","あつい","あつかう","あっしゅく","あつまり","あつめる","あてな","あてはまる","あひる","あぶら","あぶる","あふれる","あまい","あまど","あまやかす","あまり","あみもの","あめりか","あやまる","あゆむ","あらいぐま","あらし","あらすじ","あらためる","あらゆる","あらわす","ありがとう","あわせる","あわてる","あんい","あんがい","あんこ","あんぜん","あんてい","あんない","あんまり","いいだす","いおん","いがい","いがく","いきおい","いきなり","いきもの","いきる","いくじ","いくぶん","いけばな","いけん","いこう","いこく","いこつ","いさましい","いさん","いしき","いじゅう","いじょう","いじわる","いずみ","いずれ","いせい","いせえび","いせかい","いせき","いぜん","いそうろう","いそがしい","いだい","いだく","いたずら","いたみ","いたりあ","いちおう","いちじ","いちど","いちば","いちぶ","いちりゅう","いつか","いっしゅん","いっせい","いっそう","いったん","いっち","いってい","いっぽう","いてざ","いてん","いどう","いとこ","いない","いなか","いねむり","いのち","いのる","いはつ","いばる","いはん","いびき","いひん","いふく","いへん","いほう","いみん","いもうと","いもたれ","いもり","いやがる","いやす","いよかん","いよく","いらい","いらすと","いりぐち","いりょう","いれい","いれもの","いれる","いろえんぴつ","いわい","いわう","いわかん","いわば","いわゆる","いんげんまめ","いんさつ","いんしょう","いんよう","うえき","うえる","うおざ","うがい","うかぶ","うかべる","うきわ","うくらいな","うくれれ","うけたまわる","うけつけ","うけとる","うけもつ","うける","うごかす","うごく","うこん","うさぎ","うしなう","うしろがみ","うすい","うすぎ","うすぐらい","うすめる","うせつ","うちあわせ","うちがわ","うちき","うちゅう","うっかり","うつくしい","うったえる","うつる","うどん","うなぎ","うなじ","うなずく","うなる","うねる","うのう","うぶげ","うぶごえ","うまれる","うめる","うもう","うやまう","うよく","うらがえす","うらぐち","うらない","うりあげ","うりきれ","うるさい","うれしい","うれゆき","うれる","うろこ","うわき","うわさ","うんこう","うんちん","うんてん","うんどう","えいえん","えいが","えいきょう","えいご","えいせい","えいぶん","えいよう","えいわ","えおり","えがお","えがく","えきたい","えくせる","えしゃく","えすて","えつらん","えのぐ","えほうまき","えほん","えまき","えもじ","えもの","えらい","えらぶ","えりあ","えんえん","えんかい","えんぎ","えんげき","えんしゅう","えんぜつ","えんそく","えんちょう","えんとつ","おいかける","おいこす","おいしい","おいつく","おうえん","おうさま","おうじ","おうせつ","おうたい","おうふく","おうべい","おうよう","おえる","おおい","おおう","おおどおり","おおや","おおよそ","おかえり","おかず","おがむ","おかわり","おぎなう","おきる","おくさま","おくじょう","おくりがな","おくる","おくれる","おこす","おこなう","おこる","おさえる","おさない","おさめる","おしいれ","おしえる","おじぎ","おじさん","おしゃれ","おそらく","おそわる","おたがい","おたく","おだやか","おちつく","おっと","おつり","おでかけ","おとしもの","おとなしい","おどり","おどろかす","おばさん","おまいり","おめでとう","おもいで","おもう","おもたい","おもちゃ","おやつ","おやゆび","およぼす","おらんだ","おろす","おんがく","おんけい","おんしゃ","おんせん","おんだん","おんちゅう","おんどけい","かあつ","かいが","がいき","がいけん","がいこう","かいさつ","かいしゃ","かいすいよく","かいぜん","かいぞうど","かいつう","かいてん","かいとう","かいふく","がいへき","かいほう","かいよう","がいらい","かいわ","かえる","かおり","かかえる","かがく","かがし","かがみ","かくご","かくとく","かざる","がぞう","かたい","かたち","がちょう","がっきゅう","がっこう","がっさん","がっしょう","かなざわし","かのう","がはく","かぶか","かほう","かほご","かまう","かまぼこ","かめれおん","かゆい","かようび","からい","かるい","かろう","かわく","かわら","がんか","かんけい","かんこう","かんしゃ","かんそう","かんたん","かんち","がんばる","きあい","きあつ","きいろ","ぎいん","きうい","きうん","きえる","きおう","きおく","きおち","きおん","きかい","きかく","きかんしゃ","ききて","きくばり","きくらげ","きけんせい","きこう","きこえる","きこく","きさい","きさく","きさま","きさらぎ","ぎじかがく","ぎしき","ぎじたいけん","ぎじにってい","ぎじゅつしゃ","きすう","きせい","きせき","きせつ","きそう","きぞく","きぞん","きたえる","きちょう","きつえん","ぎっちり","きつつき","きつね","きてい","きどう","きどく","きない","きなが","きなこ","きぬごし","きねん","きのう","きのした","きはく","きびしい","きひん","きふく","きぶん","きぼう","きほん","きまる","きみつ","きむずかしい","きめる","きもだめし","きもち","きもの","きゃく","きやく","ぎゅうにく","きよう","きょうりゅう","きらい","きらく","きりん","きれい","きれつ","きろく","ぎろん","きわめる","ぎんいろ","きんかくじ","きんじょ","きんようび","ぐあい","くいず","くうかん","くうき","くうぐん","くうこう","ぐうせい","くうそう","ぐうたら","くうふく","くうぼ","くかん","くきょう","くげん","ぐこう","くさい","くさき","くさばな","くさる","くしゃみ","くしょう","くすのき","くすりゆび","くせげ","くせん","ぐたいてき","くださる","くたびれる","くちこみ","くちさき","くつした","ぐっすり","くつろぐ","くとうてん","くどく","くなん","くねくね","くのう","くふう","くみあわせ","くみたてる","くめる","くやくしょ","くらす","くらべる","くるま","くれる","くろう","くわしい","ぐんかん","ぐんしょく","ぐんたい","ぐんて","けあな","けいかく","けいけん","けいこ","けいさつ","げいじゅつ","けいたい","げいのうじん","けいれき","けいろ","けおとす","けおりもの","げきか","げきげん","げきだん","げきちん","げきとつ","げきは","げきやく","げこう","げこくじょう","げざい","けさき","げざん","けしき","けしごむ","けしょう","げすと","けたば","けちゃっぷ","けちらす","けつあつ","けつい","けつえき","けっこん","けつじょ","けっせき","けってい","けつまつ","げつようび","げつれい","けつろん","げどく","けとばす","けとる","けなげ","けなす","けなみ","けぬき","げねつ","けねん","けはい","げひん","けぶかい","げぼく","けまり","けみかる","けむし","けむり","けもの","けらい","けろけろ","けわしい","けんい","けんえつ","けんお","けんか","げんき","けんげん","けんこう","けんさく","けんしゅう","けんすう","げんそう","けんちく","けんてい","けんとう","けんない","けんにん","げんぶつ","けんま","けんみん","けんめい","けんらん","けんり","こあくま","こいぬ","こいびと","ごうい","こうえん","こうおん","こうかん","ごうきゅう","ごうけい","こうこう","こうさい","こうじ","こうすい","ごうせい","こうそく","こうたい","こうちゃ","こうつう","こうてい","こうどう","こうない","こうはい","ごうほう","ごうまん","こうもく","こうりつ","こえる","こおり","ごかい","ごがつ","ごかん","こくご","こくさい","こくとう","こくない","こくはく","こぐま","こけい","こける","ここのか","こころ","こさめ","こしつ","こすう","こせい","こせき","こぜん","こそだて","こたい","こたえる","こたつ","こちょう","こっか","こつこつ","こつばん","こつぶ","こてい","こてん","ことがら","ことし","ことば","ことり","こなごな","こねこね","このまま","このみ","このよ","ごはん","こひつじ","こふう","こふん","こぼれる","ごまあぶら","こまかい","ごますり","こまつな","こまる","こむぎこ","こもじ","こもち","こもの","こもん","こやく","こやま","こゆう","こゆび","こよい","こよう","こりる","これくしょん","ころっけ","こわもて","こわれる","こんいん","こんかい","こんき","こんしゅう","こんすい","こんだて","こんとん","こんなん","こんびに","こんぽん","こんまけ","こんや","こんれい","こんわく","ざいえき","さいかい","さいきん","ざいげん","ざいこ","さいしょ","さいせい","ざいたく","ざいちゅう","さいてき","ざいりょう","さうな","さかいし","さがす","さかな","さかみち","さがる","さぎょう","さくし","さくひん","さくら","さこく","さこつ","さずかる","ざせき","さたん","さつえい","ざつおん","ざっか","ざつがく","さっきょく","ざっし","さつじん","ざっそう","さつたば","さつまいも","さてい","さといも","さとう","さとおや","さとし","さとる","さのう","さばく","さびしい","さべつ","さほう","さほど","さます","さみしい","さみだれ","さむけ","さめる","さやえんどう","さゆう","さよう","さよく","さらだ","ざるそば","さわやか","さわる","さんいん","さんか","さんきゃく","さんこう","さんさい","ざんしょ","さんすう","さんせい","さんそ","さんち","さんま","さんみ","さんらん","しあい","しあげ","しあさって","しあわせ","しいく","しいん","しうち","しえい","しおけ","しかい","しかく","じかん","しごと","しすう","じだい","したうけ","したぎ","したて","したみ","しちょう","しちりん","しっかり","しつじ","しつもん","してい","してき","してつ","じてん","じどう","しなぎれ","しなもの","しなん","しねま","しねん","しのぐ","しのぶ","しはい","しばかり","しはつ","しはらい","しはん","しひょう","しふく","じぶん","しへい","しほう","しほん","しまう","しまる","しみん","しむける","じむしょ","しめい","しめる","しもん","しゃいん","しゃうん","しゃおん","じゃがいも","しやくしょ","しゃくほう","しゃけん","しゃこ","しゃざい","しゃしん","しゃせん","しゃそう","しゃたい","しゃちょう","しゃっきん","じゃま","しゃりん","しゃれい","じゆう","じゅうしょ","しゅくはく","じゅしん","しゅっせき","しゅみ","しゅらば","じゅんばん","しょうかい","しょくたく","しょっけん","しょどう","しょもつ","しらせる","しらべる","しんか","しんこう","じんじゃ","しんせいじ","しんちく","しんりん","すあげ","すあし","すあな","ずあん","すいえい","すいか","すいとう","ずいぶん","すいようび","すうがく","すうじつ","すうせん","すおどり","すきま","すくう","すくない","すける","すごい","すこし","ずさん","すずしい","すすむ","すすめる","すっかり","ずっしり","ずっと","すてき","すてる","すねる","すのこ","すはだ","すばらしい","ずひょう","ずぶぬれ","すぶり","すふれ","すべて","すべる","ずほう","すぼん","すまい","すめし","すもう","すやき","すらすら","するめ","すれちがう","すろっと","すわる","すんぜん","すんぽう","せあぶら","せいかつ","せいげん","せいじ","せいよう","せおう","せかいかん","せきにん","せきむ","せきゆ","せきらんうん","せけん","せこう","せすじ","せたい","せたけ","せっかく","せっきゃく","ぜっく","せっけん","せっこつ","せっさたくま","せつぞく","せつだん","せつでん","せっぱん","せつび","せつぶん","せつめい","せつりつ","せなか","せのび","せはば","せびろ","せぼね","せまい","せまる","せめる","せもたれ","せりふ","ぜんあく","せんい","せんえい","せんか","せんきょ","せんく","せんげん","ぜんご","せんさい","せんしゅ","せんすい","せんせい","せんぞ","せんたく","せんちょう","せんてい","せんとう","せんぬき","せんねん","せんぱい","ぜんぶ","ぜんぽう","せんむ","せんめんじょ","せんもん","せんやく","せんゆう","せんよう","ぜんら","ぜんりゃく","せんれい","せんろ","そあく","そいとげる","そいね","そうがんきょう","そうき","そうご","そうしん","そうだん","そうなん","そうび","そうめん","そうり","そえもの","そえん","そがい","そげき","そこう","そこそこ","そざい","そしな","そせい","そせん","そそぐ","そだてる","そつう","そつえん","そっかん","そつぎょう","そっけつ","そっこう","そっせん","そっと","そとがわ","そとづら","そなえる","そなた","そふぼ","そぼく","そぼろ","そまつ","そまる","そむく","そむりえ","そめる","そもそも","そよかぜ","そらまめ","そろう","そんかい","そんけい","そんざい","そんしつ","そんぞく","そんちょう","ぞんび","ぞんぶん","そんみん","たあい","たいいん","たいうん","たいえき","たいおう","だいがく","たいき","たいぐう","たいけん","たいこ","たいざい","だいじょうぶ","だいすき","たいせつ","たいそう","だいたい","たいちょう","たいてい","だいどころ","たいない","たいねつ","たいのう","たいはん","だいひょう","たいふう","たいへん","たいほ","たいまつばな","たいみんぐ","たいむ","たいめん","たいやき","たいよう","たいら","たいりょく","たいる","たいわん","たうえ","たえる","たおす","たおる","たおれる","たかい","たかね","たきび","たくさん","たこく","たこやき","たさい","たしざん","だじゃれ","たすける","たずさわる","たそがれ","たたかう","たたく","ただしい","たたみ","たちばな","だっかい","だっきゃく","だっこ","だっしゅつ","だったい","たてる","たとえる","たなばた","たにん","たぬき","たのしみ","たはつ","たぶん","たべる","たぼう","たまご","たまる","だむる","ためいき","ためす","ためる","たもつ","たやすい","たよる","たらす","たりきほんがん","たりょう","たりる","たると","たれる","たれんと","たろっと","たわむれる","だんあつ","たんい","たんおん","たんか","たんき","たんけん","たんご","たんさん","たんじょうび","だんせい","たんそく","たんたい","だんち","たんてい","たんとう","だんな","たんにん","だんねつ","たんのう","たんぴん","だんぼう","たんまつ","たんめい","だんれつ","だんろ","だんわ","ちあい","ちあん","ちいき","ちいさい","ちえん","ちかい","ちから","ちきゅう","ちきん","ちけいず","ちけん","ちこく","ちさい","ちしき","ちしりょう","ちせい","ちそう","ちたい","ちたん","ちちおや","ちつじょ","ちてき","ちてん","ちぬき","ちぬり","ちのう","ちひょう","ちへいせん","ちほう","ちまた","ちみつ","ちみどろ","ちめいど","ちゃんこなべ","ちゅうい","ちゆりょく","ちょうし","ちょさくけん","ちらし","ちらみ","ちりがみ","ちりょう","ちるど","ちわわ","ちんたい","ちんもく","ついか","ついたち","つうか","つうじょう","つうはん","つうわ","つかう","つかれる","つくね","つくる","つけね","つける","つごう","つたえる","つづく","つつじ","つつむ","つとめる","つながる","つなみ","つねづね","つのる","つぶす","つまらない","つまる","つみき","つめたい","つもり","つもる","つよい","つるぼ","つるみく","つわもの","つわり","てあし","てあて","てあみ","ていおん","ていか","ていき","ていけい","ていこく","ていさつ","ていし","ていせい","ていたい","ていど","ていねい","ていひょう","ていへん","ていぼう","てうち","ておくれ","てきとう","てくび","でこぼこ","てさぎょう","てさげ","てすり","てそう","てちがい","てちょう","てつがく","てつづき","でっぱ","てつぼう","てつや","でぬかえ","てぬき","てぬぐい","てのひら","てはい","てぶくろ","てふだ","てほどき","てほん","てまえ","てまきずし","てみじか","てみやげ","てらす","てれび","てわけ","てわたし","でんあつ","てんいん","てんかい","てんき","てんぐ","てんけん","てんごく","てんさい","てんし","てんすう","でんち","てんてき","てんとう","てんない","てんぷら","てんぼうだい","てんめつ","てんらんかい","でんりょく","でんわ","どあい","といれ","どうかん","とうきゅう","どうぐ","とうし","とうむぎ","とおい","とおか","とおく","とおす","とおる","とかい","とかす","ときおり","ときどき","とくい","とくしゅう","とくてん","とくに","とくべつ","とけい","とける","とこや","とさか","としょかん","とそう","とたん","とちゅう","とっきゅう","とっくん","とつぜん","とつにゅう","とどける","ととのえる","とない","となえる","となり","とのさま","とばす","どぶがわ","とほう","とまる","とめる","ともだち","ともる","どようび","とらえる","とんかつ","どんぶり","ないかく","ないこう","ないしょ","ないす","ないせん","ないそう","なおす","ながい","なくす","なげる","なこうど","なさけ","なたでここ","なっとう","なつやすみ","ななおし","なにごと","なにもの","なにわ","なのか","なふだ","なまいき","なまえ","なまみ","なみだ","なめらか","なめる","なやむ","ならう","ならび","ならぶ","なれる","なわとび","なわばり","にあう","にいがた","にうけ","におい","にかい","にがて","にきび","にくしみ","にくまん","にげる","にさんかたんそ","にしき","にせもの","にちじょう","にちようび","にっか","にっき","にっけい","にっこう","にっさん","にっしょく","にっすう","にっせき","にってい","になう","にほん","にまめ","にもつ","にやり","にゅういん","にりんしゃ","にわとり","にんい","にんか","にんき","にんげん","にんしき","にんずう","にんそう","にんたい","にんち","にんてい","にんにく","にんぷ","にんまり","にんむ","にんめい","にんよう","ぬいくぎ","ぬかす","ぬぐいとる","ぬぐう","ぬくもり","ぬすむ","ぬまえび","ぬめり","ぬらす","ぬんちゃく","ねあげ","ねいき","ねいる","ねいろ","ねぐせ","ねくたい","ねくら","ねこぜ","ねこむ","ねさげ","ねすごす","ねそべる","ねだん","ねつい","ねっしん","ねつぞう","ねったいぎょ","ねぶそく","ねふだ","ねぼう","ねほりはほり","ねまき","ねまわし","ねみみ","ねむい","ねむたい","ねもと","ねらう","ねわざ","ねんいり","ねんおし","ねんかん","ねんきん","ねんぐ","ねんざ","ねんし","ねんちゃく","ねんど","ねんぴ","ねんぶつ","ねんまつ","ねんりょう","ねんれい","のいず","のおづま","のがす","のきなみ","のこぎり","のこす","のこる","のせる","のぞく","のぞむ","のたまう","のちほど","のっく","のばす","のはら","のべる","のぼる","のみもの","のやま","のらいぬ","のらねこ","のりもの","のりゆき","のれん","のんき","ばあい","はあく","ばあさん","ばいか","ばいく","はいけん","はいご","はいしん","はいすい","はいせん","はいそう","はいち","ばいばい","はいれつ","はえる","はおる","はかい","ばかり","はかる","はくしゅ","はけん","はこぶ","はさみ","はさん","はしご","ばしょ","はしる","はせる","ぱそこん","はそん","はたん","はちみつ","はつおん","はっかく","はづき","はっきり","はっくつ","はっけん","はっこう","はっさん","はっしん","はったつ","はっちゅう","はってん","はっぴょう","はっぽう","はなす","はなび","はにかむ","はぶらし","はみがき","はむかう","はめつ","はやい","はやし","はらう","はろうぃん","はわい","はんい","はんえい","はんおん","はんかく","はんきょう","ばんぐみ","はんこ","はんしゃ","はんすう","はんだん","ぱんち","ぱんつ","はんてい","はんとし","はんのう","はんぱ","はんぶん","はんぺん","はんぼうき","はんめい","はんらん","はんろん","ひいき","ひうん","ひえる","ひかく","ひかり","ひかる","ひかん","ひくい","ひけつ","ひこうき","ひこく","ひさい","ひさしぶり","ひさん","びじゅつかん","ひしょ","ひそか","ひそむ","ひたむき","ひだり","ひたる","ひつぎ","ひっこし","ひっし","ひつじゅひん","ひっす","ひつぜん","ぴったり","ぴっちり","ひつよう","ひてい","ひとごみ","ひなまつり","ひなん","ひねる","ひはん","ひびく","ひひょう","ひほう","ひまわり","ひまん","ひみつ","ひめい","ひめじし","ひやけ","ひやす","ひよう","びょうき","ひらがな","ひらく","ひりつ","ひりょう","ひるま","ひるやすみ","ひれい","ひろい","ひろう","ひろき","ひろゆき","ひんかく","ひんけつ","ひんこん","ひんしゅ","ひんそう","ぴんち","ひんぱん","びんぼう","ふあん","ふいうち","ふうけい","ふうせん","ぷうたろう","ふうとう","ふうふ","ふえる","ふおん","ふかい","ふきん","ふくざつ","ふくぶくろ","ふこう","ふさい","ふしぎ","ふじみ","ふすま","ふせい","ふせぐ","ふそく","ぶたにく","ふたん","ふちょう","ふつう","ふつか","ふっかつ","ふっき","ふっこく","ぶどう","ふとる","ふとん","ふのう","ふはい","ふひょう","ふへん","ふまん","ふみん","ふめつ","ふめん","ふよう","ふりこ","ふりる","ふるい","ふんいき","ぶんがく","ぶんぐ","ふんしつ","ぶんせき","ふんそう","ぶんぽう","へいあん","へいおん","へいがい","へいき","へいげん","へいこう","へいさ","へいしゃ","へいせつ","へいそ","へいたく","へいてん","へいねつ","へいわ","へきが","へこむ","べにいろ","べにしょうが","へらす","へんかん","べんきょう","べんごし","へんさい","へんたい","べんり","ほあん","ほいく","ぼうぎょ","ほうこく","ほうそう","ほうほう","ほうもん","ほうりつ","ほえる","ほおん","ほかん","ほきょう","ぼきん","ほくろ","ほけつ","ほけん","ほこう","ほこる","ほしい","ほしつ","ほしゅ","ほしょう","ほせい","ほそい","ほそく","ほたて","ほたる","ぽちぶくろ","ほっきょく","ほっさ","ほったん","ほとんど","ほめる","ほんい","ほんき","ほんけ","ほんしつ","ほんやく","まいにち","まかい","まかせる","まがる","まける","まこと","まさつ","まじめ","ますく","まぜる","まつり","まとめ","まなぶ","まぬけ","まねく","まほう","まもる","まゆげ","まよう","まろやか","まわす","まわり","まわる","まんが","まんきつ","まんぞく","まんなか","みいら","みうち","みえる","みがく","みかた","みかん","みけん","みこん","みじかい","みすい","みすえる","みせる","みっか","みつかる","みつける","みてい","みとめる","みなと","みなみかさい","みねらる","みのう","みのがす","みほん","みもと","みやげ","みらい","みりょく","みわく","みんか","みんぞく","むいか","むえき","むえん","むかい","むかう","むかえ","むかし","むぎちゃ","むける","むげん","むさぼる","むしあつい","むしば","むじゅん","むしろ","むすう","むすこ","むすぶ","むすめ","むせる","むせん","むちゅう","むなしい","むのう","むやみ","むよう","むらさき","むりょう","むろん","めいあん","めいうん","めいえん","めいかく","めいきょく","めいさい","めいし","めいそう","めいぶつ","めいれい","めいわく","めぐまれる","めざす","めした","めずらしい","めだつ","めまい","めやす","めんきょ","めんせき","めんどう","もうしあげる","もうどうけん","もえる","もくし","もくてき","もくようび","もちろん","もどる","もらう","もんく","もんだい","やおや","やける","やさい","やさしい","やすい","やすたろう","やすみ","やせる","やそう","やたい","やちん","やっと","やっぱり","やぶる","やめる","ややこしい","やよい","やわらかい","ゆうき","ゆうびんきょく","ゆうべ","ゆうめい","ゆけつ","ゆしゅつ","ゆせん","ゆそう","ゆたか","ゆちゃく","ゆでる","ゆにゅう","ゆびわ","ゆらい","ゆれる","ようい","ようか","ようきゅう","ようじ","ようす","ようちえん","よかぜ","よかん","よきん","よくせい","よくぼう","よけい","よごれる","よさん","よしゅう","よそう","よそく","よっか","よてい","よどがわく","よねつ","よやく","よゆう","よろこぶ","よろしい","らいう","らくがき","らくご","らくさつ","らくだ","らしんばん","らせん","らぞく","らたい","らっか","られつ","りえき","りかい","りきさく","りきせつ","りくぐん","りくつ","りけん","りこう","りせい","りそう","りそく","りてん","りねん","りゆう","りゅうがく","りよう","りょうり","りょかん","りょくちゃ","りょこう","りりく","りれき","りろん","りんご","るいけい","るいさい","るいじ","るいせき","るすばん","るりがわら","れいかん","れいぎ","れいせい","れいぞうこ","れいとう","れいぼう","れきし","れきだい","れんあい","れんけい","れんこん","れんさい","れんしゅう","れんぞく","れんらく","ろうか","ろうご","ろうじん","ろうそく","ろくが","ろこつ","ろじうら","ろしゅつ","ろせん","ろてん","ろめん","ろれつ","ろんぎ","ろんぱ","ろんぶん","ろんり","わかす","わかめ","わかやま","わかれる","わしつ","わじまし","わすれもの","わらう","われる"]');
+
+/***/ }),
+
+/***/ 27974:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["가격","가끔","가난","가능","가득","가르침","가뭄","가방","가상","가슴","가운데","가을","가이드","가입","가장","가정","가족","가죽","각오","각자","간격","간부","간섭","간장","간접","간판","갈등","갈비","갈색","갈증","감각","감기","감소","감수성","감자","감정","갑자기","강남","강당","강도","강력히","강변","강북","강사","강수량","강아지","강원도","강의","강제","강조","같이","개구리","개나리","개방","개별","개선","개성","개인","객관적","거실","거액","거울","거짓","거품","걱정","건강","건물","건설","건조","건축","걸음","검사","검토","게시판","게임","겨울","견해","결과","결국","결론","결석","결승","결심","결정","결혼","경계","경고","경기","경력","경복궁","경비","경상도","경영","경우","경쟁","경제","경주","경찰","경치","경향","경험","계곡","계단","계란","계산","계속","계약","계절","계층","계획","고객","고구려","고궁","고급","고등학생","고무신","고민","고양이","고장","고전","고집","고춧가루","고통","고향","곡식","골목","골짜기","골프","공간","공개","공격","공군","공급","공기","공동","공무원","공부","공사","공식","공업","공연","공원","공장","공짜","공책","공통","공포","공항","공휴일","과목","과일","과장","과정","과학","관객","관계","관광","관념","관람","관련","관리","관습","관심","관점","관찰","광경","광고","광장","광주","괴로움","굉장히","교과서","교문","교복","교실","교양","교육","교장","교직","교통","교환","교훈","구경","구름","구멍","구별","구분","구석","구성","구속","구역","구입","구청","구체적","국가","국기","국내","국립","국물","국민","국수","국어","국왕","국적","국제","국회","군대","군사","군인","궁극적","권리","권위","권투","귀국","귀신","규정","규칙","균형","그날","그냥","그늘","그러나","그룹","그릇","그림","그제서야","그토록","극복","극히","근거","근교","근래","근로","근무","근본","근원","근육","근처","글씨","글자","금강산","금고","금년","금메달","금액","금연","금요일","금지","긍정적","기간","기관","기념","기능","기독교","기둥","기록","기름","기법","기본","기분","기쁨","기숙사","기술","기억","기업","기온","기운","기원","기적","기준","기침","기혼","기획","긴급","긴장","길이","김밥","김치","김포공항","깍두기","깜빡","깨달음","깨소금","껍질","꼭대기","꽃잎","나들이","나란히","나머지","나물","나침반","나흘","낙엽","난방","날개","날씨","날짜","남녀","남대문","남매","남산","남자","남편","남학생","낭비","낱말","내년","내용","내일","냄비","냄새","냇물","냉동","냉면","냉방","냉장고","넥타이","넷째","노동","노란색","노력","노인","녹음","녹차","녹화","논리","논문","논쟁","놀이","농구","농담","농민","농부","농업","농장","농촌","높이","눈동자","눈물","눈썹","뉴욕","느낌","늑대","능동적","능력","다방","다양성","다음","다이어트","다행","단계","단골","단독","단맛","단순","단어","단위","단점","단체","단추","단편","단풍","달걀","달러","달력","달리","닭고기","담당","담배","담요","담임","답변","답장","당근","당분간","당연히","당장","대규모","대낮","대단히","대답","대도시","대략","대량","대륙","대문","대부분","대신","대응","대장","대전","대접","대중","대책","대출","대충","대통령","대학","대한민국","대합실","대형","덩어리","데이트","도대체","도덕","도둑","도망","도서관","도심","도움","도입","도자기","도저히","도전","도중","도착","독감","독립","독서","독일","독창적","동화책","뒷모습","뒷산","딸아이","마누라","마늘","마당","마라톤","마련","마무리","마사지","마약","마요네즈","마을","마음","마이크","마중","마지막","마찬가지","마찰","마흔","막걸리","막내","막상","만남","만두","만세","만약","만일","만점","만족","만화","많이","말기","말씀","말투","맘대로","망원경","매년","매달","매력","매번","매스컴","매일","매장","맥주","먹이","먼저","먼지","멀리","메일","며느리","며칠","면담","멸치","명단","명령","명예","명의","명절","명칭","명함","모금","모니터","모델","모든","모범","모습","모양","모임","모조리","모집","모퉁이","목걸이","목록","목사","목소리","목숨","목적","목표","몰래","몸매","몸무게","몸살","몸속","몸짓","몸통","몹시","무관심","무궁화","무더위","무덤","무릎","무슨","무엇","무역","무용","무조건","무지개","무척","문구","문득","문법","문서","문제","문학","문화","물가","물건","물결","물고기","물론","물리학","물음","물질","물체","미국","미디어","미사일","미술","미역","미용실","미움","미인","미팅","미혼","민간","민족","민주","믿음","밀가루","밀리미터","밑바닥","바가지","바구니","바나나","바늘","바닥","바닷가","바람","바이러스","바탕","박물관","박사","박수","반대","반드시","반말","반발","반성","반응","반장","반죽","반지","반찬","받침","발가락","발걸음","발견","발달","발레","발목","발바닥","발생","발음","발자국","발전","발톱","발표","밤하늘","밥그릇","밥맛","밥상","밥솥","방금","방면","방문","방바닥","방법","방송","방식","방안","방울","방지","방학","방해","방향","배경","배꼽","배달","배드민턴","백두산","백색","백성","백인","백제","백화점","버릇","버섯","버튼","번개","번역","번지","번호","벌금","벌레","벌써","범위","범인","범죄","법률","법원","법적","법칙","베이징","벨트","변경","변동","변명","변신","변호사","변화","별도","별명","별일","병실","병아리","병원","보관","보너스","보라색","보람","보름","보상","보안","보자기","보장","보전","보존","보통","보편적","보험","복도","복사","복숭아","복습","볶음","본격적","본래","본부","본사","본성","본인","본질","볼펜","봉사","봉지","봉투","부근","부끄러움","부담","부동산","부문","부분","부산","부상","부엌","부인","부작용","부장","부정","부족","부지런히","부친","부탁","부품","부회장","북부","북한","분노","분량","분리","분명","분석","분야","분위기","분필","분홍색","불고기","불과","불교","불꽃","불만","불법","불빛","불안","불이익","불행","브랜드","비극","비난","비닐","비둘기","비디오","비로소","비만","비명","비밀","비바람","비빔밥","비상","비용","비율","비중","비타민","비판","빌딩","빗물","빗방울","빗줄기","빛깔","빨간색","빨래","빨리","사건","사계절","사나이","사냥","사람","사랑","사립","사모님","사물","사방","사상","사생활","사설","사슴","사실","사업","사용","사월","사장","사전","사진","사촌","사춘기","사탕","사투리","사흘","산길","산부인과","산업","산책","살림","살인","살짝","삼계탕","삼국","삼십","삼월","삼촌","상관","상금","상대","상류","상반기","상상","상식","상업","상인","상자","상점","상처","상추","상태","상표","상품","상황","새벽","색깔","색연필","생각","생명","생물","생방송","생산","생선","생신","생일","생활","서랍","서른","서명","서민","서비스","서양","서울","서적","서점","서쪽","서클","석사","석유","선거","선물","선배","선생","선수","선원","선장","선전","선택","선풍기","설거지","설날","설렁탕","설명","설문","설사","설악산","설치","설탕","섭씨","성공","성당","성명","성별","성인","성장","성적","성질","성함","세금","세미나","세상","세월","세종대왕","세탁","센터","센티미터","셋째","소규모","소극적","소금","소나기","소년","소득","소망","소문","소설","소속","소아과","소용","소원","소음","소중히","소지품","소질","소풍","소형","속담","속도","속옷","손가락","손길","손녀","손님","손등","손목","손뼉","손실","손질","손톱","손해","솔직히","솜씨","송아지","송이","송편","쇠고기","쇼핑","수건","수년","수단","수돗물","수동적","수면","수명","수박","수상","수석","수술","수시로","수업","수염","수영","수입","수준","수집","수출","수컷","수필","수학","수험생","수화기","숙녀","숙소","숙제","순간","순서","순수","순식간","순위","숟가락","술병","술집","숫자","스님","스물","스스로","스승","스웨터","스위치","스케이트","스튜디오","스트레스","스포츠","슬쩍","슬픔","습관","습기","승객","승리","승부","승용차","승진","시각","시간","시골","시금치","시나리오","시댁","시리즈","시멘트","시민","시부모","시선","시설","시스템","시아버지","시어머니","시월","시인","시일","시작","시장","시절","시점","시중","시즌","시집","시청","시합","시험","식구","식기","식당","식량","식료품","식물","식빵","식사","식생활","식초","식탁","식품","신고","신규","신념","신문","신발","신비","신사","신세","신용","신제품","신청","신체","신화","실감","실내","실력","실례","실망","실수","실습","실시","실장","실정","실질적","실천","실체","실컷","실태","실패","실험","실현","심리","심부름","심사","심장","심정","심판","쌍둥이","씨름","씨앗","아가씨","아나운서","아드님","아들","아쉬움","아스팔트","아시아","아울러","아저씨","아줌마","아직","아침","아파트","아프리카","아픔","아홉","아흔","악기","악몽","악수","안개","안경","안과","안내","안녕","안동","안방","안부","안주","알루미늄","알코올","암시","암컷","압력","앞날","앞문","애인","애정","액수","앨범","야간","야단","야옹","약간","약국","약속","약수","약점","약품","약혼녀","양념","양력","양말","양배추","양주","양파","어둠","어려움","어른","어젯밤","어쨌든","어쩌다가","어쩐지","언니","언덕","언론","언어","얼굴","얼른","얼음","얼핏","엄마","업무","업종","업체","엉덩이","엉망","엉터리","엊그제","에너지","에어컨","엔진","여건","여고생","여관","여군","여권","여대생","여덟","여동생","여든","여론","여름","여섯","여성","여왕","여인","여전히","여직원","여학생","여행","역사","역시","역할","연결","연구","연극","연기","연락","연설","연세","연속","연습","연애","연예인","연인","연장","연주","연출","연필","연합","연휴","열기","열매","열쇠","열심히","열정","열차","열흘","염려","엽서","영국","영남","영상","영양","영역","영웅","영원히","영하","영향","영혼","영화","옆구리","옆방","옆집","예감","예금","예방","예산","예상","예선","예술","예습","예식장","예약","예전","예절","예정","예컨대","옛날","오늘","오락","오랫동안","오렌지","오로지","오른발","오븐","오십","오염","오월","오전","오직","오징어","오페라","오피스텔","오히려","옥상","옥수수","온갖","온라인","온몸","온종일","온통","올가을","올림픽","올해","옷차림","와이셔츠","와인","완성","완전","왕비","왕자","왜냐하면","왠지","외갓집","외국","외로움","외삼촌","외출","외침","외할머니","왼발","왼손","왼쪽","요금","요일","요즘","요청","용기","용서","용어","우산","우선","우승","우연히","우정","우체국","우편","운동","운명","운반","운전","운행","울산","울음","움직임","웃어른","웃음","워낙","원고","원래","원서","원숭이","원인","원장","원피스","월급","월드컵","월세","월요일","웨이터","위반","위법","위성","위원","위험","위협","윗사람","유난히","유럽","유명","유물","유산","유적","유치원","유학","유행","유형","육군","육상","육십","육체","은행","음력","음료","음반","음성","음식","음악","음주","의견","의논","의문","의복","의식","의심","의외로","의욕","의원","의학","이것","이곳","이념","이놈","이달","이대로","이동","이렇게","이력서","이론적","이름","이민","이발소","이별","이불","이빨","이상","이성","이슬","이야기","이용","이웃","이월","이윽고","이익","이전","이중","이튿날","이틀","이혼","인간","인격","인공","인구","인근","인기","인도","인류","인물","인생","인쇄","인연","인원","인재","인종","인천","인체","인터넷","인하","인형","일곱","일기","일단","일대","일등","일반","일본","일부","일상","일생","일손","일요일","일월","일정","일종","일주일","일찍","일체","일치","일행","일회용","임금","임무","입대","입력","입맛","입사","입술","입시","입원","입장","입학","자가용","자격","자극","자동","자랑","자부심","자식","자신","자연","자원","자율","자전거","자정","자존심","자판","작가","작년","작성","작업","작용","작은딸","작품","잔디","잔뜩","잔치","잘못","잠깐","잠수함","잠시","잠옷","잠자리","잡지","장관","장군","장기간","장래","장례","장르","장마","장면","장모","장미","장비","장사","장소","장식","장애인","장인","장점","장차","장학금","재능","재빨리","재산","재생","재작년","재정","재채기","재판","재학","재활용","저것","저고리","저곳","저녁","저런","저렇게","저번","저울","저절로","저축","적극","적당히","적성","적용","적응","전개","전공","전기","전달","전라도","전망","전문","전반","전부","전세","전시","전용","전자","전쟁","전주","전철","전체","전통","전혀","전후","절대","절망","절반","절약","절차","점검","점수","점심","점원","점점","점차","접근","접시","접촉","젓가락","정거장","정도","정류장","정리","정말","정면","정문","정반대","정보","정부","정비","정상","정성","정오","정원","정장","정지","정치","정확히","제공","제과점","제대로","제목","제발","제법","제삿날","제안","제일","제작","제주도","제출","제품","제한","조각","조건","조금","조깅","조명","조미료","조상","조선","조용히","조절","조정","조직","존댓말","존재","졸업","졸음","종교","종로","종류","종소리","종업원","종종","종합","좌석","죄인","주관적","주름","주말","주머니","주먹","주문","주민","주방","주변","주식","주인","주일","주장","주전자","주택","준비","줄거리","줄기","줄무늬","중간","중계방송","중국","중년","중단","중독","중반","중부","중세","중소기업","중순","중앙","중요","중학교","즉석","즉시","즐거움","증가","증거","증권","증상","증세","지각","지갑","지경","지극히","지금","지급","지능","지름길","지리산","지방","지붕","지식","지역","지우개","지원","지적","지점","지진","지출","직선","직업","직원","직장","진급","진동","진로","진료","진리","진짜","진찰","진출","진통","진행","질문","질병","질서","짐작","집단","집안","집중","짜증","찌꺼기","차남","차라리","차량","차림","차별","차선","차츰","착각","찬물","찬성","참가","참기름","참새","참석","참여","참외","참조","찻잔","창가","창고","창구","창문","창밖","창작","창조","채널","채점","책가방","책방","책상","책임","챔피언","처벌","처음","천국","천둥","천장","천재","천천히","철도","철저히","철학","첫날","첫째","청년","청바지","청소","청춘","체계","체력","체온","체육","체중","체험","초등학생","초반","초밥","초상화","초순","초여름","초원","초저녁","초점","초청","초콜릿","촛불","총각","총리","총장","촬영","최근","최상","최선","최신","최악","최종","추석","추억","추진","추천","추측","축구","축소","축제","축하","출근","출발","출산","출신","출연","출입","출장","출판","충격","충고","충돌","충분히","충청도","취업","취직","취향","치약","친구","친척","칠십","칠월","칠판","침대","침묵","침실","칫솔","칭찬","카메라","카운터","칼국수","캐릭터","캠퍼스","캠페인","커튼","컨디션","컬러","컴퓨터","코끼리","코미디","콘서트","콜라","콤플렉스","콩나물","쾌감","쿠데타","크림","큰길","큰딸","큰소리","큰아들","큰어머니","큰일","큰절","클래식","클럽","킬로","타입","타자기","탁구","탁자","탄생","태권도","태양","태풍","택시","탤런트","터널","터미널","테니스","테스트","테이블","텔레비전","토론","토마토","토요일","통계","통과","통로","통신","통역","통일","통장","통제","통증","통합","통화","퇴근","퇴원","퇴직금","튀김","트럭","특급","특별","특성","특수","특징","특히","튼튼히","티셔츠","파란색","파일","파출소","판결","판단","판매","판사","팔십","팔월","팝송","패션","팩스","팩시밀리","팬티","퍼센트","페인트","편견","편의","편지","편히","평가","평균","평생","평소","평양","평일","평화","포스터","포인트","포장","포함","표면","표정","표준","표현","품목","품질","풍경","풍속","풍습","프랑스","프린터","플라스틱","피곤","피망","피아노","필름","필수","필요","필자","필통","핑계","하느님","하늘","하드웨어","하룻밤","하반기","하숙집","하순","하여튼","하지만","하천","하품","하필","학과","학교","학급","학기","학년","학력","학번","학부모","학비","학생","학술","학습","학용품","학원","학위","학자","학점","한계","한글","한꺼번에","한낮","한눈","한동안","한때","한라산","한마디","한문","한번","한복","한식","한여름","한쪽","할머니","할아버지","할인","함께","함부로","합격","합리적","항공","항구","항상","항의","해결","해군","해답","해당","해물","해석","해설","해수욕장","해안","핵심","핸드백","햄버거","햇볕","햇살","행동","행복","행사","행운","행위","향기","향상","향수","허락","허용","헬기","현관","현금","현대","현상","현실","현장","현재","현지","혈액","협력","형부","형사","형수","형식","형제","형태","형편","혜택","호기심","호남","호랑이","호박","호텔","호흡","혹시","홀로","홈페이지","홍보","홍수","홍차","화면","화분","화살","화요일","화장","화학","확보","확인","확장","확정","환갑","환경","환영","환율","환자","활기","활동","활발히","활용","활짝","회견","회관","회복","회색","회원","회장","회전","횟수","횡단보도","효율적","후반","후춧가루","훈련","훨씬","휴식","휴일","흉내","흐름","흑백","흑인","흔적","흔히","흥미","흥분","희곡","희망","희생","흰색","힘껏"]');
+
+/***/ }),
+
+/***/ 76384:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["abacate","abaixo","abalar","abater","abduzir","abelha","aberto","abismo","abotoar","abranger","abreviar","abrigar","abrupto","absinto","absoluto","absurdo","abutre","acabado","acalmar","acampar","acanhar","acaso","aceitar","acelerar","acenar","acervo","acessar","acetona","achatar","acidez","acima","acionado","acirrar","aclamar","aclive","acolhida","acomodar","acoplar","acordar","acumular","acusador","adaptar","adega","adentro","adepto","adequar","aderente","adesivo","adeus","adiante","aditivo","adjetivo","adjunto","admirar","adorar","adquirir","adubo","adverso","advogado","aeronave","afastar","aferir","afetivo","afinador","afivelar","aflito","afluente","afrontar","agachar","agarrar","agasalho","agenciar","agilizar","agiota","agitado","agora","agradar","agreste","agrupar","aguardar","agulha","ajoelhar","ajudar","ajustar","alameda","alarme","alastrar","alavanca","albergue","albino","alcatra","aldeia","alecrim","alegria","alertar","alface","alfinete","algum","alheio","aliar","alicate","alienar","alinhar","aliviar","almofada","alocar","alpiste","alterar","altitude","alucinar","alugar","aluno","alusivo","alvo","amaciar","amador","amarelo","amassar","ambas","ambiente","ameixa","amenizar","amido","amistoso","amizade","amolador","amontoar","amoroso","amostra","amparar","ampliar","ampola","anagrama","analisar","anarquia","anatomia","andaime","anel","anexo","angular","animar","anjo","anomalia","anotado","ansioso","anterior","anuidade","anunciar","anzol","apagador","apalpar","apanhado","apego","apelido","apertada","apesar","apetite","apito","aplauso","aplicada","apoio","apontar","aposta","aprendiz","aprovar","aquecer","arame","aranha","arara","arcada","ardente","areia","arejar","arenito","aresta","argiloso","argola","arma","arquivo","arraial","arrebate","arriscar","arroba","arrumar","arsenal","arterial","artigo","arvoredo","asfaltar","asilado","aspirar","assador","assinar","assoalho","assunto","astral","atacado","atadura","atalho","atarefar","atear","atender","aterro","ateu","atingir","atirador","ativo","atoleiro","atracar","atrevido","atriz","atual","atum","auditor","aumentar","aura","aurora","autismo","autoria","autuar","avaliar","avante","avaria","avental","avesso","aviador","avisar","avulso","axila","azarar","azedo","azeite","azulejo","babar","babosa","bacalhau","bacharel","bacia","bagagem","baiano","bailar","baioneta","bairro","baixista","bajular","baleia","baliza","balsa","banal","bandeira","banho","banir","banquete","barato","barbado","baronesa","barraca","barulho","baseado","bastante","batata","batedor","batida","batom","batucar","baunilha","beber","beijo","beirada","beisebol","beldade","beleza","belga","beliscar","bendito","bengala","benzer","berimbau","berlinda","berro","besouro","bexiga","bezerro","bico","bicudo","bienal","bifocal","bifurcar","bigorna","bilhete","bimestre","bimotor","biologia","biombo","biosfera","bipolar","birrento","biscoito","bisneto","bispo","bissexto","bitola","bizarro","blindado","bloco","bloquear","boato","bobagem","bocado","bocejo","bochecha","boicotar","bolada","boletim","bolha","bolo","bombeiro","bonde","boneco","bonita","borbulha","borda","boreal","borracha","bovino","boxeador","branco","brasa","braveza","breu","briga","brilho","brincar","broa","brochura","bronzear","broto","bruxo","bucha","budismo","bufar","bule","buraco","busca","busto","buzina","cabana","cabelo","cabide","cabo","cabrito","cacau","cacetada","cachorro","cacique","cadastro","cadeado","cafezal","caiaque","caipira","caixote","cajado","caju","calafrio","calcular","caldeira","calibrar","calmante","calota","camada","cambista","camisa","camomila","campanha","camuflar","canavial","cancelar","caneta","canguru","canhoto","canivete","canoa","cansado","cantar","canudo","capacho","capela","capinar","capotar","capricho","captador","capuz","caracol","carbono","cardeal","careca","carimbar","carneiro","carpete","carreira","cartaz","carvalho","casaco","casca","casebre","castelo","casulo","catarata","cativar","caule","causador","cautelar","cavalo","caverna","cebola","cedilha","cegonha","celebrar","celular","cenoura","censo","centeio","cercar","cerrado","certeiro","cerveja","cetim","cevada","chacota","chaleira","chamado","chapada","charme","chatice","chave","chefe","chegada","cheiro","cheque","chicote","chifre","chinelo","chocalho","chover","chumbo","chutar","chuva","cicatriz","ciclone","cidade","cidreira","ciente","cigana","cimento","cinto","cinza","ciranda","circuito","cirurgia","citar","clareza","clero","clicar","clone","clube","coado","coagir","cobaia","cobertor","cobrar","cocada","coelho","coentro","coeso","cogumelo","coibir","coifa","coiote","colar","coleira","colher","colidir","colmeia","colono","coluna","comando","combinar","comentar","comitiva","comover","complexo","comum","concha","condor","conectar","confuso","congelar","conhecer","conjugar","consumir","contrato","convite","cooperar","copeiro","copiador","copo","coquetel","coragem","cordial","corneta","coronha","corporal","correio","cortejo","coruja","corvo","cosseno","costela","cotonete","couro","couve","covil","cozinha","cratera","cravo","creche","credor","creme","crer","crespo","criada","criminal","crioulo","crise","criticar","crosta","crua","cruzeiro","cubano","cueca","cuidado","cujo","culatra","culminar","culpar","cultura","cumprir","cunhado","cupido","curativo","curral","cursar","curto","cuspir","custear","cutelo","damasco","datar","debater","debitar","deboche","debulhar","decalque","decimal","declive","decote","decretar","dedal","dedicado","deduzir","defesa","defumar","degelo","degrau","degustar","deitado","deixar","delator","delegado","delinear","delonga","demanda","demitir","demolido","dentista","depenado","depilar","depois","depressa","depurar","deriva","derramar","desafio","desbotar","descanso","desenho","desfiado","desgaste","desigual","deslize","desmamar","desova","despesa","destaque","desviar","detalhar","detentor","detonar","detrito","deusa","dever","devido","devotado","dezena","diagrama","dialeto","didata","difuso","digitar","dilatado","diluente","diminuir","dinastia","dinheiro","diocese","direto","discreta","disfarce","disparo","disquete","dissipar","distante","ditador","diurno","diverso","divisor","divulgar","dizer","dobrador","dolorido","domador","dominado","donativo","donzela","dormente","dorsal","dosagem","dourado","doutor","drenagem","drible","drogaria","duelar","duende","dueto","duplo","duquesa","durante","duvidoso","eclodir","ecoar","ecologia","edificar","edital","educado","efeito","efetivar","ejetar","elaborar","eleger","eleitor","elenco","elevador","eliminar","elogiar","embargo","embolado","embrulho","embutido","emenda","emergir","emissor","empatia","empenho","empinado","empolgar","emprego","empurrar","emulador","encaixe","encenado","enchente","encontro","endeusar","endossar","enfaixar","enfeite","enfim","engajado","engenho","englobar","engomado","engraxar","enguia","enjoar","enlatar","enquanto","enraizar","enrolado","enrugar","ensaio","enseada","ensino","ensopado","entanto","enteado","entidade","entortar","entrada","entulho","envergar","enviado","envolver","enxame","enxerto","enxofre","enxuto","epiderme","equipar","ereto","erguido","errata","erva","ervilha","esbanjar","esbelto","escama","escola","escrita","escuta","esfinge","esfolar","esfregar","esfumado","esgrima","esmalte","espanto","espelho","espiga","esponja","espreita","espumar","esquerda","estaca","esteira","esticar","estofado","estrela","estudo","esvaziar","etanol","etiqueta","euforia","europeu","evacuar","evaporar","evasivo","eventual","evidente","evoluir","exagero","exalar","examinar","exato","exausto","excesso","excitar","exclamar","executar","exemplo","exibir","exigente","exonerar","expandir","expelir","expirar","explanar","exposto","expresso","expulsar","externo","extinto","extrato","fabricar","fabuloso","faceta","facial","fada","fadiga","faixa","falar","falta","familiar","fandango","fanfarra","fantoche","fardado","farelo","farinha","farofa","farpa","fartura","fatia","fator","favorita","faxina","fazenda","fechado","feijoada","feirante","felino","feminino","fenda","feno","fera","feriado","ferrugem","ferver","festejar","fetal","feudal","fiapo","fibrose","ficar","ficheiro","figurado","fileira","filho","filme","filtrar","firmeza","fisgada","fissura","fita","fivela","fixador","fixo","flacidez","flamingo","flanela","flechada","flora","flutuar","fluxo","focal","focinho","fofocar","fogo","foguete","foice","folgado","folheto","forjar","formiga","forno","forte","fosco","fossa","fragata","fralda","frango","frasco","fraterno","freira","frente","fretar","frieza","friso","fritura","fronha","frustrar","fruteira","fugir","fulano","fuligem","fundar","fungo","funil","furador","furioso","futebol","gabarito","gabinete","gado","gaiato","gaiola","gaivota","galega","galho","galinha","galocha","ganhar","garagem","garfo","gargalo","garimpo","garoupa","garrafa","gasoduto","gasto","gata","gatilho","gaveta","gazela","gelado","geleia","gelo","gemada","gemer","gemido","generoso","gengiva","genial","genoma","genro","geologia","gerador","germinar","gesso","gestor","ginasta","gincana","gingado","girafa","girino","glacial","glicose","global","glorioso","goela","goiaba","golfe","golpear","gordura","gorjeta","gorro","gostoso","goteira","governar","gracejo","gradual","grafite","gralha","grampo","granada","gratuito","graveto","graxa","grego","grelhar","greve","grilo","grisalho","gritaria","grosso","grotesco","grudado","grunhido","gruta","guache","guarani","guaxinim","guerrear","guiar","guincho","guisado","gula","guloso","guru","habitar","harmonia","haste","haver","hectare","herdar","heresia","hesitar","hiato","hibernar","hidratar","hiena","hino","hipismo","hipnose","hipoteca","hoje","holofote","homem","honesto","honrado","hormonal","hospedar","humorado","iate","ideia","idoso","ignorado","igreja","iguana","ileso","ilha","iludido","iluminar","ilustrar","imagem","imediato","imenso","imersivo","iminente","imitador","imortal","impacto","impedir","implante","impor","imprensa","impune","imunizar","inalador","inapto","inativo","incenso","inchar","incidir","incluir","incolor","indeciso","indireto","indutor","ineficaz","inerente","infantil","infestar","infinito","inflamar","informal","infrator","ingerir","inibido","inicial","inimigo","injetar","inocente","inodoro","inovador","inox","inquieto","inscrito","inseto","insistir","inspetor","instalar","insulto","intacto","integral","intimar","intocado","intriga","invasor","inverno","invicto","invocar","iogurte","iraniano","ironizar","irreal","irritado","isca","isento","isolado","isqueiro","italiano","janeiro","jangada","janta","jararaca","jardim","jarro","jasmim","jato","javali","jazida","jejum","joaninha","joelhada","jogador","joia","jornal","jorrar","jovem","juba","judeu","judoca","juiz","julgador","julho","jurado","jurista","juro","justa","labareda","laboral","lacre","lactante","ladrilho","lagarta","lagoa","laje","lamber","lamentar","laminar","lampejo","lanche","lapidar","lapso","laranja","lareira","largura","lasanha","lastro","lateral","latido","lavanda","lavoura","lavrador","laxante","lazer","lealdade","lebre","legado","legendar","legista","leigo","leiloar","leitura","lembrete","leme","lenhador","lentilha","leoa","lesma","leste","letivo","letreiro","levar","leveza","levitar","liberal","libido","liderar","ligar","ligeiro","limitar","limoeiro","limpador","linda","linear","linhagem","liquidez","listagem","lisura","litoral","livro","lixa","lixeira","locador","locutor","lojista","lombo","lona","longe","lontra","lorde","lotado","loteria","loucura","lousa","louvar","luar","lucidez","lucro","luneta","lustre","lutador","luva","macaco","macete","machado","macio","madeira","madrinha","magnata","magreza","maior","mais","malandro","malha","malote","maluco","mamilo","mamoeiro","mamute","manada","mancha","mandato","manequim","manhoso","manivela","manobrar","mansa","manter","manusear","mapeado","maquinar","marcador","maresia","marfim","margem","marinho","marmita","maroto","marquise","marreco","martelo","marujo","mascote","masmorra","massagem","mastigar","matagal","materno","matinal","matutar","maxilar","medalha","medida","medusa","megafone","meiga","melancia","melhor","membro","memorial","menino","menos","mensagem","mental","merecer","mergulho","mesada","mesclar","mesmo","mesquita","mestre","metade","meteoro","metragem","mexer","mexicano","micro","migalha","migrar","milagre","milenar","milhar","mimado","minerar","minhoca","ministro","minoria","miolo","mirante","mirtilo","misturar","mocidade","moderno","modular","moeda","moer","moinho","moita","moldura","moleza","molho","molinete","molusco","montanha","moqueca","morango","morcego","mordomo","morena","mosaico","mosquete","mostarda","motel","motim","moto","motriz","muda","muito","mulata","mulher","multar","mundial","munido","muralha","murcho","muscular","museu","musical","nacional","nadador","naja","namoro","narina","narrado","nascer","nativa","natureza","navalha","navegar","navio","neblina","nebuloso","negativa","negociar","negrito","nervoso","neta","neural","nevasca","nevoeiro","ninar","ninho","nitidez","nivelar","nobreza","noite","noiva","nomear","nominal","nordeste","nortear","notar","noticiar","noturno","novelo","novilho","novo","nublado","nudez","numeral","nupcial","nutrir","nuvem","obcecado","obedecer","objetivo","obrigado","obscuro","obstetra","obter","obturar","ocidente","ocioso","ocorrer","oculista","ocupado","ofegante","ofensiva","oferenda","oficina","ofuscado","ogiva","olaria","oleoso","olhar","oliveira","ombro","omelete","omisso","omitir","ondulado","oneroso","ontem","opcional","operador","oponente","oportuno","oposto","orar","orbitar","ordem","ordinal","orfanato","orgasmo","orgulho","oriental","origem","oriundo","orla","ortodoxo","orvalho","oscilar","ossada","osso","ostentar","otimismo","ousadia","outono","outubro","ouvido","ovelha","ovular","oxidar","oxigenar","pacato","paciente","pacote","pactuar","padaria","padrinho","pagar","pagode","painel","pairar","paisagem","palavra","palestra","palheta","palito","palmada","palpitar","pancada","panela","panfleto","panqueca","pantanal","papagaio","papelada","papiro","parafina","parcial","pardal","parede","partida","pasmo","passado","pastel","patamar","patente","patinar","patrono","paulada","pausar","peculiar","pedalar","pedestre","pediatra","pedra","pegada","peitoral","peixe","pele","pelicano","penca","pendurar","peneira","penhasco","pensador","pente","perceber","perfeito","pergunta","perito","permitir","perna","perplexo","persiana","pertence","peruca","pescado","pesquisa","pessoa","petiscar","piada","picado","piedade","pigmento","pilastra","pilhado","pilotar","pimenta","pincel","pinguim","pinha","pinote","pintar","pioneiro","pipoca","piquete","piranha","pires","pirueta","piscar","pistola","pitanga","pivete","planta","plaqueta","platina","plebeu","plumagem","pluvial","pneu","poda","poeira","poetisa","polegada","policiar","poluente","polvilho","pomar","pomba","ponderar","pontaria","populoso","porta","possuir","postal","pote","poupar","pouso","povoar","praia","prancha","prato","praxe","prece","predador","prefeito","premiar","prensar","preparar","presilha","pretexto","prevenir","prezar","primata","princesa","prisma","privado","processo","produto","profeta","proibido","projeto","prometer","propagar","prosa","protetor","provador","publicar","pudim","pular","pulmonar","pulseira","punhal","punir","pupilo","pureza","puxador","quadra","quantia","quarto","quase","quebrar","queda","queijo","quente","querido","quimono","quina","quiosque","rabanada","rabisco","rachar","racionar","radial","raiar","rainha","raio","raiva","rajada","ralado","ramal","ranger","ranhura","rapadura","rapel","rapidez","raposa","raquete","raridade","rasante","rascunho","rasgar","raspador","rasteira","rasurar","ratazana","ratoeira","realeza","reanimar","reaver","rebaixar","rebelde","rebolar","recado","recente","recheio","recibo","recordar","recrutar","recuar","rede","redimir","redonda","reduzida","reenvio","refinar","refletir","refogar","refresco","refugiar","regalia","regime","regra","reinado","reitor","rejeitar","relativo","remador","remendo","remorso","renovado","reparo","repelir","repleto","repolho","represa","repudiar","requerer","resenha","resfriar","resgatar","residir","resolver","respeito","ressaca","restante","resumir","retalho","reter","retirar","retomada","retratar","revelar","revisor","revolta","riacho","rica","rigidez","rigoroso","rimar","ringue","risada","risco","risonho","robalo","rochedo","rodada","rodeio","rodovia","roedor","roleta","romano","roncar","rosado","roseira","rosto","rota","roteiro","rotina","rotular","rouco","roupa","roxo","rubro","rugido","rugoso","ruivo","rumo","rupestre","russo","sabor","saciar","sacola","sacudir","sadio","safira","saga","sagrada","saibro","salada","saleiro","salgado","saliva","salpicar","salsicha","saltar","salvador","sambar","samurai","sanar","sanfona","sangue","sanidade","sapato","sarda","sargento","sarjeta","saturar","saudade","saxofone","sazonal","secar","secular","seda","sedento","sediado","sedoso","sedutor","segmento","segredo","segundo","seiva","seleto","selvagem","semanal","semente","senador","senhor","sensual","sentado","separado","sereia","seringa","serra","servo","setembro","setor","sigilo","silhueta","silicone","simetria","simpatia","simular","sinal","sincero","singular","sinopse","sintonia","sirene","siri","situado","soberano","sobra","socorro","sogro","soja","solda","soletrar","solteiro","sombrio","sonata","sondar","sonegar","sonhador","sono","soprano","soquete","sorrir","sorteio","sossego","sotaque","soterrar","sovado","sozinho","suavizar","subida","submerso","subsolo","subtrair","sucata","sucesso","suco","sudeste","sufixo","sugador","sugerir","sujeito","sulfato","sumir","suor","superior","suplicar","suposto","suprimir","surdina","surfista","surpresa","surreal","surtir","suspiro","sustento","tabela","tablete","tabuada","tacho","tagarela","talher","talo","talvez","tamanho","tamborim","tampa","tangente","tanto","tapar","tapioca","tardio","tarefa","tarja","tarraxa","tatuagem","taurino","taxativo","taxista","teatral","tecer","tecido","teclado","tedioso","teia","teimar","telefone","telhado","tempero","tenente","tensor","tentar","termal","terno","terreno","tese","tesoura","testado","teto","textura","texugo","tiara","tigela","tijolo","timbrar","timidez","tingido","tinteiro","tiragem","titular","toalha","tocha","tolerar","tolice","tomada","tomilho","tonel","tontura","topete","tora","torcido","torneio","torque","torrada","torto","tostar","touca","toupeira","toxina","trabalho","tracejar","tradutor","trafegar","trajeto","trama","trancar","trapo","traseiro","tratador","travar","treino","tremer","trepidar","trevo","triagem","tribo","triciclo","tridente","trilogia","trindade","triplo","triturar","triunfal","trocar","trombeta","trova","trunfo","truque","tubular","tucano","tudo","tulipa","tupi","turbo","turma","turquesa","tutelar","tutorial","uivar","umbigo","unha","unidade","uniforme","urologia","urso","urtiga","urubu","usado","usina","usufruir","vacina","vadiar","vagaroso","vaidoso","vala","valente","validade","valores","vantagem","vaqueiro","varanda","vareta","varrer","vascular","vasilha","vassoura","vazar","vazio","veado","vedar","vegetar","veicular","veleiro","velhice","veludo","vencedor","vendaval","venerar","ventre","verbal","verdade","vereador","vergonha","vermelho","verniz","versar","vertente","vespa","vestido","vetorial","viaduto","viagem","viajar","viatura","vibrador","videira","vidraria","viela","viga","vigente","vigiar","vigorar","vilarejo","vinco","vinheta","vinil","violeta","virada","virtude","visitar","visto","vitral","viveiro","vizinho","voador","voar","vogal","volante","voleibol","voltagem","volumoso","vontade","vulto","vuvuzela","xadrez","xarope","xeque","xeretar","xerife","xingar","zangado","zarpar","zebu","zelador","zombar","zoologia","zumbido"]');
+
+/***/ }),
+
+/***/ 31046:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('["ábaco","abdomen","abeja","abierto","abogado","abono","aborto","abrazo","abrir","abuelo","abuso","acabar","academia","acceso","acción","aceite","acelga","acento","aceptar","ácido","aclarar","acné","acoger","acoso","activo","acto","actriz","actuar","acudir","acuerdo","acusar","adicto","admitir","adoptar","adorno","aduana","adulto","aéreo","afectar","afición","afinar","afirmar","ágil","agitar","agonía","agosto","agotar","agregar","agrio","agua","agudo","águila","aguja","ahogo","ahorro","aire","aislar","ajedrez","ajeno","ajuste","alacrán","alambre","alarma","alba","álbum","alcalde","aldea","alegre","alejar","alerta","aleta","alfiler","alga","algodón","aliado","aliento","alivio","alma","almeja","almíbar","altar","alteza","altivo","alto","altura","alumno","alzar","amable","amante","amapola","amargo","amasar","ámbar","ámbito","ameno","amigo","amistad","amor","amparo","amplio","ancho","anciano","ancla","andar","andén","anemia","ángulo","anillo","ánimo","anís","anotar","antena","antiguo","antojo","anual","anular","anuncio","añadir","añejo","año","apagar","aparato","apetito","apio","aplicar","apodo","aporte","apoyo","aprender","aprobar","apuesta","apuro","arado","araña","arar","árbitro","árbol","arbusto","archivo","arco","arder","ardilla","arduo","área","árido","aries","armonía","arnés","aroma","arpa","arpón","arreglo","arroz","arruga","arte","artista","asa","asado","asalto","ascenso","asegurar","aseo","asesor","asiento","asilo","asistir","asno","asombro","áspero","astilla","astro","astuto","asumir","asunto","atajo","ataque","atar","atento","ateo","ático","atleta","átomo","atraer","atroz","atún","audaz","audio","auge","aula","aumento","ausente","autor","aval","avance","avaro","ave","avellana","avena","avestruz","avión","aviso","ayer","ayuda","ayuno","azafrán","azar","azote","azúcar","azufre","azul","baba","babor","bache","bahía","baile","bajar","balanza","balcón","balde","bambú","banco","banda","baño","barba","barco","barniz","barro","báscula","bastón","basura","batalla","batería","batir","batuta","baúl","bazar","bebé","bebida","bello","besar","beso","bestia","bicho","bien","bingo","blanco","bloque","blusa","boa","bobina","bobo","boca","bocina","boda","bodega","boina","bola","bolero","bolsa","bomba","bondad","bonito","bono","bonsái","borde","borrar","bosque","bote","botín","bóveda","bozal","bravo","brazo","brecha","breve","brillo","brinco","brisa","broca","broma","bronce","brote","bruja","brusco","bruto","buceo","bucle","bueno","buey","bufanda","bufón","búho","buitre","bulto","burbuja","burla","burro","buscar","butaca","buzón","caballo","cabeza","cabina","cabra","cacao","cadáver","cadena","caer","café","caída","caimán","caja","cajón","cal","calamar","calcio","caldo","calidad","calle","calma","calor","calvo","cama","cambio","camello","camino","campo","cáncer","candil","canela","canguro","canica","canto","caña","cañón","caoba","caos","capaz","capitán","capote","captar","capucha","cara","carbón","cárcel","careta","carga","cariño","carne","carpeta","carro","carta","casa","casco","casero","caspa","castor","catorce","catre","caudal","causa","cazo","cebolla","ceder","cedro","celda","célebre","celoso","célula","cemento","ceniza","centro","cerca","cerdo","cereza","cero","cerrar","certeza","césped","cetro","chacal","chaleco","champú","chancla","chapa","charla","chico","chiste","chivo","choque","choza","chuleta","chupar","ciclón","ciego","cielo","cien","cierto","cifra","cigarro","cima","cinco","cine","cinta","ciprés","circo","ciruela","cisne","cita","ciudad","clamor","clan","claro","clase","clave","cliente","clima","clínica","cobre","cocción","cochino","cocina","coco","código","codo","cofre","coger","cohete","cojín","cojo","cola","colcha","colegio","colgar","colina","collar","colmo","columna","combate","comer","comida","cómodo","compra","conde","conejo","conga","conocer","consejo","contar","copa","copia","corazón","corbata","corcho","cordón","corona","correr","coser","cosmos","costa","cráneo","cráter","crear","crecer","creído","crema","cría","crimen","cripta","crisis","cromo","crónica","croqueta","crudo","cruz","cuadro","cuarto","cuatro","cubo","cubrir","cuchara","cuello","cuento","cuerda","cuesta","cueva","cuidar","culebra","culpa","culto","cumbre","cumplir","cuna","cuneta","cuota","cupón","cúpula","curar","curioso","curso","curva","cutis","dama","danza","dar","dardo","dátil","deber","débil","década","decir","dedo","defensa","definir","dejar","delfín","delgado","delito","demora","denso","dental","deporte","derecho","derrota","desayuno","deseo","desfile","desnudo","destino","desvío","detalle","detener","deuda","día","diablo","diadema","diamante","diana","diario","dibujo","dictar","diente","dieta","diez","difícil","digno","dilema","diluir","dinero","directo","dirigir","disco","diseño","disfraz","diva","divino","doble","doce","dolor","domingo","don","donar","dorado","dormir","dorso","dos","dosis","dragón","droga","ducha","duda","duelo","dueño","dulce","dúo","duque","durar","dureza","duro","ébano","ebrio","echar","eco","ecuador","edad","edición","edificio","editor","educar","efecto","eficaz","eje","ejemplo","elefante","elegir","elemento","elevar","elipse","élite","elixir","elogio","eludir","embudo","emitir","emoción","empate","empeño","empleo","empresa","enano","encargo","enchufe","encía","enemigo","enero","enfado","enfermo","engaño","enigma","enlace","enorme","enredo","ensayo","enseñar","entero","entrar","envase","envío","época","equipo","erizo","escala","escena","escolar","escribir","escudo","esencia","esfera","esfuerzo","espada","espejo","espía","esposa","espuma","esquí","estar","este","estilo","estufa","etapa","eterno","ética","etnia","evadir","evaluar","evento","evitar","exacto","examen","exceso","excusa","exento","exigir","exilio","existir","éxito","experto","explicar","exponer","extremo","fábrica","fábula","fachada","fácil","factor","faena","faja","falda","fallo","falso","faltar","fama","familia","famoso","faraón","farmacia","farol","farsa","fase","fatiga","fauna","favor","fax","febrero","fecha","feliz","feo","feria","feroz","fértil","fervor","festín","fiable","fianza","fiar","fibra","ficción","ficha","fideo","fiebre","fiel","fiera","fiesta","figura","fijar","fijo","fila","filete","filial","filtro","fin","finca","fingir","finito","firma","flaco","flauta","flecha","flor","flota","fluir","flujo","flúor","fobia","foca","fogata","fogón","folio","folleto","fondo","forma","forro","fortuna","forzar","fosa","foto","fracaso","frágil","franja","frase","fraude","freír","freno","fresa","frío","frito","fruta","fuego","fuente","fuerza","fuga","fumar","función","funda","furgón","furia","fusil","fútbol","futuro","gacela","gafas","gaita","gajo","gala","galería","gallo","gamba","ganar","gancho","ganga","ganso","garaje","garza","gasolina","gastar","gato","gavilán","gemelo","gemir","gen","género","genio","gente","geranio","gerente","germen","gesto","gigante","gimnasio","girar","giro","glaciar","globo","gloria","gol","golfo","goloso","golpe","goma","gordo","gorila","gorra","gota","goteo","gozar","grada","gráfico","grano","grasa","gratis","grave","grieta","grillo","gripe","gris","grito","grosor","grúa","grueso","grumo","grupo","guante","guapo","guardia","guerra","guía","guiño","guion","guiso","guitarra","gusano","gustar","haber","hábil","hablar","hacer","hacha","hada","hallar","hamaca","harina","haz","hazaña","hebilla","hebra","hecho","helado","helio","hembra","herir","hermano","héroe","hervir","hielo","hierro","hígado","higiene","hijo","himno","historia","hocico","hogar","hoguera","hoja","hombre","hongo","honor","honra","hora","hormiga","horno","hostil","hoyo","hueco","huelga","huerta","hueso","huevo","huida","huir","humano","húmedo","humilde","humo","hundir","huracán","hurto","icono","ideal","idioma","ídolo","iglesia","iglú","igual","ilegal","ilusión","imagen","imán","imitar","impar","imperio","imponer","impulso","incapaz","índice","inerte","infiel","informe","ingenio","inicio","inmenso","inmune","innato","insecto","instante","interés","íntimo","intuir","inútil","invierno","ira","iris","ironía","isla","islote","jabalí","jabón","jamón","jarabe","jardín","jarra","jaula","jazmín","jefe","jeringa","jinete","jornada","joroba","joven","joya","juerga","jueves","juez","jugador","jugo","juguete","juicio","junco","jungla","junio","juntar","júpiter","jurar","justo","juvenil","juzgar","kilo","koala","labio","lacio","lacra","lado","ladrón","lagarto","lágrima","laguna","laico","lamer","lámina","lámpara","lana","lancha","langosta","lanza","lápiz","largo","larva","lástima","lata","látex","latir","laurel","lavar","lazo","leal","lección","leche","lector","leer","legión","legumbre","lejano","lengua","lento","leña","león","leopardo","lesión","letal","letra","leve","leyenda","libertad","libro","licor","líder","lidiar","lienzo","liga","ligero","lima","límite","limón","limpio","lince","lindo","línea","lingote","lino","linterna","líquido","liso","lista","litera","litio","litro","llaga","llama","llanto","llave","llegar","llenar","llevar","llorar","llover","lluvia","lobo","loción","loco","locura","lógica","logro","lombriz","lomo","lonja","lote","lucha","lucir","lugar","lujo","luna","lunes","lupa","lustro","luto","luz","maceta","macho","madera","madre","maduro","maestro","mafia","magia","mago","maíz","maldad","maleta","malla","malo","mamá","mambo","mamut","manco","mando","manejar","manga","maniquí","manjar","mano","manso","manta","mañana","mapa","máquina","mar","marco","marea","marfil","margen","marido","mármol","marrón","martes","marzo","masa","máscara","masivo","matar","materia","matiz","matriz","máximo","mayor","mazorca","mecha","medalla","medio","médula","mejilla","mejor","melena","melón","memoria","menor","mensaje","mente","menú","mercado","merengue","mérito","mes","mesón","meta","meter","método","metro","mezcla","miedo","miel","miembro","miga","mil","milagro","militar","millón","mimo","mina","minero","mínimo","minuto","miope","mirar","misa","miseria","misil","mismo","mitad","mito","mochila","moción","moda","modelo","moho","mojar","molde","moler","molino","momento","momia","monarca","moneda","monja","monto","moño","morada","morder","moreno","morir","morro","morsa","mortal","mosca","mostrar","motivo","mover","móvil","mozo","mucho","mudar","mueble","muela","muerte","muestra","mugre","mujer","mula","muleta","multa","mundo","muñeca","mural","muro","músculo","museo","musgo","música","muslo","nácar","nación","nadar","naipe","naranja","nariz","narrar","nasal","natal","nativo","natural","náusea","naval","nave","navidad","necio","néctar","negar","negocio","negro","neón","nervio","neto","neutro","nevar","nevera","nicho","nido","niebla","nieto","niñez","niño","nítido","nivel","nobleza","noche","nómina","noria","norma","norte","nota","noticia","novato","novela","novio","nube","nuca","núcleo","nudillo","nudo","nuera","nueve","nuez","nulo","número","nutria","oasis","obeso","obispo","objeto","obra","obrero","observar","obtener","obvio","oca","ocaso","océano","ochenta","ocho","ocio","ocre","octavo","octubre","oculto","ocupar","ocurrir","odiar","odio","odisea","oeste","ofensa","oferta","oficio","ofrecer","ogro","oído","oír","ojo","ola","oleada","olfato","olivo","olla","olmo","olor","olvido","ombligo","onda","onza","opaco","opción","ópera","opinar","oponer","optar","óptica","opuesto","oración","orador","oral","órbita","orca","orden","oreja","órgano","orgía","orgullo","oriente","origen","orilla","oro","orquesta","oruga","osadía","oscuro","osezno","oso","ostra","otoño","otro","oveja","óvulo","óxido","oxígeno","oyente","ozono","pacto","padre","paella","página","pago","país","pájaro","palabra","palco","paleta","pálido","palma","paloma","palpar","pan","panal","pánico","pantera","pañuelo","papá","papel","papilla","paquete","parar","parcela","pared","parir","paro","párpado","parque","párrafo","parte","pasar","paseo","pasión","paso","pasta","pata","patio","patria","pausa","pauta","pavo","payaso","peatón","pecado","pecera","pecho","pedal","pedir","pegar","peine","pelar","peldaño","pelea","peligro","pellejo","pelo","peluca","pena","pensar","peñón","peón","peor","pepino","pequeño","pera","percha","perder","pereza","perfil","perico","perla","permiso","perro","persona","pesa","pesca","pésimo","pestaña","pétalo","petróleo","pez","pezuña","picar","pichón","pie","piedra","pierna","pieza","pijama","pilar","piloto","pimienta","pino","pintor","pinza","piña","piojo","pipa","pirata","pisar","piscina","piso","pista","pitón","pizca","placa","plan","plata","playa","plaza","pleito","pleno","plomo","pluma","plural","pobre","poco","poder","podio","poema","poesía","poeta","polen","policía","pollo","polvo","pomada","pomelo","pomo","pompa","poner","porción","portal","posada","poseer","posible","poste","potencia","potro","pozo","prado","precoz","pregunta","premio","prensa","preso","previo","primo","príncipe","prisión","privar","proa","probar","proceso","producto","proeza","profesor","programa","prole","promesa","pronto","propio","próximo","prueba","público","puchero","pudor","pueblo","puerta","puesto","pulga","pulir","pulmón","pulpo","pulso","puma","punto","puñal","puño","pupa","pupila","puré","quedar","queja","quemar","querer","queso","quieto","química","quince","quitar","rábano","rabia","rabo","ración","radical","raíz","rama","rampa","rancho","rango","rapaz","rápido","rapto","rasgo","raspa","rato","rayo","raza","razón","reacción","realidad","rebaño","rebote","recaer","receta","rechazo","recoger","recreo","recto","recurso","red","redondo","reducir","reflejo","reforma","refrán","refugio","regalo","regir","regla","regreso","rehén","reino","reír","reja","relato","relevo","relieve","relleno","reloj","remar","remedio","remo","rencor","rendir","renta","reparto","repetir","reposo","reptil","res","rescate","resina","respeto","resto","resumen","retiro","retorno","retrato","reunir","revés","revista","rey","rezar","rico","riego","rienda","riesgo","rifa","rígido","rigor","rincón","riñón","río","riqueza","risa","ritmo","rito","rizo","roble","roce","rociar","rodar","rodeo","rodilla","roer","rojizo","rojo","romero","romper","ron","ronco","ronda","ropa","ropero","rosa","rosca","rostro","rotar","rubí","rubor","rudo","rueda","rugir","ruido","ruina","ruleta","rulo","rumbo","rumor","ruptura","ruta","rutina","sábado","saber","sabio","sable","sacar","sagaz","sagrado","sala","saldo","salero","salir","salmón","salón","salsa","salto","salud","salvar","samba","sanción","sandía","sanear","sangre","sanidad","sano","santo","sapo","saque","sardina","sartén","sastre","satán","sauna","saxofón","sección","seco","secreto","secta","sed","seguir","seis","sello","selva","semana","semilla","senda","sensor","señal","señor","separar","sepia","sequía","ser","serie","sermón","servir","sesenta","sesión","seta","setenta","severo","sexo","sexto","sidra","siesta","siete","siglo","signo","sílaba","silbar","silencio","silla","símbolo","simio","sirena","sistema","sitio","situar","sobre","socio","sodio","sol","solapa","soldado","soledad","sólido","soltar","solución","sombra","sondeo","sonido","sonoro","sonrisa","sopa","soplar","soporte","sordo","sorpresa","sorteo","sostén","sótano","suave","subir","suceso","sudor","suegra","suelo","sueño","suerte","sufrir","sujeto","sultán","sumar","superar","suplir","suponer","supremo","sur","surco","sureño","surgir","susto","sutil","tabaco","tabique","tabla","tabú","taco","tacto","tajo","talar","talco","talento","talla","talón","tamaño","tambor","tango","tanque","tapa","tapete","tapia","tapón","taquilla","tarde","tarea","tarifa","tarjeta","tarot","tarro","tarta","tatuaje","tauro","taza","tazón","teatro","techo","tecla","técnica","tejado","tejer","tejido","tela","teléfono","tema","temor","templo","tenaz","tender","tener","tenis","tenso","teoría","terapia","terco","término","ternura","terror","tesis","tesoro","testigo","tetera","texto","tez","tibio","tiburón","tiempo","tienda","tierra","tieso","tigre","tijera","tilde","timbre","tímido","timo","tinta","tío","típico","tipo","tira","tirón","titán","títere","título","tiza","toalla","tobillo","tocar","tocino","todo","toga","toldo","tomar","tono","tonto","topar","tope","toque","tórax","torero","tormenta","torneo","toro","torpedo","torre","torso","tortuga","tos","tosco","toser","tóxico","trabajo","tractor","traer","tráfico","trago","traje","tramo","trance","trato","trauma","trazar","trébol","tregua","treinta","tren","trepar","tres","tribu","trigo","tripa","triste","triunfo","trofeo","trompa","tronco","tropa","trote","trozo","truco","trueno","trufa","tubería","tubo","tuerto","tumba","tumor","túnel","túnica","turbina","turismo","turno","tutor","ubicar","úlcera","umbral","unidad","unir","universo","uno","untar","uña","urbano","urbe","urgente","urna","usar","usuario","útil","utopía","uva","vaca","vacío","vacuna","vagar","vago","vaina","vajilla","vale","válido","valle","valor","válvula","vampiro","vara","variar","varón","vaso","vecino","vector","vehículo","veinte","vejez","vela","velero","veloz","vena","vencer","venda","veneno","vengar","venir","venta","venus","ver","verano","verbo","verde","vereda","verja","verso","verter","vía","viaje","vibrar","vicio","víctima","vida","vídeo","vidrio","viejo","viernes","vigor","vil","villa","vinagre","vino","viñedo","violín","viral","virgo","virtud","visor","víspera","vista","vitamina","viudo","vivaz","vivero","vivir","vivo","volcán","volumen","volver","voraz","votar","voto","voz","vuelo","vulgar","yacer","yate","yegua","yema","yerno","yeso","yodo","yoga","yogur","zafiro","zanja","zapato","zarza","zona","zorro","zumo","zurdo"]');
 
 /***/ }),
 

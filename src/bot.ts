@@ -1,5 +1,6 @@
 import { Address, SignableMessage } from '@multiversx/sdk-core/out';
 import { UserPublicKey, UserVerifier } from '@multiversx/sdk-wallet/out';
+import { LibraryConfig } from "@multiversx/sdk-core/out";
 import { Probot } from 'probot';
 import axios from 'axios';
 
@@ -197,6 +198,8 @@ export const robot = (app: Probot) => {
               return 'https://devnet-api.multiversx.com';
             case 'testnet':
               return 'https://testnet-api.multiversx.com';
+            case 'vibeox':
+              return 'https://vibeox-api.multiversx.com';
           }
 
           throw new Error(`Invalid network: ${network}`);
@@ -208,10 +211,11 @@ export const robot = (app: Probot) => {
           return [...new Set(networks)];
         }
 
-        function getNetwork(fileName: string): 'mainnet' | 'devnet' | 'testnet' | undefined {
+        function getNetwork(fileName: string): 'mainnet' | 'devnet' | 'testnet' | 'vibeox' | undefined {
           const mainnetRegex = /^(identities|accounts|tokens)\b/;
           const testnetRegex = /^testnet\/(identities|accounts|tokens)\b/;
           const devnetRegex = /^devnet\/(identities|accounts|tokens)\b/;
+          const vibeoxRegex = /^vibeox\/(identities|accounts|tokens)\b/;
 
           if (mainnetRegex.test(fileName)) {
             return 'mainnet';
@@ -223,6 +227,11 @@ export const robot = (app: Probot) => {
 
           if (devnetRegex.test(fileName)) {
             return 'devnet';
+          }
+
+          if (vibeoxRegex.test(fileName)) {
+            LibraryConfig.DefaultAddressHrp = 'vibe';
+            return 'vibeox';
           }
 
           return undefined;
