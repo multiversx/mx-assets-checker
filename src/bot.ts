@@ -175,6 +175,49 @@ export const robot = (app: Probot) => {
             await fetchStringValueFromApi(apiUrl, "collections", token, "owner");
         }
 
+        /**
+         * Multisig support: a smart contract can never produce an ed25519 message
+         * signature, so when an asset's resolved owner is a multisig SC the check
+         * was impossible to satisfy. Expand such owners to the multisig's on-chain
+         * BOARD MEMBERS (getAllBoardMembers view) and accept a signature from any
+         * one of them — a board member signing the commit sha proves the same
+         * insider control the owner signature was designed to prove.
+         */
+        async function expandMultisigOwners(owners: string[]): Promise<{ owners: string[], multisig: boolean }> {
+          const apiUrl = getApiUrl();
+          const expanded: string[] = [];
+          let multisig = false;
+          for (const owner of owners) {
+            if (!owner || !new Address(owner).isContractAddress()) {
+              expanded.push(owner);
+              continue;
+            }
+            try {
+              const response = await axios.post(`${apiUrl}/query`, {
+                scAddress: owner,
+                funcName: 'getAllBoardMembers',
+                args: [],
+              });
+              const returnData: string[] = response?.data?.returnData ?? [];
+              const members = returnData
+                .filter((x) => x)
+                .map((x) => Buffer.from(x, 'base64'))
+                .filter((b) => b.length === 32)
+                .map((b) => new Address(b).bech32());
+              if (members.length > 0) {
+                multisig = true;
+                expanded.push(...members);
+                console.log(`Owner ${owner} is a multisig — accepting signatures from board members: ${members}`);
+                continue;
+              }
+            } catch (error) {
+              console.error(`getAllBoardMembers query failed for ${owner}: ${error}`);
+            }
+            expanded.push(owner); // not a multisig (or query failed) — unchanged behaviour
+          }
+          return { owners: [...new Set(expanded)], multisig };
+        }
+
         async function fetchStringValueFromApi(apiUrl: string, endpoint: string, query: string, extract?: string): Promise<string> {
           let requestUrl = `${apiUrl}/${endpoint}/${query}`;
           if (extract) {
@@ -476,22 +519,33 @@ export const robot = (app: Probot) => {
           return;
         }
 
-        console.log(`Asset owners. check mode=${checkMode}. value=${owners}. Commit shas=${commitShas}`);
-        const invalidAddresses = await multiVerify(bodies, owners, commitShas);
+        // Contract-owned assets: expand multisig owners to their board members
+        // (any single board member's signature is accepted — see helper above).
+        const { owners: effectiveOwners, multisig } = await expandMultisigOwners(owners);
+
+        console.log(`Asset owners. check mode=${checkMode}. multisig=${multisig}. value=${effectiveOwners}. Commit shas=${commitShas}`);
+        const invalidAddresses = await multiVerify(bodies, effectiveOwners, commitShas);
         if (!invalidAddresses) {
           await fail('Failed to verify owners');
           return;
         }
 
-        const addressDescription = invalidAddresses.length > 1 ? 'addresses' : 'address';
-        const invalidAddressesDescription = invalidAddresses.map(address => `\`${address}\``).join('\n');
+        const verifiedCount = effectiveOwners.length - invalidAddresses.length;
+        const signatureOk = multisig ? verifiedCount >= 1 : invalidAddresses.length === 0;
 
-        if (invalidAddresses.length > 0) {
-          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be signed with the owner wallet ${addressDescription}: \n${invalidAddressesDescription}`);
+        const addressDescription = effectiveOwners.length > 1 ? 'addresses' : 'address';
+
+        if (!signatureOk) {
+          const wanted = effectiveOwners.map(address => `\`${address}\``).join('\n');
+          const requirement = multisig
+            ? `signed with ANY board member of the owner multisig`
+            : `signed with the owner wallet ${addressDescription}`;
+          await fail(`Please provide a signature for the latest commit sha: \`${lastCommitSha}\` which must be ${requirement}: \n${wanted}`);
           return;
         } else {
-          const ownersDescription = owners.map((address: any) => `\`${address}\``).join('\n');
-          await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the wallet ${addressDescription}: \n${ownersDescription}`);
+          const verifiedOwners = effectiveOwners.filter(a => !invalidAddresses.includes(a));
+          const ownersDescription = verifiedOwners.map((address: any) => `\`${address}\``).join('\n');
+          await createComment(`Signature OK. Verified that the latest commit hash \`${lastCommitSha}\` was signed using the ${multisig ? 'multisig board member ' : ''}wallet ${verifiedOwners.length > 1 ? 'addresses' : 'address'}: \n${ownersDescription}`);
         }
 
         console.info('successfully reviewed', pullRequest.html_url);
